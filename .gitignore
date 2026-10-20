@@ -3,7 +3,7 @@ roms/
 *.zip
 *.bin
 *.snp
-*.asm
+sim/*.asm
 out/
 *.pce
 *.ppm
@@ -15,3 +15,8 @@ tools/tgrun/tgrun
 __pycache__/
 *.o
 *.log
+
+# build products and listings
+build/
+*.lst
+*.sym

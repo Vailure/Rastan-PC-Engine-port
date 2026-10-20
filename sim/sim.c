@@ -30,7 +30,7 @@ static int irq_pending;
 static int frame;
 static int trace_on;
 static uint32_t cur_pc_hist[0x60000 / 2];
-static uint64_t unmapped_reads, unmapped_writes;
+static uint64_t unmapped_reads, unmapped_writes; static uint32_t last_unmapped_w;
 
 int sim_int_ack(int level) { (void)level; irq_pending = 0; m68k_set_irq(0); return M68K_INT_ACK_AUTOVECTOR; }
 
@@ -74,7 +74,7 @@ static void write8(uint32_t a, uint8_t v)
     if (a >= 0xc50000 && a < 0xc50004) { uint16_t *r = &vctrl[(a >> 1) & 1]; if (a & 1) *r = (*r & 0xff00) | v; else *r = (*r & 0xff) | (v << 8); return; }
     if (a == 0x380000 || a == 0x380001) { if (a & 1) sprctrl = (sprctrl & 0xff00) | v; else sprctrl = (sprctrl & 0xff) | (v << 8); return; }
     if ((a & ~1u) == 0x350008 || (a & ~1u) == 0x3c0000 || (a & ~3u) == 0x3e0000) return;
-    unmapped_writes++;
+    unmapped_writes++; last_unmapped_w = a;
 }
 
 unsigned int m68k_read_memory_8(unsigned int a) { return read8(a); }
@@ -88,7 +88,8 @@ unsigned int m68k_read_disassembler_16(unsigned int a) { return m68k_read_memory
 unsigned int m68k_read_disassembler_32(unsigned int a) { return m68k_read_memory_32(a); }
 
 typedef struct { int kind, from, to; uint32_t addr; char size; uint32_t val; uint8_t p1, sys; } cmd_t;
-static cmd_t cmds[4096];
+#define MAX_CMDS 200000
+static cmd_t cmds[MAX_CMDS];
 static int ncmds, end_frame = 3600;
 
 static void load_script(const char *fn)
@@ -105,6 +106,7 @@ static void load_script(const char *fn)
         else if (sscanf(line, "end %d", &a) == 1) { end_frame = a; continue; }
         else if (strncmp(line, "trace", 5) == 0) { trace_on = 1; continue; }
         else continue;
+        if (ncmds == MAX_CMDS) { fprintf(stderr, "too many script lines\n"); exit(1); }
         cmds[ncmds++] = c;
     }
     fclose(f);
@@ -157,8 +159,8 @@ int main(int argc, char **argv)
         m68k_set_irq(5);
     }
     gzclose(g);
-    fprintf(stderr, "frames=%d pc=%06x unmapped r=%llu w=%llu\n", frame, m68k_get_reg(NULL, M68K_REG_PC),
-            (unsigned long long)unmapped_reads, (unsigned long long)unmapped_writes);
+    fprintf(stderr, "frames=%d pc=%06x unmapped r=%llu w=%llu last_w=%06x\n", frame, (unsigned)m68k_get_reg(NULL, M68K_REG_PC),
+            (unsigned long long)unmapped_reads, (unsigned long long)unmapped_writes, last_unmapped_w);
     if (trace_on) {
         char buf[128];
         for (uint32_t i = 0; i < 0x30000; i++) if (cur_pc_hist[i]) {
