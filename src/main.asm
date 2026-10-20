@@ -1,0 +1,380 @@
+; ***************************************************************************
+;
+; Rastan PC Engine port - milestone 1: stage 1 scrolling.
+;
+; One BG layer (arcade FG composited over BG), 256x224, 64x64 BAT.
+; Tile patterns are streamed into a pool of 1024 VRAM slots using a schedule
+; computed offline by tools/pce_stage.py (the stage only scrolls forward).
+;
+; Controls: RIGHT scrolls (hold I for fast), UP/DOWN scroll vertically.
+;
+; VRAM:  $0000-$0FFF BAT (64x64)
+;        $1000-$4FFF streamed BG tiles (tile #$100-#$4FF)
+;        $5000-$7EFF sprite patterns (unused yet)
+;        $7F00-$7FFF SATB
+;
+; ***************************************************************************
+
+		include "core.inc"
+		.list
+		.mlist
+		include	"common.asm"
+		include	"vdc.asm"
+
+		include	"stage.inc"		; STAGE_COLUMNS, STAGE_WINDOW
+
+SATB_ADDR	=	$7F00
+MAX_SCROLL_X	=	(STAGE_COLUMNS - STAGE_WINDOW) * 8
+MAX_SCROLL_Y	=	512 - 224
+START_SCROLL_Y	=	192
+
+; ---------------------------------------------------------------------------
+; Zero page.
+
+		.zp
+scroll_x:	ds	2		; World X of the screen's left edge.
+scroll_y:	ds	2
+next_col:	ds	2		; Next stage column to stream into VRAM.
+rec_ptr:	ds	2		; Current record read pointer ($6000-$9FFF).
+tmp:		ds	2
+count:		ds	1
+mawr_hi:	ds	1		; Scratch for stream_column (tmp belongs to stream_ahead).
+
+; ---------------------------------------------------------------------------
+; Code.
+
+		.code
+
+core_main:	call	init_screen
+
+		; Load all 16 BG palettes.
+		lda	#^palette_data
+		tam3
+		stz	VCE_CTA + 0
+		stz	VCE_CTA + 1
+		tia	palette_data, VCE_CTW, 512
+
+		; Stream the first window of columns with the display off.
+		stz	<next_col + 0
+		stz	<next_col + 1
+.preload:	jsr	stream_column
+		lda	<next_col + 0
+		cmp	#STAGE_WINDOW - 1
+		bne	.preload
+
+		stz	<scroll_x + 0
+		stz	<scroll_x + 1
+		lda	#<START_SCROLL_Y
+		sta	<scroll_y + 0
+		lda	#>START_SCROLL_Y
+		sta	<scroll_y + 1
+		jsr	set_scroll_regs
+
+		call	set_dspon
+
+; Main loop: one iteration per frame, starting right after VBLANK.
+.frame:		call	wait_vsync
+		jsr	set_scroll_regs		; Show this frame's position.
+		jsr	read_input		; Compute next frame's position.
+		jsr	stream_ahead		; Make its columns resident.
+		bra	.frame
+
+; ---------------------------------------------------------------------------
+; set_scroll_regs - write scroll_x/scroll_y to BXR/BYR.
+
+set_scroll_regs:
+		st0	#VDC_BXR
+		lda	<scroll_x + 0
+		sta	VDC_DL
+		lda	<scroll_x + 1
+		and	#$01
+		sta	VDC_DH
+		st0	#VDC_BYR
+		lda	<scroll_y + 0
+		sta	VDC_DL
+		lda	<scroll_y + 1
+		and	#$01
+		sta	VDC_DH
+		rts
+
+; ---------------------------------------------------------------------------
+; read_input - pad 1 moves the camera.
+
+read_input:	lda	joynow
+		bit	#JOY_R
+		beq	.vert
+		ldx	#2			; Speed 2, or 4 with button I.
+		bit	#JOY_B1
+		beq	!+
+		ldx	#4
+!:		txa
+		clc
+		adc	<scroll_x + 0
+		sta	<scroll_x + 0
+		bcc	!+
+		inc	<scroll_x + 1
+!:		; Clamp to MAX_SCROLL_X.
+		lda	<scroll_x + 1
+		cmp	#>MAX_SCROLL_X
+		bcc	.vert
+		bne	.clamp_x
+		lda	<scroll_x + 0
+		cmp	#<MAX_SCROLL_X
+		bcc	.vert
+.clamp_x:	lda	#<MAX_SCROLL_X
+		sta	<scroll_x + 0
+		lda	#>MAX_SCROLL_X
+		sta	<scroll_x + 1
+
+.vert:		lda	joynow
+		bit	#JOY_D
+		beq	.up
+		lda	<scroll_y + 0		; y += 2, max MAX_SCROLL_Y
+		clc
+		adc	#2
+		sta	<scroll_y + 0
+		bcc	!+
+		inc	<scroll_y + 1
+!:		lda	<scroll_y + 1
+		beq	.done
+		lda	<scroll_y + 0
+		cmp	#<MAX_SCROLL_Y
+		bcc	.done
+		lda	#<MAX_SCROLL_Y
+		sta	<scroll_y + 0
+		rts
+.up:		bit	#JOY_U
+		beq	.done
+		lda	<scroll_y + 0		; y -= 2, min 0
+		sec
+		sbc	#2
+		sta	<scroll_y + 0
+		bcs	.done
+		dec	<scroll_y + 1
+		bpl	.done
+		stz	<scroll_y + 0
+		stz	<scroll_y + 1
+.done:		rts
+
+; ---------------------------------------------------------------------------
+; stream_ahead - stream columns until next_col > (scroll_x / 8) + 33.
+
+stream_ahead:	lda	<scroll_x + 1		; tmp = scroll_x >> 3
+		sta	<tmp + 1
+		lda	<scroll_x + 0
+		lsr	<tmp + 1
+		ror	a
+		lsr	<tmp + 1
+		ror	a
+		lsr	<tmp + 1
+		ror	a
+		clc				; tmp += 33
+		adc	#STAGE_WINDOW - 2
+		sta	<tmp + 0
+		bcc	!+
+		inc	<tmp + 1
+!:		; while (next_col <= tmp) stream_column
+.loop:		lda	<tmp + 1
+		cmp	<next_col + 1
+		bcc	.done
+		bne	.go
+		lda	<tmp + 0
+		cmp	<next_col + 0
+		bcc	.done
+.go:		lda	<next_col + 1		; Stop at the end of the stage.
+		cmp	#>STAGE_COLUMNS
+		bcc	.ok
+		lda	<next_col + 0
+		cmp	#<STAGE_COLUMNS
+		bcs	.done
+.ok:		jsr	stream_column
+		bra	.loop
+.done:		rts
+
+; ---------------------------------------------------------------------------
+; stream_column - upload the record for next_col, then next_col++.
+;
+; Record: u8 n; n * (u16 tile#, 32 bytes); 64 * u16 BAT words.
+
+stream_column:
+		; Pointer table entry = stage_data + next_col * 3 (in 1st bank).
+		lda	#^stage_data
+		tam3
+		lda	<next_col + 0
+		sta	<rec_ptr + 0
+		lda	<next_col + 1
+		sta	<rec_ptr + 1
+		asl	<rec_ptr + 0		; *2
+		rol	<rec_ptr + 1
+		lda	<rec_ptr + 0		; + next_col = *3
+		clc
+		adc	<next_col + 0
+		sta	<rec_ptr + 0
+		lda	<rec_ptr + 1
+		adc	<next_col + 1
+		adc	#$60			; Bank mapped at $6000.
+		sta	<rec_ptr + 1
+
+		lda	[rec_ptr]		; Bank offset of the record.
+		clc
+		adc	#^stage_data
+		pha
+		ldy	#1
+		lda	[rec_ptr], y
+		tax
+		iny
+		lda	[rec_ptr], y
+		stx	<rec_ptr + 0
+		sta	<rec_ptr + 1
+		pla
+		tam3				; Record spans $6000-$9FFF.
+		inc	a
+		tam4
+
+		lda	[rec_ptr]		; Number of tile uploads.
+		sta	<count
+		jsr	inc_ptr_1
+		lda	<count
+		beq	.bat
+
+.upload:	; MAWR = tile# * 16
+		ldy	#1
+		lda	[rec_ptr], y		; tile# hi
+		sta	<mawr_hi
+		lda	[rec_ptr]		; tile# lo
+		asl	a
+		rol	<mawr_hi
+		asl	a
+		rol	<mawr_hi
+		asl	a
+		rol	<mawr_hi
+		asl	a
+		rol	<mawr_hi
+		st0	#VDC_MAWR
+		sta	VDC_DL
+		lda	<mawr_hi
+		sta	VDC_DH
+		st0	#VDC_VWR
+
+		ldy	#2			; 32 bytes of pattern.
+.pat:		lda	[rec_ptr], y
+		sta	VDC_DL
+		iny
+		lda	[rec_ptr], y
+		sta	VDC_DH
+		iny
+		cpy	#34
+		bne	.pat
+
+		lda	<rec_ptr + 0		; rec_ptr += 34
+		clc
+		adc	#34
+		sta	<rec_ptr + 0
+		bcc	!+
+		inc	<rec_ptr + 1
+!:		dec	<count
+		bne	.upload
+
+.bat:		; BAT column: VRAM increment 64, MAWR = next_col & 63.
+		st0	#VDC_CR
+		lda	<vdc_crl
+		sta	VDC_DL
+		lda	#$10			; Increment by 64.
+		sta	VDC_DH
+
+		st0	#VDC_MAWR
+		lda	<next_col + 0
+		and	#63
+		sta	VDC_DL
+		st2	#0			; MAWR hi = 0 (row 0).
+		st0	#VDC_VWR
+		cly
+.batloop:	lda	[rec_ptr], y
+		sta	VDC_DL
+		iny
+		lda	[rec_ptr], y
+		sta	VDC_DH
+		iny
+		cpy	#128			; 64 words.
+		bne	.batloop
+
+		st0	#VDC_CR			; Back to increment by 1.
+		lda	<vdc_crl
+		sta	VDC_DL
+		st2	#$00
+
+		inc	<next_col + 0
+		bne	!+
+		inc	<next_col + 1
+!:		rts
+
+inc_ptr_1:	inc	<rec_ptr + 0
+		bne	!+
+		inc	<rec_ptr + 1
+!:		rts
+
+; ---------------------------------------------------------------------------
+; init_screen - 256x224, 64x64 BAT, SATB at $7F00, display off.
+
+init_screen	.proc
+		php
+		sei
+		call	clear_vce
+		lda.l	#$100			; Fill BAT with tile #$100.
+		sta.l	<_ax
+		lda.h	#$100
+		sta.h	<_ax
+		lda	#>(64 * 64)		; BAT size in words / 256.
+		sta	<_bl
+		call	clear_vram_vdc
+		lda	#<.mode
+		sta.l	<_bp
+		lda	#>.mode
+		sta.h	<_bp
+		ldy	#^.mode
+		call	set_mode_vdc
+		bit	VDC_SR
+		plp
+		call	wait_vsync
+		leave
+
+.mode:		db	$80
+		db	VCE_CR_5MHz + XRES_SOFT
+		db	VDC_MWR
+		dw	VDC_MWR_64x64 + VDC_MWR_1CYCLE
+		db	VDC_HSR
+		dw	VDC_HSR_256
+		db	VDC_HDR
+		dw	VDC_HDR_256
+		db	VDC_VPR
+		dw	VDC_VPR_224
+		db	VDC_VDW
+		dw	VDC_VDW_224
+		db	VDC_VCR
+		dw	VDC_VCR_224
+		db	VDC_DCR
+		dw	$0010			; Auto VRAM->SATB each VBLANK.
+		db	VDC_DVSSR
+		dw	SATB_ADDR
+		db	VDC_BXR
+		dw	$0000
+		db	VDC_BYR
+		dw	$0000
+		db	VDC_RCR
+		dw	$0000
+		db	VDC_CR
+		dw	$000C			; VSYNC & RCR IRQ enable.
+		db	0
+		.endp
+
+; ---------------------------------------------------------------------------
+; Data.
+
+		.data
+		.bank	$08
+		.page	3
+palette_data:	incbin	"palette.bin"
+
+		.bank	$10
+		.page	3
+stage_data:	incbin	"stage.bin"

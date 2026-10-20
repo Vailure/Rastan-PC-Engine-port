@@ -14,6 +14,10 @@ from the ROMs (`*.bin`, snapshots, renders, disassembly) is git-ignored.
 | `tools/arcade_gfx.py` | ROM region loader (MAME layout) and 4bpp packed tile/sprite decoder |
 | `tools/gfx_sheets.py` | Renders all 16,384 BG tiles and 4,096 sprites to PNG sheets |
 | `tools/fgmap.py` | Static decoder for the foreground world map in the 68000 program ROM |
+| `tools/bgmap.py` | Static decoder for the background strips |
+| `tools/pce_stage.py` | Arcade stage → PCE data: composite, palettes, VRAM streaming schedule |
+| `tools/test_scroll.py` | Scrolls the ROM headless and checks every frame pixel-for-pixel |
+| `src/main.asm` | PC Engine engine (PCEAS, using HuC's core library) |
 | `tools/render_map.py` | Renders the FG world strip with a palette captured from the simulator |
 | `tools/snap.py`, `tools/contact.py` | Reads simulator snapshots and renders arcade frames like MAME |
 | `tools/extract_roms.py` | Builds interleaved `maincpu.bin` / `pc080sn.bin` / `pc090oj.bin` |
@@ -21,7 +25,26 @@ from the ROMs (`*.bin`, snapshots, renders, disassembly) is git-ignored.
 | `sim/` | Headless Rastan main-CPU simulator (Musashi 68000) and a linear disassembler |
 | `sim/scripts/` | Input scripts for the simulator |
 
-## Quick start
+## Building the ROM
+
+Requirements: Python 3 with numpy and Pillow, gcc and zlib, and a built checkout of
+[HuC](https://github.com/pce-devel/huc), which provides `pceas` and the `tgemu` core used by the tests.
+
+```sh
+make HUC=/path/to/huc          # -> build/rastan.pce
+make HUC=/path/to/huc test     # scroll the ROM headless and compare with the converter preview
+```
+
+The build:
+1. Extracts the ROM regions.
+2. Runs the arcade program in the simulator to capture round 1's palette.
+3. Converts round 1 (`tools/pce_stage.py`).
+4. Assembles `src/main.asm`.
+
+**Milestone 1 controls:** RIGHT scrolls (hold I for 4 px/frame), UP and DOWN scroll vertically.
+The stage only scrolls forward, as in the arcade.
+
+## Simulator quick start
 
 ```sh
 python3 tools/extract_roms.py roms/rastan sim
@@ -29,6 +52,23 @@ make -C sim
 sim/sim sim/maincpu.bin sim/scripts/play1.txt out/play1.snp 10   # coin, start, walk right
 cd tools && python3 contact.py ../out/play1.snp ../out/play1.png 700 900 1100
 ```
+
+## How stage 1 is converted (`tools/pce_stage.py`)
+
+- **One layer:** the arcade FG layer is composited over the BG layer locked to the same scroll
+  speed (1:1). Round 1's BG uses only 5 distinct strips, so they are repeated to cover the FG.
+  Parallax is lost for now and can come back later with raster splits.
+- **Colors:** quantized to 9-bit RGB, with one shared color 0 (the most common color).
+  Tiles are greedily packed into 16 palettes of 15 colors. Round 1 has 71 distinct colors after quantization.
+- **VRAM streaming:** round 1 has 3,343 unique 8x8 patterns, but VRAM holds 1,024.
+  Since the stage scrolls forward only, the converter simulates a cache offline.
+  The resident window is 35 columns (33 visible, 1 preloaded, 1 lagging so that tiles still on screen
+  are never overwritten). Peak use is 928 of 1,024 slots.
+  Each column record carries the patterns it needs uploaded, plus its 64 BAT words.
+- **Size:** round 1 is 488 KB. Compressing the BAT columns and patterns is a later task,
+  because six rounds at this rate would not fit in 8 Mbit.
+
+VRAM layout: BAT `$0000`, streamed tiles `$1000-$4FFF` (#`$100-$4FF`), sprites `$5000`, SATB `$7F00`.
 
 Simulator script commands: `in <frame> <p1> <sys>` (active-low pad bits; up 01, down 02,
 left 04, right 08, b1 10, b2 20), `poke <from> <to> <addr> <b|w|l> <val>`,
@@ -57,10 +97,14 @@ The headless runner is built with `tools/tgrun/build.sh`, after running `make` i
 - [x] Arcade graphics decode
 - [x] Headless arcade simulator, with frames verified against the real game's look
 - [x] FG world map decoded statically from ROM
-- [ ] Per-round palettes (needs a full playthrough with a health cheat)
-- [ ] BG strip decode and flattening into one layer
-- [ ] PCE asset converter (dedupe with flip expansion, 16-palette fit, metatiles, collision)
-- [ ] Stage 1 scrolling ROM
+- [x] BG strip decode (`tools/bgmap.py`) and flattening into one layer
+- [x] PCE stage converter: 16-palette fit and offline VRAM streaming schedule
+- [x] Stage 1 scrolling ROM, verified pixel-exact against the converter in the headless emulator
+- [ ] Per-round palettes for rounds 2-6. Needs a full playthrough; the bot still dies in pits, and
+      `$10D2A6` is only a *candidate* health counter.
+- [ ] Palette cycling (arcade BG palette 2 animates)
+- [ ] Data compression (metatiles, LZ)
+- [ ] Collision data and the player sprite
 
 ## Licenses
 
