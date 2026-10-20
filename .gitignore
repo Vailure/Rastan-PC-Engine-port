@@ -1,0 +1,17 @@
+# Arcade ROMs and anything derived from them stay local (Taito copyright)
+roms/
+*.zip
+*.bin
+*.snp
+*.asm
+out/
+*.pce
+*.ppm
+
+# build outputs
+sim/sim
+sim/dasm
+tools/tgrun/tgrun
+__pycache__/
+*.o
+*.log

@@ -1,0 +1,6 @@
+patch 5073a 73
+in 100 ff 3f
+in 106 ff 1f
+in 200 ff 17
+in 206 ff 1f
+end 700
