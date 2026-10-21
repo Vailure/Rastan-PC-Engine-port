@@ -1,0 +1,84 @@
+"""test_player.py rom : behavior checks for Rastan, run headless.
+
+Each check drives the pad and compares the trace with values measured in the
+arcade program (see README). Exits non-zero on any failure.
+"""
+import sys
+from trace_player import trace, symbols, TGRUN
+import os
+import subprocess
+
+rom = sys.argv[1]
+fails = []
+
+
+def check(name, ok, detail=''):
+    print(('PASS ' if ok else 'FAIL ') + name + (f'  ({detail})' if detail else ''))
+    if not ok:
+        fails.append(name)
+
+
+def run(frames, *inputs):
+    return trace(rom, frames, list(inputs))
+
+
+# Start position (arcade x 32 / y 112 mapped to world) and idle.
+r = run(60)
+check('starts idle at (48,295)', (r[-1]['x'], r[-1]['y'], r[-1]['state']) == (48, 295, 0),
+      f"{r[-1]['x']},{r[-1]['y']} state {r[-1]['state']}")
+
+# Walk: 1 px/frame for 15 frames, then 2 px/frame (measured in the arcade).
+r = run(140, 60, 139, '04')
+d = [r[f]['x'] - r[f - 1]['x'] for f in range(61, 120)]
+check('walk speed ramp 1px x15 then 2px', d[:15] == [1] * 15 and set(d[15:]) == {2}, f'{d[:20]}')
+
+# Low jump: 36 px up, back on the ground after 36 frames.
+r = run(200, 100, 102, '40')
+ys = [x['y'] for x in r[100:180]]
+peak = 295 - min(ys)
+land = next(i for i, x in enumerate(r[101:], 101) if x['state'] == 0) - 100
+check('low jump height 36', peak == 36, f'{peak}')
+check('low jump lands after 36 frames', abs(land - 37) <= 1, f'{land}')
+
+# High jump (UP+I): 68 px.
+r = run(200, 100, 102, '41')
+peak = 295 - min(x['y'] for x in r[100:200])
+check('high jump height 68', peak == 68, f'{peak}')
+
+# Standing attack: 21 frames, then idle.
+r = run(160, 100, 101, '80')
+atk = [x['state'] for x in r[100:140]]
+n = sum(1 for s in atk if s == 4)
+check('attack lasts 21 frames', abs(n - 21) <= 1, f'{n}')
+check('attack returns to idle', r[-1]['state'] == 0)
+
+# Crouch while DOWN is held.
+r = run(130, 100, 120, '02')
+check('crouch while DOWN held', r[110]['state'] == 2 and r[-1]['state'] == 0)
+
+# Rope route: hold RIGHT+UP, jump every second; must reach the rope and get past the pit.
+args = ['60', '1600', '05']
+for f in range(100, 1600, 60):
+    args += [str(f), str(f + 3), '40']
+r = trace(rom, 1600, args)
+climbed = any(x['state'] == 6 for x in r)
+past = max(x['x'] for x in r)
+check('catches and climbs the first rope', climbed)
+check('gets past the rope pit (x > 1500)', past > 1500, f'max x {past}')
+
+# Frame budget: the main loop runs exactly once per frame during that run.
+lst = os.path.join(os.path.dirname(__file__), '..', 'src', 'main.lst')
+import re
+off = None
+for ln in open(lst):
+    m = re.match(r'\s*\d+\s+F8:(20[0-9A-F]{2})\s+loop_cnt:', ln)
+    if m:
+        off = int(m.group(1), 16) - 0x2000
+out = subprocess.run([TGRUN, rom, '1500', '/dev/null'] + args, capture_output=True, text=True, check=True,
+                     env=dict(os.environ, TGRUN_PEEK=f'{off:x},2')).stdout.split('\n')
+cnt = [int(l.split(':')[1].split()[0], 16) | int(l.split(':')[1].split()[1], 16) << 8 for l in out if ':' in l]
+slow = sum(1 for i in range(200, len(cnt)) if cnt[i] - cnt[i - 1] != 1)
+check('no slow frames during play', slow == 0, f'{slow} frames')
+
+print(f'{len(fails)} failure(s)')
+sys.exit(1 if fails else 0)
