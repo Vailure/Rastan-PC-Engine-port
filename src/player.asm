@@ -48,7 +48,7 @@ p_anim:		ds	2		; Current animation (pose, frames) list.
 p_animi:	ds	1		; Index into it (bytes).
 p_animt:	ds	1		; Frames left on this pose (0 = hold).
 p_animend:	ds	1		; Set when a one-shot animation finished.
-p_jatk:		ds	1		; Jump attack playing.
+p_jatk:		ds	1		; Air attack: 0 none, 1 swing/up thrust, 2 down thrust.
 p_pose:		ds	1
 p_pose_up:	ds	1		; Pose currently uploaded ($FF none).
 p_buf:		ds	1		; 0: buffer A shows, 1: B.
@@ -199,11 +199,23 @@ st_catk:	lda	<p_animend
 !:		rts
 
 ; --- In the air.
-st_air:		bbr1	<padtrg, .no_atk	; Jump attack (once per jump).
+st_air:		bbr1	<padtrg, .no_atk	; Air attack (once per jump):
 		lda	<p_jatk
 		bne	.no_atk
-		inc	<p_jatk
-		lda	#<anim_jatk
+		bbr6	<pad, .not_down		; DOWN: down thrust, held to landing.
+		lda	#2
+		sta	<p_jatk
+		lda	#<anim_dthrust
+		ldx	#>anim_dthrust
+		jsr	set_anim
+		bra	.no_atk
+.not_down:	inc	<p_jatk			; UP: up thrust, else swing.
+		bbr4	<pad, .swing
+		lda	#<anim_uthrust
+		ldx	#>anim_uthrust
+		jsr	set_anim
+		bra	.no_atk
+.swing:		lda	#<anim_jatk
 		ldx	#>anim_jatk
 		jsr	set_anim
 .no_atk:	lda	<p_jatk			; Back to the jump pose when done.
@@ -541,8 +553,12 @@ move_down:	jsr	floor_below
 !:		dec	<dy
 		bne	move_down
 		rts
-.land:		lda	<p_jatk			; Land: stand (or keep walking).
+.land:		lda	<p_jatk			; Down thrust lands crouched.
 		stz	<p_jatk
+		cmp	#2
+		bne	!+
+		jmp	enter_crouch
+!:
 		lda	<pad
 		and	#JOY_L + JOY_R
 		beq	!+

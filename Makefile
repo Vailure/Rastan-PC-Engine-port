@@ -45,8 +45,12 @@ $(BUILD)/attract.snp: sim/sim sim/maincpu.bin sim/scripts/attract_demo.txt
 	@mkdir -p $(BUILD)
 	sim/sim sim/maincpu.bin sim/scripts/attract_demo.txt $@ 1
 
-$(PLAYER)/player.bin: tools/pce_player.py tools/fgmap.py sim/maincpu.bin $(BUILD)/actions.snp $(BUILD)/attract.snp
-	cd tools && python3 pce_player.py ../sim/maincpu.bin ../$(BUILD)/actions.snp ../$(BUILD)/attract.snp ../$(PLAYER)
+$(BUILD)/thrusts.snp: sim/sim sim/maincpu.bin sim/scripts/thrusts.txt
+	@mkdir -p $(BUILD)
+	sim/sim sim/maincpu.bin sim/scripts/thrusts.txt $@ 1
+
+$(PLAYER)/player.bin: tools/pce_player.py tools/fgmap.py sim/maincpu.bin $(BUILD)/actions.snp $(BUILD)/attract.snp $(BUILD)/thrusts.snp
+	cd tools && python3 pce_player.py ../sim/maincpu.bin ../$(BUILD)/actions.snp ../$(BUILD)/attract.snp ../$(BUILD)/thrusts.snp ../$(PLAYER)
 
 $(BUILD)/rastan.pce: src/main.asm src/player.asm $(STAGE)/stage.bin $(PLAYER)/player.bin
 	@mkdir -p $(BUILD)/opt

@@ -52,6 +52,16 @@ n = sum(1 for s in atk if s == 4)
 check('attack lasts 21 frames', abs(n - 21) <= 1, f'{n}')
 check('attack returns to idle', r[-1]['state'] == 0)
 
+# Down thrust: jump, then DOWN+II - sword-down pose held through the fall, lands crouched.
+r = run(200, 100, 102, '40', 110, 113, '82', 113, 160, '02')
+air = [x for x in r[120:160] if x['state'] == 3]
+poses = sorted({x['pose'] for x in air})
+landed = next((x for x in r[110:200] if x['state'] != 3), None)
+check('down thrust holds a single pose while falling', len(air) > 5 and len({x['pose'] for x in air[-5:]}) == 1,
+      f'poses {poses}')
+check('down thrust lands crouched', landed is not None and landed['state'] == 2,
+      f"state {landed['state'] if landed else None}")
+
 # Crouch while DOWN is held.
 r = run(130, 100, 120, '02')
 check('crouch while DOWN held', r[110]['state'] == 2 and r[-1]['state'] == 0)

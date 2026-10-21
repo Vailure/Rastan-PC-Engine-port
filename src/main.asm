@@ -414,6 +414,6 @@ stage_data:	incbin	"stage.bin"
 		.page	3
 player_data:	incbin	"player.bin"
 
-		.bank	$54
+		.bank	$56
 		.page	5
 collision_data:	incbin	"collision.bin"
