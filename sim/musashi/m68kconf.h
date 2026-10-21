@@ -216,8 +216,9 @@ int sim_int_ack(int);
  * instruction.
  */
 #ifndef M68K_INSTRUCTION_HOOK
-#define M68K_INSTRUCTION_HOOK       M68K_OPT_OFF
-#define M68K_INSTRUCTION_CALLBACK(pc) your_instruction_hook_function(pc)
+#define M68K_INSTRUCTION_HOOK       M68K_OPT_SPECIFY_HANDLER
+void sim_instr_hook(unsigned int pc);
+#define M68K_INSTRUCTION_CALLBACK(pc) sim_instr_hook(pc)
 #endif
 
 

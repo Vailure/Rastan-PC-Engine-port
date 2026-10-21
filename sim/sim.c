@@ -9,6 +9,13 @@
  *   poke <from> <to> <addr> <b|w|l> <val>  write value at start of each frame in range
  *   end  <frame>                           stop
  *   patch <addr> <bytehex>                 patch program ROM byte before reset
+ *   pcprof <from> <to> <file>              per-PC execution counts for frames from..to
+ *   wtrace <lo> <hi>                       log writer PCs for an address range (with trace output)
+ *   calltrace <frame> <file>               log every JSR/BSR executed in one frame
+ *   watch <addr> <lenhex>                  log writes (frame, PC, addr, byte) to stderr
+ *   profile <from_frame>                   per-PC instruction counts + RAM access map
+ *   focus <entryhex>                       restrict profile to calls of one routine
+ *   callsnap <entryhex> <file>             RAM+regs at entry/exit of every call (lockstep tests)
  *   trace                                  log PCs that write tilemap RAM (stderr at end)
  */
 #include <stdio.h>
@@ -29,8 +36,57 @@ static uint8_t dswa = 0xfe, dswb = 0xff;
 static int irq_pending;
 static int frame;
 static int trace_on;
+static int profile_on;                 /* profile: per-PC instruction counts in gameplay frames */
+static uint32_t *pc_count;
+static uint8_t ram_touch[0x4000];      /* bit0 read, bit1 write (work RAM) */
+static int profile_from = 0x7fffffff;
+static uint32_t focus_entry, focus_sp; static int in_focus;
+static gzFile callsnap_f;                 /* callsnap <entry> <file>: RAM + regs at entry and exit of each call */
+static uint8_t callsnap_in[0x4000]; static uint32_t callsnap_regs[16];   /* focus <entry>: profile only inside that routine */
+static uint32_t watch_lo, watch_hi;   /* watch <addr> <len>: log writes in [lo,hi) */
+static FILE *watch_f;
+static uint32_t wtrace_lo = 1, wtrace_hi = 0;   /* wtrace <lo> <hi>: log writer PCs for an address range */
 static uint32_t cur_pc_hist[0x60000 / 2];
 static uint64_t unmapped_reads, unmapped_writes; static uint32_t last_unmapped_w;
+
+/* pcprof <from> <to> <file> : count executed instructions per PC within a frame range */
+static char ct_file[256];
+static int prof_from = -1, prof_to = -1; static char prof_file[256];
+static uint32_t *prof_hits;
+static int calltrace_frame = -1; static FILE *calltrace_out; static uint32_t ct_sp0;
+void sim_instr_hook(unsigned int pc)
+{
+    if (prof_hits && pc < 0x60000) prof_hits[pc >> 1]++;
+    if (focus_entry) {
+        uint32_t sp = m68k_get_reg(NULL, M68K_REG_SP);
+        if (pc == focus_entry && !in_focus) {
+            in_focus = 1; focus_sp = sp;
+            if (callsnap_f) {
+                memcpy(callsnap_in, wram, sizeof wram);
+                for (int r = 0; r < 16; r++) callsnap_regs[r] = m68k_get_reg(NULL, M68K_REG_D0 + r);
+            }
+        }
+        else if (in_focus && sp > focus_sp) {
+            in_focus = 0;
+            if (callsnap_f) {     /* record: "CSNP", frame, 16 regs at entry, RAM at entry, RAM at exit */
+                uint8_t h[8] = {'C', 'S', 'N', 'P', frame >> 24, frame >> 16, frame >> 8, frame};
+                gzwrite(callsnap_f, h, 8);
+                for (int r = 0; r < 16; r++) { uint8_t b[4] = {callsnap_regs[r] >> 24, callsnap_regs[r] >> 16, callsnap_regs[r] >> 8, callsnap_regs[r]}; gzwrite(callsnap_f, b, 4); }
+                gzwrite(callsnap_f, callsnap_in, sizeof wram);
+                gzwrite(callsnap_f, wram, sizeof wram);
+            }
+        }
+    }
+    if (profile_on && frame >= profile_from && pc < 0x60000 && (!focus_entry || in_focus)) pc_count[pc >> 1]++;
+    if (calltrace_out && pc < 0x60000) {      /* log JSR/BSR with stack depth */
+        uint16_t op = (rom[pc] << 8) | rom[pc + 1];
+        int depth = (int)(ct_sp0 - m68k_get_reg(NULL, M68K_REG_SP)) / 4;
+        if ((op & 0xff00) == 0x6100 || (op & 0xffc0) == 0x4e80) {
+            char buf[128]; m68k_disassemble(buf, pc, M68K_CPU_TYPE_68000);
+            fprintf(calltrace_out, "%*s%06x %s\n", depth > 0 ? depth * 2 : 0, "", pc, buf);
+        }
+    }
+}
 
 int sim_int_ack(int level) { (void)level; irq_pending = 0; m68k_set_irq(0); return M68K_INT_ACK_AUTOVECTOR; }
 
@@ -39,6 +95,7 @@ static inline uint16_t rd16(const uint8_t *p, uint32_t a) { return (p[a] << 8) |
 static uint8_t read8(uint32_t a)
 {
     a &= 0xffffff;
+    if (profile_on && frame >= profile_from && a >= 0x10c000 && a < 0x110000 && (!focus_entry || in_focus)) ram_touch[a - 0x10c000] |= 1;
     if (a < 0x60000) return rom[a];
     if (a >= 0x10c000 && a < 0x110000) return wram[a - 0x10c000];
     if (a >= 0x200000 && a < 0x201000) return pal[a - 0x200000];
@@ -61,7 +118,13 @@ static uint8_t read8(uint32_t a)
 static void write8(uint32_t a, uint8_t v)
 {
     a &= 0xffffff;
-    if (a >= 0x10c000 && a < 0x110000) { wram[a - 0x10c000] = v; return; }
+    if (watch_f && a >= watch_lo && a < watch_hi)
+        fprintf(watch_f, "W %d %06x %06x %02x\n", frame, m68k_get_reg(NULL, M68K_REG_PPC), a, v);
+    if (a >= wtrace_lo && a < wtrace_hi) { uint32_t pc = m68k_get_reg(NULL, M68K_REG_PPC); if (pc < 0x60000) cur_pc_hist[pc >> 1]++; }
+    if (a >= 0x10c000 && a < 0x110000) {
+        if (profile_on && frame >= profile_from && (!focus_entry || in_focus)) ram_touch[a - 0x10c000] |= 2;
+        wram[a - 0x10c000] = v; return;
+    }
     if (a >= 0x200000 && a < 0x201000) { pal[a - 0x200000] = v; return; }
     if (a >= 0xc00000 && a < 0xc10000) {
         vram[a - 0xc00000] = v;
@@ -104,7 +167,14 @@ static void load_script(const char *fn)
         else if (sscanf(line, "poke %d %d %x %c %x", &a, &b, &addr, &sz, &val) == 5) { c.kind = 2; c.from = a; c.to = b; c.addr = addr; c.size = sz; c.val = val; }
         else if (sscanf(line, "patch %x %x", &addr, &val) == 2) { rom[addr] = val; continue; }
         else if (sscanf(line, "end %d", &a) == 1) { end_frame = a; continue; }
+        else if (sscanf(line, "calltrace %d %255s", &a, prof_file) == 2) { calltrace_frame = a; strcpy(ct_file, prof_file); continue; }
+        else if (sscanf(line, "pcprof %d %d %255s", &a, &b, prof_file) == 3) { prof_from = a; prof_to = b; continue; }
+        else if (sscanf(line, "wtrace %x %x", &addr, &val) == 2) { wtrace_lo = addr; wtrace_hi = val; trace_on = 1; continue; }
         else if (strncmp(line, "trace", 5) == 0) { trace_on = 1; continue; }
+        else if (sscanf(line, "focus %x", &addr) == 1) { focus_entry = addr; continue; }
+        else if (sscanf(line, "callsnap %x %255s", &addr, ct_file) == 2) { focus_entry = addr; callsnap_f = gzopen(ct_file, "wb1"); continue; }
+        else if (sscanf(line, "profile %d", &a) == 1) { profile_on = 1; profile_from = a; continue; }
+        else if (sscanf(line, "watch %x %x", &addr, &val) == 2) { watch_lo = addr; watch_hi = addr + val; if (!watch_f) watch_f = stderr; continue; }
         else continue;
         if (ncmds == MAX_CMDS) { fprintf(stderr, "too many script lines\n"); exit(1); }
         cmds[ncmds++] = c;
@@ -132,6 +202,7 @@ int main(int argc, char **argv)
     FILE *f = fopen(argv[1], "rb");
     if (!f || fread(rom, 1, sizeof rom, f) != sizeof rom) { fprintf(stderr, "bad rom\n"); return 1; }
     fclose(f);
+    pc_count = calloc(0x30000, sizeof *pc_count);
     load_script(argv[2]);
     int every = argc > 4 ? atoi(argv[4]) : 1;
     gzFile g = gzopen(argv[3], "wb1");
@@ -152,15 +223,31 @@ int main(int argc, char **argv)
                 else m68k_write_memory_32(c->addr, c->val);
             }
         }
+        if (frame == calltrace_frame) { calltrace_out = fopen(ct_file, "w"); ct_sp0 = m68k_get_reg(NULL, M68K_REG_SP); }
+        if (frame == prof_from) prof_hits = calloc(0x30000, sizeof *prof_hits);
         m68k_execute(cycles_per_frame);
+        if (calltrace_out && frame == calltrace_frame) { fclose(calltrace_out); calltrace_out = NULL; }
+        if (frame == prof_to && prof_hits) {
+            FILE *pf = fopen(prof_file, "w");
+            for (uint32_t i = 0; i < 0x30000; i++) if (prof_hits[i]) fprintf(pf, "%06x %u\n", i * 2, prof_hits[i]);
+            fclose(pf); free(prof_hits); prof_hits = NULL;
+        }
         if (frame % every == 0) write_snapshot(g);
         /* vblank at end of frame: IRQ5, held until acknowledged */
         irq_pending = 1;
         m68k_set_irq(5);
     }
     gzclose(g);
+    if (callsnap_f) gzclose(callsnap_f);
     fprintf(stderr, "frames=%d pc=%06x unmapped r=%llu w=%llu last_w=%06x\n", frame, (unsigned)m68k_get_reg(NULL, M68K_REG_PC),
             (unsigned long long)unmapped_reads, (unsigned long long)unmapped_writes, last_unmapped_w);
+    if (profile_on) {
+        FILE *pf = fopen("profile.out", "w");
+        for (uint32_t i = 0; i < 0x30000; i++) if (pc_count[i]) fprintf(pf, "%06x %u\n", i * 2, pc_count[i]);
+        fclose(pf);
+        pf = fopen("ramtouch.bin", "wb"); fwrite(ram_touch, 1, sizeof ram_touch, pf); fclose(pf);
+        fprintf(stderr, "wrote profile.out, ramtouch.bin (from frame %d)\n", profile_from);
+    }
     if (trace_on) {
         char buf[128];
         for (uint32_t i = 0; i < 0x30000; i++) if (cur_pc_hist[i]) {

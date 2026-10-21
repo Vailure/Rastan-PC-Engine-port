@@ -20,3 +20,5 @@ __pycache__/
 build/
 *.lst
 *.sym
+sim/profile.out
+sim/ramtouch.bin
