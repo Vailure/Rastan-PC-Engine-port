@@ -2,7 +2,7 @@
 with periodic attack/jump. Used to capture round 1 palettes from the arcade program."""
 import sys
 L = ["in 100 ff 3f", "in 106 ff 1f", "in 200 ff 17", "in 206 ff 1f",
-     "poke 300 30000 10d2a6 w e",   # candidate health counter (see README)
+     "poke 300 30000 10c13a w 3000",   # health ($13A,A5) held at max: no hit can kill in one frame
      "end 20000"]
 for f in range(400, 20000, 2):
     p = 0xff & ~0x08              # right

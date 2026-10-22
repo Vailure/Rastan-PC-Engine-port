@@ -29,6 +29,11 @@ ST_AIR		=	3
 ST_ATTACK	=	4
 ST_CATK		=	5
 ST_CLIMB	=	6
+ST_HURT		=	7
+
+PLAYER_HP	=	12		; Arcade: 12288 health, 3072 per lizardman hit.
+HIT_DAMAGE	=	3
+INVULN_FRAMES	=	90
 
 START_X		=	48		; Arcade x 32 + 16 (stage 1 start).
 START_Y		=	295		; Arcade y 112 + 183.
@@ -54,7 +59,15 @@ p_pose_up:	ds	1		; Pose currently uploaded ($FF none).
 p_buf:		ds	1		; 0: buffer A shows, 1: B.
 p_ncells:	ds	1
 p_hold:		ds	1
-p_nograb:	ds	1		; Frames before a rope can be caught again.		; Freeze the animation (climbing, not moving).
+p_nograb:	ds	1		; Frames before a rope can be caught again.
+p_hp:		ds	1
+p_invuln:	ds	1		; Frames of invulnerability left (sprite flickers).
+p_kdir:		ds	1		; Knockback: 1 right, $FF left.
+p_frame:	ds	1		; Frame counter (flicker).
+sb_x0:		ds	2		; Sword hitbox (world), valid when sword_box sets carry.
+sb_x1:		ds	2
+sb_y0:		ds	2
+sb_y1:		ds	2		; Freeze the animation (climbing, not moving).
 p_prev_cells:	ds	1
 cx:		ds	2		; Collision probe position.
 cy:		ds	2
@@ -103,6 +116,11 @@ player_init:	lda	#<START_X
 
 player_update:	lda	#COLL_BANK		; Collision data at $A000.
 		tam5
+		inc	<p_frame
+		lda	<p_invuln
+		beq	!+
+		dec	<p_invuln
+!:
 		lda	joynow
 		sta	<pad
 		lda	joytrg
@@ -120,6 +138,7 @@ player_update:	lda	#COLL_BANK		; Collision data at $A000.
 		dw	st_attack
 		dw	st_catk
 		dw	st_climb
+		dw	st_hurt
 
 ; --- Standing / walking.
 st_ground:	bbr0	<padtrg, .no_jump	; JOY_B1: jump.
@@ -294,6 +313,152 @@ st_air:		bbr1	<padtrg, .no_atk	; Air attack (once per jump):
 		bcc	!+
 		jmp	stage_start
 !:		rts
+
+; --- Hit: knocked back 1px/frame for the hurt animation, then stand (or die).
+st_hurt:	lda	<p_kdir
+		sta	<dx
+		jsr	move_x
+		jsr	floor_below		; Fall if knocked off a ledge.
+		bcs	!+
+		lda	#1
+		sta	<dy
+		jsr	move_down_nl
+!:		lda	<p_animend
+		beq	.done
+		lda	<p_hp
+		bne	!+
+		jmp	stage_start		; Out of health: restart the stage.
+!:		jmp	enter_stand
+.done:		rts
+
+; player_hit - an enemy hits Rastan. A = knockback direction (1 right, $FF left).
+; Ignored while invulnerable or already hurt.
+player_hit:	ldx	<p_invuln
+		bne	.no
+		ldx	<p_state
+		cpx	#ST_HURT
+		beq	.no
+		sta	<p_kdir
+		lda	<p_hp
+		sec
+		sbc	#HIT_DAMAGE
+		bcs	!+
+		cla
+!:		sta	<p_hp
+		lda	#INVULN_FRAMES
+		sta	<p_invuln
+		lda	#ST_HURT
+		sta	<p_state
+		stz	<p_jatk
+		lda	#<anim_hurt
+		ldx	#>anim_hurt
+		jmp	set_anim
+.no:		rts
+
+; sword_box - carry set and sb_* set if Rastan's sword is out this frame.
+sword_box:	lda	<p_state
+		cmp	#ST_ATTACK
+		beq	.stand
+		cmp	#ST_CATK
+		beq	.crouch
+		cmp	#ST_AIR
+		bne	.none
+		lda	<p_jatk
+		beq	.none
+		cmp	#2
+		beq	.down
+		lda	<p_pose
+		cmp	#POSE_UTHR
+		beq	.up
+		cmp	#POSE_JATK4		; Jump swing: sword out in jatk4/jatk5.
+		bcc	.none
+		cmp	#POSE_JATK5 + 1
+		bcs	.none
+		ldy	#0
+		bra	.front
+.stand:		lda	<p_pose			; Standing: atk4/atk5.
+		cmp	#POSE_ATK4
+		bcc	.none
+		cmp	#POSE_ATK5 + 1
+		bcs	.none
+		ldy	#0
+		bra	.front
+.crouch:	lda	<p_pose
+		cmp	#POSE_CATK4
+		bcc	.none
+		cmp	#POSE_CATK5 + 1
+		bcs	.none
+		ldy	#1
+		bra	.front
+.none:		clc
+		rts
+.down:		lda	<p_pose			; Down thrust: below him once pointed down.
+		cmp	#POSE_DTHR2
+		bcc	.none
+		ldy	#2
+		bra	.vert
+.up:		ldy	#3
+.vert:		lda	<p_x			; x: p_x - 10 .. p_x + 10
+		sec
+		sbc	#10
+		sta	<sb_x0
+		lda	<p_x + 1
+		sbc	#0
+		sta	<sb_x0 + 1
+		lda	<p_x
+		clc
+		adc	#10
+		sta	<sb_x1
+		lda	<p_x + 1
+		adc	#0
+		sta	<sb_x1 + 1
+		bra	.yrange
+.front:		; Facing right: p_x .. p_x + 56; left: p_x - 56 .. p_x.
+		lda	<p_face
+		bne	.left
+		lda	<p_x
+		sta	<sb_x0
+		clc
+		adc	#56
+		sta	<sb_x1
+		lda	<p_x + 1
+		sta	<sb_x0 + 1
+		adc	#0
+		sta	<sb_x1 + 1
+		bra	.yrange
+.left:		lda	<p_x
+		sta	<sb_x1
+		sec
+		sbc	#56
+		sta	<sb_x0
+		lda	<p_x + 1
+		sta	<sb_x1 + 1
+		sbc	#0
+		sta	<sb_x0 + 1
+.yrange:	lda	.y0, y			; y = p_y + y0 .. p_y + y1 (signed)
+		jsr	.add_py
+		sta	<sb_y0
+		stx	<sb_y0 + 1
+		lda	.y1, y
+		jsr	.add_py
+		sta	<sb_y1
+		stx	<sb_y1 + 1
+		sec
+		rts
+.add_py:	pha				; A (signed) + p_y -> A/X
+		clc
+		adc	<p_y
+		tax
+		pla
+		and	#$80
+		beq	!+
+		lda	#$FF
+!:		adc	<p_y + 1
+		sax
+		rts
+		;	stand, crouch, down thrust, up thrust
+.y0:		db	-28, 0, 8, -64
+.y1:		db	8, 24, 44, -20
 
 ; --- On a rope: UP climbs, DOWN slides, I jumps off.
 st_climb:	lda	#1
@@ -493,6 +658,9 @@ enter_air:	lda	#ST_AIR
 		jmp	set_anim
 
 player_init_pos:
+		lda	#PLAYER_HP
+		sta	<p_hp
+		stz	<p_invuln
 		stz	<p_nograb
 		stz	<p_jatk
 		stz	<p_face
@@ -568,6 +736,16 @@ move_down:	jsr	floor_below
 		ldx	#>anim_idle
 		jmp	set_anim
 !:		jmp	enter_stand
+
+; move_down_nl - dy pixels down, stopping on floors without changing state.
+move_down_nl:	jsr	floor_below
+		bcs	.done
+		inc	<p_y
+		bne	!+
+		inc	<p_y + 1
+!:		dec	<dy
+		bne	move_down_nl
+.done:		rts
 
 ; move_up - dy (negative) pixels up. Rastan jumps through platforms.
 move_up:	lda	<p_y
@@ -884,7 +1062,9 @@ camera_update:	lda	<p_x			; tmp = p_x - 136
 ; Runs after the frame's logic; the SATB DMA at the next VBLANK picks it up,
 ; together with the scroll registers written then.
 
-player_draw:	jsr	anim_tick
+player_draw:	php				; VDC writes: IRQ held off (see stream_column).
+		sei
+		jsr	anim_tick
 		; Map the pose record (pose table at the start of player_data).
 		lda	#PLAYER_BANK
 		tam3
@@ -952,7 +1132,14 @@ player_draw:	jsr	anim_tick
 !:		dex
 		bne	.cell
 
-.satb:		; SATB entries 0..ncells-1, then clear what the last pose used.
+.satb:		; Flicker while invulnerable: draw no cells every other 4 frames.
+		lda	<p_invuln
+		beq	!+
+		lda	<p_frame
+		and	#4
+		beq	!+
+		stz	<p_ncells
+!:		; SATB entries 0..ncells-1, then clear what the last pose used.
 		st0	#VDC_MAWR
 		lda	#<SATB_ADDR
 		sta	VDC_DL
@@ -1067,4 +1254,5 @@ player_draw:	jsr	anim_tick
 		bra	.clear
 .end:		lda	<p_ncells
 		sta	<p_prev_cells
+		plp
 		rts
