@@ -52,6 +52,8 @@ def pieces(s, k):
 
 
 def norm(p):
+    if not p:
+        return ()
     mx = min(q[3] for q in p)
     my = min(q[1] for q in p)
     return tuple(sorted((a, dy - my, c, dx - mx) for a, dy, c, dx in p))
@@ -81,12 +83,18 @@ def main():
     for g, seqs in GROUPS.items():
         poses, ids, anims = [], {}, {}
         for name, cap, slot, a, b, *rest in seqs:
-            lo, hi = rest[0] if rest else (0, 0x2000)
+            # Options: a cell range (lo, hi), or {'cells': (lo, hi), 'index': (i0, i1)}
+            # to keep pieces i0..i1-1 in the arcade's order (big objects split in two).
+            opt = rest[0] if rest else {}
+            if isinstance(opt, tuple):
+                opt = {'cells': opt}
+            lo, hi = opt.get('cells', (0, 0x2000))
+            i0, i1 = opt.get('index', (0, 999))
             seq = []
             for f in range(a, b + 1):
                 s = frames[cap, f]
-                p = [q for q in pieces(s, slot) if lo <= q[2] < hi]
-                if not p:
+                p = [q for q in pieces(s, slot) if lo <= q[2] < hi][i0:i1]
+                if not p and 'index' not in opt:     # (a split part may be empty: keep its timing)
                     continue
                 bank = (s.sprctrl & 0xe0) >> 1
                 p = [(attr, dy, code, dx, bank + (attr & 15)) for attr, dy, code, dx in p]

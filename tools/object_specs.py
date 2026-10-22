@@ -19,6 +19,7 @@ FILES = {
     'gargoyle': 'gargoyle.snp',  # sim/scripts/gargoyle.txt: the gargoyle from checkpoint segment 8
     'woman': 'woman.snp',        # sim/scripts/woman.txt: the woman warrior (x 4523)
     'castle': 'castle.snp',      # sim/scripts/castle.txt: castle soldiers (mace slot 4, sword slot 6)
+    'boss': 'boss.snp',          # sim/scripts/boss.txt: the boss (slot 17), its fire (slots 18-22)
 }
 
 GROUPS = {
@@ -77,6 +78,23 @@ GROUPS = {
         ('jet_rise', 'castle', 1, 1481, 1497),
         ('jet_column', 'castle', 0, 1477, 1485),
     ],
+    # The boss (arcade slot 17, up to 18 pieces): every animation in two parts, the first
+    # 13 pieces in the arcade's order and the rest, drawn by two objects. Its fire
+    # (slots 18-22): forming at the top of the screen, then raining down.
+    'boss': [
+        ('boss_walk', 'boss', 17, 950, 1013, {'index': (0, 13)}),
+        ('boss2_walk', 'boss', 17, 950, 1013, {'index': (13, 99)}),
+        ('boss_rain', 'boss', 17, 1107, 1178, {'index': (0, 13)}),
+        ('boss2_rain', 'boss', 17, 1107, 1178, {'index': (13, 99)}),
+        ('boss_staff', 'boss', 17, 1365, 1413, {'index': (0, 13)}),
+        ('boss2_staff', 'boss', 17, 1365, 1413, {'index': (13, 99)}),
+        ('boss_leap', 'boss', 17, 1299, 1335, {'index': (0, 13)}),
+        ('boss2_leap', 'boss', 17, 1299, 1335, {'index': (13, 99)}),
+        ('boss_death', 'boss', 17, 2224, 2240, {'index': (0, 13)}),
+        ('boss2_death', 'boss', 17, 2224, 2240, {'index': (13, 99)}),
+        ('frag_form', 'boss', 18, 1107, 1136),
+        ('frag_fly', 'boss', 18, 1140, 1160),
+    ],
 }
 
 # Scripted flights, replayed relative to the spawn point:
@@ -87,7 +105,7 @@ PATHS = {
 
 # Pieces per pose (src/enemies.asm slot buffers): walkers 11 (the default), items and
 # bats 4, specials 13; projectiles 2 (single-piece here).
-GROUP_MAX = {'items': 4, 'rocks': 13, 'gargoyle': 13, 'jets': 13}
+GROUP_MAX = {'items': 4, 'rocks': 13, 'gargoyle': 13, 'jets': 13, 'boss': 13}
 
 # Poses the engine refers to by number: (group, animation, step) -> symbol.
 POSE_SYMBOLS = {

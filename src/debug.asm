@@ -20,7 +20,8 @@
 ;
 ; ***************************************************************************
 
-NUM_CP		=	6
+NUM_CP		=	6			; The arcade's checkpoints,
+NUM_WARP	=	NUM_CP + 1		; and a debug warp to the boss room.
 
 FONT_VRAM	=	$5C00			; Enemy cells (reloaded on close).
 FONT_TILE	=	FONT_VRAM >> 4		; Tile number of ' '.
@@ -54,10 +55,10 @@ dbg_line:	ds	1
 ; Checkpoints: camera x, camera y (port scroll_y), Rastan's x and y (world).
 ; Measured in the arcade by starting the round at each checkpoint.
 
-cp_cam_x:	dw	0, 2048, 4096, 6144, 8192, 9728
-cp_cam_y:	dw	192, 160, 192, 192, 265, 265
-cp_p_x:		dw	48, 2096, 4144, 6192, 8240, 9808
-cp_p_y:		dw	295, 263, 295, 295, 455, 455
+cp_cam_x:	dw	0, 2048, 4096, 6144, 8192, 9728, 11160
+cp_cam_y:	dw	192, 160, 192, 192, 265, 265, 265
+cp_p_x:		dw	48, 2096, 4144, 6192, 8240, 9808, 11320
+cp_p_y:		dw	295, 263, 295, 295, 455, 455, 455
 
 ; checkpoint_track - once a frame: the checkpoint moves on when the camera
 ; reaches the next one's segment (the arcade picks it by segment).
@@ -220,7 +221,7 @@ menu_change:	ldx	<dbg_sel
 		bne	.god
 		clc
 		adc	<dbg_cp
-		cmp	#NUM_CP
+		cmp	#NUM_WARP
 		bcs	.done			; (also catches -1)
 		sta	<dbg_cp
 		rts

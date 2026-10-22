@@ -462,17 +462,19 @@ GAME_BANK	=	$04
 		include	"items.asm"
 		include	"chimera.asm"
 		include	"boulder.asm"
-		include	"gargoyle.asm"
-		include	"woman.asm"
-		include	"jets.asm"
 		include	"props.asm"
 
-; Checkpoints and the debug menu: bank DEBUG_BANK, in MPR2 ($4000) all the time.
+; Checkpoints, the debug menu and more object code: bank DEBUG_BANK, in MPR2
+; ($4000) all the time, so it is as callable as GAME_BANK.
 DEBUG_BANK	=	$05
 		.code
 		.bank	DEBUG_BANK
 		.page	2
 		include	"debug.asm"
+		include	"gargoyle.asm"
+		include	"woman.asm"
+		include	"jets.asm"
+		include	"boss.asm"
 
 ; ---------------------------------------------------------------------------
 ; Data.

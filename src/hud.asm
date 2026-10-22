@@ -455,6 +455,14 @@ draw_chars:	sta	<hud_cell
 		include	"hudfont.inc"
 
 ; ---------------------------------------------------------------------------
+; round_clear - the boss is dead: round 1 again from its start (the only round
+; so far), with the score and lives kept.
+
+round_clear:	stz	<cur_cp
+		jsr	hud_reset
+		jmp	stage_start
+
+; ---------------------------------------------------------------------------
 ; player_died - lose a life and restart the stage (no game over screen yet:
 ; out of lives starts again with START_LIVES).
 

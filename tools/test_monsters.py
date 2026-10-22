@@ -14,6 +14,8 @@ Arcade values (round 1 census, sim/scripts/chimera.txt; see README):
 - In the castle (x 8200 on) sword and mace soldiers come in turn, stop about
   60 px away and swing; a swing that reaches costs 12 units.
 - Fire jets at 10382, 10478, 10574 erupt when Rastan is 172 px left of them.
+- The boss drops in when Rastan enters the last room and lands at y 446; ten
+  hits kill it for 5000, and the round is clear (round 1 again, score kept).
 """
 import sys
 from peek import peek
@@ -28,7 +30,7 @@ def check(name, ok, detail=''):
         fails.append(name)
 
 
-EK_LIZARD, EK_BLUE, EK_CHIM, EK_FIRE, EK_ROCK, EK_GARG, EK_WOMAN, EK_SWORD, EK_MACE, EK_JET = 0, 1, 5, 6, 7, 8, 10, 11, 12, 13
+EK_LIZARD, EK_BLUE, EK_CHIM, EK_FIRE, EK_ROCK, EK_GARG, EK_WOMAN, EK_SWORD, EK_MACE, EK_JET, EK_BOSS = 0, 1, 5, 6, 7, 8, 10, 11, 12, 13, 14
 ES_WALK, ES_ATTACK, ES_DYING = 1, 2, 4
 OBJ = {'e_state': 17, 'e_kind': 17, 'e_xl': 17, 'e_xh': 17, 'e_yl': 17, 'e_yh': 17, 'e_alt': 17}
 SEL, I, RIGHT = '10', '40', '04'
@@ -173,6 +175,22 @@ for i in range(1, len(r)):
             starts.setdefault(x_of(r[i], k), w16(r[i]['p_x']))
 check('fire jets erupt when Rastan is 172 px left of them', len(starts) == 3
       and all(abs(px - (jx - 172)) <= 3 for jx, px in starts.items()), f'{starts}')
+
+# The boss: the debug warp to the boss room (7th line), swinging every 25 frames.
+keys = [100, 100, SEL] + sum([[110 + 6 * k, 110 + 6 * k, RIGHT] for k in range(6)], []) + [150, 150, I]
+for f in range(300, 1000, 25):
+    keys += [f, f + 1, '80']
+r = run(god, 1000, keys)
+r3 = peek(god, 1000, keys, {'e_range': 17})
+bo = [(i, f['e_yl'][6] | f['e_yh'][6] << 8) for i, f in enumerate(r) if f['e_state'][6] and f['e_kind'][6] == EK_BOSS]
+check('the boss drops in and lands at y 446', bo and bo[0][1] < 400 and any(y == 446 for _, y in bo), f'from y {bo[0][1] if bo else None}')
+dead = next((i for i, f in enumerate(r) if f['e_kind'][6] == EK_BOSS and f['e_state'][6] == ES_DYING), None)
+hits = r3[dead]['e_range'][6] if dead else None
+check('ten hits kill it, for 5000', dead and hits == 10 and bcd(r[dead]['score']) - bcd(r[dead - 1]['score']) == 5000,
+      f'hits {hits}, score {bcd(r[dead]["score"]) if dead else None}')
+back = next((i for i in range(dead or 0, len(r)) if w16(r[i]['p_x']) == 48), None) if dead else None
+check('then the round is clear: round 1 again, score kept', back and bcd(r[back]['score']) >= 5000,
+      f'restart at frame {back}')
 
 print(f'{len(fails)} failure(s)')
 sys.exit(1 if fails else 0)

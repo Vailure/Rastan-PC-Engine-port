@@ -35,6 +35,7 @@ from the ROMs (`*.bin`, snapshots, renders, disassembly) is git-ignored.
 | `src/gargoyle.asm` | The gargoyle (replays the arcade's flight path) |
 | `src/woman.asm` | The woman warrior |
 | `src/jets.asm` | Fire jets over the castle's lava |
+| `src/boss.asm` | The round 1 boss and its fire; the round clear |
 | `src/hud.asm`, `tools/pce_hud.py` | HUD from the arcade's HUD sprites |
 | `src/debug.asm` | Checkpoints (death restarts, warps) and the debug menu |
 | `tools/test_debug.py` | Checks the menu, warps, invincibility and checkpoint restarts |
@@ -79,7 +80,7 @@ UP/DOWN pick a line, LEFT/RIGHT change a value, I applies, SELECT or II closes.
 
 | Line | What it does |
 |---|---|
-| Warp to checkpoint 0-5 | Restart at one of the arcade's round 1 checkpoints (segments 0, 4, 8, 12, 16, 19) |
+| Warp to checkpoint 0-6 | Restart at one of the arcade's round 1 checkpoints (segments 0, 4, 8, 12, 16, 19), or 6: the boss room |
 | Invincible | Enemies, water and deadly tiles do no harm (falling off the map still kills) |
 | Enemies | Walkers on/off (items and their bats still come) |
 | Refill health | Full health bar |
@@ -197,6 +198,13 @@ Not done yet: slopes, waterfall currents, the other collision codes, rope attack
   frames later while he is near; touching the flame hurts. They stay low at the lava surface, which in the port's
   224-line view is below the screen while Rastan crosses at the upper level. Not done: the castle's ceiling spikes
   (x 8328, 8488), whose bot captures show too little to model.
+- **The boss** (`src/boss.asm`; `sim/scripts/boss.txt`): drops in when Rastan enters the last room and lands
+  (anchor y 446). It walks at him, leaps when he is far, and alternates fire (five fragments form at the top of the
+  screen in front of it, then rain down at him in a fan) and a staff swing reaching about 80 px. Ten sword hits kill it
+  (it is untouchable for 20 frames after each), for 5000. The arcade draws it with up to 18 sprites: the converter
+  splits every pose by piece order (13 + the rest) and two objects draw it. Then the round is clear: with only round 1
+  ported, it starts again with the score and lives kept. The debug menu's warp has a 7th target, the boss room.
+- The later object code (gargoyle, woman, jets, boss) lives in bank 5 with the debug menu, which is always mapped.
 - **No torn frames:** the SATB is DMA'd at the start of VBLANK, before the object cell uploads, so `enemies_draw`
   plans which slots will get new cells at the next VBLANK (same order and budget) and draws each slot with the pose
   its buffer will hold. A frame never shows an old layout over new cells.
@@ -309,7 +317,9 @@ The headless runner is built with `tools/tgrun/build.sh`, after running `make` i
 - [x] Enemy spawns on the arcade's lanes, with its timing; blue club throwers
 - [x] The cave block (solid, broken by a down thrust)
 - [x] Weapons (axe, morning star, fire sword) and round 1's weapon items, with their bats
-- [ ] The rest of stage 1's enemies and the boss
+- [x] The rest of stage 1's enemies (approximate): chimeras, boulders, gargoyles, the woman warrior, castle soldiers, fire jets
+- [x] The round 1 boss; round clear
+- [ ] Castle ceiling spikes; score popups; the small castle flyers
 - [x] Restart at the arcade's checkpoints after a death (stream fast-forward, no preload data)
 - [x] Debug menu (SELECT): checkpoint warp, invincible, enemies on/off, health, lives, slow motion, weapon
 
