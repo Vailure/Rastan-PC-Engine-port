@@ -1,20 +1,28 @@
 ; ***************************************************************************
 ;
-; Rastan - enemies (milestone 3, approximate): stage 1 lizardmen.
+; Rastan - enemies (approximate): stage 1 lizardmen and blue club throwers.
 ;
-; Measured in the arcade (sim/scripts/lizard.txt): they enter at the right
+; Measured in the arcade (sim/scripts/lizard.txt): lizardmen enter at the right
 ; edge, walk at 7/8 px/frame, swing their club twice when about 56px from
 ; Rastan (hit lands when the club is out, 3072/12288 health), back off,
 ; and come again. One sword hit kills them (explosion, 10 steps x 3 frames).
 ;
-; Coordinates are world pixels; the anchor is 16px above the floor.
+; Blue club throwers (sim/scripts/blue.txt) walk the same way but stop 88-143 px
+; away and throw two clubs (at +8 and +27 frames of a 36-frame throw). The clubs
+; fly at 1.5 px/frame; one throw goes high (20 px above the thrower's anchor,
+; over a standing Rastan's head), the next low (13 px above, sinking to 6 px
+; above, head height). A club hit costs 3072 like a lizardman's; Rastan's sword
+; knocks clubs away. They die in one hit too, with the same explosion.
+;
+; Coordinates are world pixels; the anchor is 16px above the floor. Slots
+; 0..NUM_EN-1 hold enemies, the rest projectiles (clubs).
 ;
 ; ***************************************************************************
 
 		include	"enemies.inc"
 
-NUM_EN		=	4		; The arcade keeps at most 4 lizardmen alive.
-EN_SATB_MAX	=	64 - EN_SATB_FIRST
+NUM_EN		=	4		; The arcade keeps at most 4 alive.
+NUM_OBJ		=	NUM_EN + 4	; ... plus up to 4 clubs in flight.
 EN_SATB_FIRST	=	7 + 24		; SATB entries after the HUD's 7 and Rastan's 24.
 EN_VRAM		=	$5C00		; Resident enemy cells.
 EN_PATTERN	=	EN_VRAM >> 5
@@ -24,6 +32,10 @@ ES_WALK		=	1
 ES_ATTACK	=	2
 ES_RETREAT	=	3
 ES_DYING	=	4
+
+EK_LIZARD	=	0		; Kinds (e_kind).
+EK_BLUE		=	1
+EK_CLUB		=	2
 
 ATTACK_RANGE	=	52
 RETREAT_FRAMES	=	48
@@ -35,26 +47,31 @@ ey:		ds	2
 etmp:		ds	2
 spawn_timer:	ds	1
 spawn_step:	ds	1		; Index into spawn_gaps.
+spawn_kind:	ds	1		; Alternates lizardman / blue thrower.
+rng:		ds	1
 lane_best:	ds	2		; Nearest lane so far: y, distance.
 en_satb:	ds	1		; Entries written this frame.
 en_satb_prev:	ds	1
 
 		.bss
-e_state:	ds	NUM_EN
-e_xl:		ds	NUM_EN
-e_xh:		ds	NUM_EN
-e_yl:		ds	NUM_EN
-e_yh:		ds	NUM_EN
-e_face:		ds	NUM_EN		; 0 left, 1 right.
-e_animl:	ds	NUM_EN
-e_animh:	ds	NUM_EN
-e_animi:	ds	NUM_EN
-e_animt:	ds	NUM_EN
-e_animend:	ds	NUM_EN
-e_pose:		ds	NUM_EN
-e_timer:	ds	NUM_EN
-e_sub:		ds	NUM_EN		; Speed: skip every 8th step.
-e_struck:	ds	NUM_EN		; Club hit already checked this swing.
+e_state:	ds	NUM_OBJ
+e_xl:		ds	NUM_OBJ
+e_xh:		ds	NUM_OBJ
+e_yl:		ds	NUM_OBJ
+e_yh:		ds	NUM_OBJ
+e_face:		ds	NUM_OBJ		; 0 left, 1 right.
+e_animl:	ds	NUM_OBJ
+e_animh:	ds	NUM_OBJ
+e_animi:	ds	NUM_OBJ
+e_animt:	ds	NUM_OBJ
+e_animend:	ds	NUM_OBJ
+e_pose:		ds	NUM_OBJ
+e_timer:	ds	NUM_OBJ
+e_sub:		ds	NUM_OBJ		; Speed: skip every 8th step.
+e_struck:	ds	NUM_OBJ		; Club hit already checked this swing.
+e_kind:		ds	NUM_OBJ
+e_range:	ds	NUM_OBJ		; Attack distance.
+e_alt:		ds	NUM_OBJ		; Blue: next throw is low.
 
 		.code
 
@@ -116,20 +133,21 @@ enemies_init:	; Cells -> VRAM $5C00 (enemy_cells spans banks, map 2 at $6000).
 		tia	enemy_palettes, VCE_CTW, ENEMY_PALS * 32
 		plp
 
-enemies_reset:	ldx	#NUM_EN - 1
+enemies_reset:	ldx	#NUM_OBJ - 1
 !:		stz	e_state, x
 		dex
 		bpl	!-
 		lda	#SPAWN_FIRST
 		sta	<spawn_timer
 		stz	<spawn_step
+		stz	<spawn_kind
 		rts
 
 ; ---------------------------------------------------------------------------
 ; enemies_update
 
 enemies_update:	jsr	try_spawn
-		ldx	#NUM_EN - 1
+		ldx	#NUM_OBJ - 1
 .loop:		lda	e_state, x
 		beq	.next
 		phx
@@ -235,18 +253,33 @@ try_spawn:	dec	<spawn_timer
 		sta	e_xh, x
 		stz	e_face, x
 		stz	e_sub, x
-		lda	#ES_WALK
-		sta	e_state, x
-		lda	#<anim_liz_walk
-		ldy	#>anim_liz_walk
-		jmp	enemy_set_anim
+		stz	e_alt, x
+		; Kind: lizardmen only before world x 1500; from there blue throwers
+		; and lizardmen take turns (round 1 census, tools/object_census.py).
+		cla
+		ldy	<cx + 1
+		cpy	#>1500
+		bcc	.kind
+		bne	!+
+		ldy	<cx
+		cpy	#<1500
+		bcc	.kind
+!:		lda	<spawn_kind
+		eor	#1
+		sta	<spawn_kind
+.kind:		sta	e_kind, x
+		jmp	start_walk
 
 spawn_gaps:	db	49, 81, 65
 
 ; ---------------------------------------------------------------------------
 ; enemy_think - X = slot.
 
-enemy_think:	lda	e_state, x
+enemy_think:	lda	e_kind, x
+		cmp	#EK_CLUB
+		bne	!+
+		jmp	club_think
+!:		lda	e_state, x
 		cmp	#ES_DYING
 		bne	!+
 		lda	e_animend, x		; Explosion done: free the slot.
@@ -257,34 +290,71 @@ enemy_think:	lda	e_state, x
 		bcc	!+
 		lda	#ES_DYING
 		sta	e_state, x
-		lda	#<anim_liz_death
-		ldy	#>anim_liz_death
+		ldy	e_kind, x
+		lda	kind_death_l, y
+		pha
+		lda	kind_death_h, y
+		tay
+		pla
 		jmp	enemy_set_anim
 !:		lda	e_state, x
 		cmp	#ES_ATTACK
-		beq	.attack
-		cmp	#ES_RETREAT
-		beq	.retreat
+		bne	!+
+		jmp	.attack
+!:		cmp	#ES_RETREAT
+		bne	!+
+		jmp	.retreat
 
 		; --- Walk toward Rastan.
-		jsr	face_player
+!:		jsr	face_player
 		jsr	player_dist		; etmp = |p_x - e_x|, carry: |dy| small
-		bcc	.walk
-		lda	<etmp + 1
+		lda	e_kind, x
+		beq	.liz_near
+		; Blue: Rastan level with it or up to 64 px below (ey = dy).
+		lda	<ey
+		clc
+		adc	#24
+		sta	<ey
+		lda	<ey + 1
+		adc	#0
+		bne	.walk
+		lda	<ey
+		cmp	#24 + 64
+		bcs	.walk
+		bra	.near
+.liz_near:	bcc	.walk
+.near:		lda	<etmp + 1
 		bne	.walk
 		lda	<etmp
-		cmp	#ATTACK_RANGE
+		cmp	e_range, x
 		bcs	.walk
 		lda	#ES_ATTACK
 		sta	e_state, x
 		stz	e_struck, x
-		lda	#<anim_liz_attack
-		ldy	#>anim_liz_attack
+		stz	e_timer, x
+		ldy	e_kind, x
+		lda	kind_attack_l, y
+		pha
+		lda	kind_attack_h, y
+		tay
+		pla
 		jmp	enemy_set_anim
 .walk:		lda	e_face, x		; Step toward the facing direction.
 		jmp	enemy_step
 
-.attack:	; The club is out in pose 6: hit Rastan once per swing if in range.
+.attack:	lda	e_kind, x
+		beq	.club_swing
+		; Blue: clubs leave the hand 8 and 27 frames into the throw.
+		inc	e_timer, x
+		lda	e_timer, x
+		cmp	#8
+		beq	.throw
+		cmp	#27
+		bne	.wait
+.throw:		jsr	throw_club
+		bra	.wait
+
+.club_swing:	; The club is out in pose 6: hit Rastan once per swing if in range.
 		lda	e_pose, x
 		cmp	#6
 		bne	.armed
@@ -310,24 +380,226 @@ enemy_think:	lda	e_state, x
 .armed:		stz	e_struck, x
 .wait:		lda	e_animend, x
 		beq	.r2
+		lda	e_alt, x		; Blue: high and low throws alternate.
+		eor	#1
+		sta	e_alt, x
 		lda	#ES_RETREAT
 		sta	e_state, x
 		lda	#RETREAT_FRAMES
 		sta	e_timer, x
-		lda	#<anim_liz_walk
-		ldy	#>anim_liz_walk
+		ldy	e_kind, x
+		lda	kind_retreat_l, y
+		pha
+		lda	kind_retreat_h, y
+		tay
+		pla
 		jmp	enemy_set_anim
 .r2:		rts
 
 .retreat:	dec	e_timer, x		; Back off, still facing Rastan.
 		bne	!+
-		lda	#ES_WALK
-		sta	e_state, x
-		rts
+		jmp	start_walk
 !:		jsr	face_player
 		lda	e_face, x
 		eor	#1
 		jmp	enemy_step
+
+; start_walk - X = slot: walk toward Rastan with this kind's walk and range.
+start_walk:	lda	#ES_WALK
+		sta	e_state, x
+		ldy	e_kind, x
+		lda	kind_range, y
+		sta	e_range, x
+		cpy	#EK_BLUE		; Blue: 88 + 0..55.
+		bne	!+
+		jsr	rand
+		and	#$1F
+		sta	<etmp
+		jsr	rand
+		and	#$17
+		clc
+		adc	<etmp
+		adc	e_range, x
+		sta	e_range, x
+		ldy	e_kind, x
+!:		lda	kind_walk_l, y
+		pha
+		lda	kind_walk_h, y
+		tay
+		pla
+		jmp	enemy_set_anim
+
+; rand - A = next value of an 8-bit LFSR (X, Y kept).
+rand:		lda	<rng
+		bne	!+
+		lda	#$A5
+!:		asl	a
+		bcc	!+
+		eor	#$1D
+!:		sta	<rng
+		rts
+
+; Per-kind data: lizardman, blue thrower, club.
+kind_walk_l:	db	<anim_liz_walk, <anim_blue_walk, <anim_club
+kind_walk_h:	db	>anim_liz_walk, >anim_blue_walk, >anim_club
+kind_attack_l:	db	<anim_liz_attack, <anim_blue_throw, 0
+kind_attack_h:	db	>anim_liz_attack, >anim_blue_throw, 0
+kind_retreat_l:	db	<anim_liz_walk, <anim_blue_walk2, 0
+kind_retreat_h:	db	>anim_liz_walk, >anim_blue_walk2, 0
+kind_death_l:	db	<anim_liz_death, <anim_blue_death, 0
+kind_death_h:	db	>anim_liz_death, >anim_blue_death, 0
+kind_range:	db	ATTACK_RANGE, 88, 0
+kind_top:	db	36, 48, 8		; Body box: anchor - top .. anchor + 16,
+kind_half:	db	16, 16, 8		; x +/- half (club: +/- 8 around its centre).
+
+; ---------------------------------------------------------------------------
+; throw_club - X = blue thrower: a club leaves its hand toward Rastan.
+CLUB_DX		=	23			; Measured: hand 23 px ahead of the anchor.
+
+throw_club:	ldy	#NUM_OBJ - 1		; Free projectile slot?
+!:		lda	e_state, y
+		beq	.slot
+		dey
+		cpy	#NUM_EN
+		bcs	!-
+		rts
+.slot:		lda	e_face, x
+		sta	e_face, y
+		lda	e_face, x		; x = e_x -/+ 23
+		bne	.right
+		lda	e_xl, x
+		sec
+		sbc	#CLUB_DX
+		sta	e_xl, y
+		lda	e_xh, x
+		sbc	#0
+		sta	e_xh, y
+		bra	.y
+.right:		lda	e_xl, x
+		clc
+		adc	#CLUB_DX
+		sta	e_xl, y
+		lda	e_xh, x
+		adc	#0
+		sta	e_xh, y
+.y:		lda	#20			; High: anchor - 20, straight.
+		sta	<etmp
+		lda	#0
+		sta	e_timer, y
+		lda	e_alt, x
+		beq	!+
+		lda	#13			; Low: anchor - 13, sinking 7 px.
+		sta	<etmp
+		lda	#7
+		sta	e_timer, y
+!:		lda	e_yl, x
+		sec
+		sbc	<etmp
+		sta	e_yl, y
+		lda	e_yh, x
+		sbc	#0
+		sta	e_yh, y
+		lda	#EK_CLUB
+		sta	e_kind, y
+		lda	#0
+		sta	e_sub, y
+		phx
+		tya
+		tax
+		jsr	start_walk
+		plx
+		rts
+
+; club_think - X = club: fly 1.5 px/frame, hurt Rastan, break on his sword.
+club_think:	jsr	sword_vs_enemy
+		bcc	!+
+		stz	e_state, x
+		rts
+!:		inc	e_sub, x		; 1, 2, 1, 2 ... px
+		lda	e_sub, x
+		and	#1
+		inc	a
+		sta	<etmp
+		lda	e_face, x
+		bne	.right
+		lda	e_xl, x
+		sec
+		sbc	<etmp
+		sta	e_xl, x
+		bcs	.sink
+		dec	e_xh, x
+		bra	.sink
+.right:		lda	e_xl, x
+		clc
+		adc	<etmp
+		sta	e_xl, x
+		bcc	.sink
+		inc	e_xh, x
+.sink:		lda	e_timer, x		; Low clubs sink 1 px every other frame.
+		beq	.hit
+		lda	e_sub, x
+		and	#1
+		beq	.hit
+		dec	e_timer, x
+		inc	e_yl, x
+		bne	.hit
+		inc	e_yh, x
+.hit:		; Rastan's body: p_x +/- 12, p_y - 24 (crouched: - 6) .. p_y + 24.
+		; The club (16x16, centred) hits if it overlaps.
+		lda	e_xl, x			; |e_x - p_x| < 20
+		sec
+		sbc	<p_x
+		sta	<ex
+		lda	e_xh, x
+		sbc	<p_x + 1
+		bpl	!+
+		eor	#$FF			; Negate (16-bit).
+		pha
+		lda	<ex
+		eor	#$FF
+		clc
+		adc	#1
+		sta	<ex
+		pla
+		adc	#0
+!:		bne	.r
+		lda	<ex
+		cmp	#20
+		bcs	.r
+		lda	e_yl, x			; dy = e_y - p_y + 32 must be 0 .. 63
+		sec				; (crouched: 18 .. 63)
+		sbc	<p_y
+		sta	<ey
+		lda	e_yh, x
+		sbc	<p_y + 1
+		sta	<ey + 1
+		lda	<ey
+		clc
+		adc	#32
+		sta	<ey
+		lda	<ey + 1
+		adc	#0
+		bne	.r
+		lda	<ey
+		cmp	#64
+		bcs	.r
+		ldy	<p_state
+		cpy	#ST_CROUCH
+		beq	.low
+		cpy	#ST_CATK
+		bne	.hurt
+.low:		cmp	#18
+		bcc	.r
+.hurt:		phx
+		lda	e_face, x
+		beq	!+
+		lda	#1
+		bra	!++
+!:		lda	#$FF
+!:		jsr	player_hit
+		plx
+.gone:		stz	e_state, x
+.r:		rts
 
 ; face_player - e_face = Rastan is to the right.
 face_player:	lda	<p_x
@@ -341,8 +613,8 @@ face_player:	lda	<p_x
 .left:		stz	e_face, x
 		rts
 
-; player_dist - etmp = |p_x - e_x|; carry set if Rastan's anchor is within
-; 24px vertically (Rastan's anchor is 8px above a lizardman's on flat ground).
+; player_dist - etmp = |p_x - e_x|, ey = p_y + 8 - e_y; carry set if Rastan's
+; anchor is within 24px vertically (it is 8px above a lizardman's on flat ground).
 player_dist:	lda	<p_x
 		sec
 		sbc	e_xl, x
@@ -373,6 +645,7 @@ player_dist:	lda	<p_x
 		sta	<ey
 		lda	<ey + 1
 		sbc	e_yh, x
+		sta	<ey + 1			; (ey = dy, for callers)
 		bmi	.neg
 		bne	.far
 		lda	<ey			; 0 <= dy < 24
@@ -463,17 +736,18 @@ enemy_step:	pha
 .blocked:	pla
 		rts
 
-; sword_vs_enemy - carry set if Rastan's sword box overlaps this enemy's
-; body (x - 16 .. x + 16, y - 36 .. y + 16).
+; sword_vs_enemy - carry set if Rastan's sword box overlaps this object's
+; body (x - half .. x + half, y - top .. y + 16; kind_half, kind_top).
 sword_vs_enemy:	phx
 		jsr	sword_box
 		plx
 		bcs	!+
 		rts
-!:		; sb_x0 <= e_x + 16 ?
+!:		ldy	e_kind, x
+		; sb_x0 <= e_x + half ?
 		lda	e_xl, x
 		clc
-		adc	#16
+		adc	kind_half, y
 		sta	<ex
 		lda	e_xh, x
 		adc	#0
@@ -483,10 +757,10 @@ sword_vs_enemy:	phx
 		lda	<ex + 1
 		sbc	<sb_x0 + 1
 		bmi	.no
-		; e_x - 16 <= sb_x1 ?
+		; e_x - half <= sb_x1 ?
 		lda	e_xl, x
 		sec
-		sbc	#16
+		sbc	kind_half, y
 		sta	<ex
 		lda	e_xh, x
 		sbc	#0
@@ -509,10 +783,10 @@ sword_vs_enemy:	phx
 		lda	<ey + 1
 		sbc	<sb_y0 + 1
 		bmi	.no
-		; e_y - 36 <= sb_y1 ?
+		; e_y - top <= sb_y1 ?
 		lda	e_yl, x
 		sec
-		sbc	#36
+		sbc	kind_top, y
 		sta	<ey
 		lda	e_yh, x
 		sbc	#0
@@ -621,7 +895,7 @@ enemies_draw:	php				; VDC writes: IRQ held off (see stream_column).
 		sta	VDC_DH
 		st0	#VDC_VWR
 		stz	<en_satb
-		ldx	#NUM_EN - 1
+		ldx	#NUM_OBJ - 1
 .slot:		lda	e_state, x
 		beq	.next
 		phx
@@ -755,13 +1029,7 @@ piece_pos:	lda	[ep], y			; dx, mirrored when facing right
 		rts
 
 ; emit_piece - write one SATB entry from cy/ctx and the cell/attr at [ep],y.
-emit_piece:	lda	<en_satb		; SATB full: skip the piece.
-		cmp	#EN_SATB_MAX
-		bcc	!+
-		iny
-		iny
-		rts
-!:		lda	<ctx			; y + 64
+emit_piece:	lda	<ctx			; y + 64
 		clc
 		adc	#64
 		sta	VDC_DL

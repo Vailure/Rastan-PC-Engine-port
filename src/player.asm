@@ -403,7 +403,11 @@ hazard_probe:	clc
 
 ; player_hit - an enemy hits Rastan. A = knockback direction (1 right, $FF left).
 ; Ignored while invulnerable or already hurt.
-player_hit:	ldx	<p_invuln
+player_hit:
+	.if	GOD_MODE			; Test builds: enemies can't hurt him.
+		rts
+	.endif
+		ldx	<p_invuln
 		bne	.no
 		ldx	<p_state
 		cpx	#ST_HURT

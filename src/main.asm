@@ -11,7 +11,9 @@
 ;
 ; VRAM:  $0000-$0FFF BAT (64x64)
 ;        $1000-$4FFF streamed BG tiles (tile #$100-#$4FF)
-;        $5000-$7EFF sprite patterns (unused yet)
+;        $5000-$5BFF Rastan's two sprite pattern buffers (24 cells each)
+;        $5C00-$76FF enemy cells (resident)
+;        $7700-$7EFF HUD cells
 ;        $7F00-$7FFF SATB
 ;
 ; ***************************************************************************

@@ -1,15 +1,19 @@
 """Build enemy sprite data for the PC Engine from arcade captures.
 
-usage: pce_enemies.py lizard.snp outdir
+usage: pce_enemies.py lizard.snp blue.snp outdir
 
 The arcade draws objects from 16x16 PC090OJ pieces, which are also the PCE's
 16x16 sprite cell size, so each unique arcade piece (code + palette) becomes one
 PCE cell, and a pose is a list of (dx, dy, cell, flip) relative to the object's
-anchor. All enemy cells stay resident in VRAM.
+anchor. Cells that are flips of each other are stored once (the PCE flips sprites
+too). All enemy cells stay resident in VRAM.
 
-Sequences are captured from the run in sim/scripts/lizard.txt (Rastan stands at
-the start with his health held; lizardmen walk up, attack him, and are killed by
-his periodic swings), using the object slot and frame ranges below.
+Sequences are captured from sim/scripts/lizard.txt (Rastan stands at the start
+with his health held; lizardmen walk up, attack him, and are killed by his
+periodic swings) and sim/scripts/blue.txt (the same for the blue club throwers
+at checkpoint 2), using the object slot and frame ranges below. The thrown clubs
+are projectile objects (slots of 64 bytes at $10C740, same layout), one 16x16
+piece centred on the object.
 
 Outputs:
   enemies.bin  cells (128 bytes each, PCE sprite format)
@@ -30,10 +34,26 @@ ROMDIR = os.environ.get('RASTAN_ROMS', os.path.join(os.path.dirname(__file__), '
 # (name, slot, first frame, last frame) in the lizard run; consecutive frames
 # with the same layout collapse into one pose with a duration.
 SEQUENCES = [
-    ('liz_walk', 8, 420, 451),
-    ('liz_attack', 8, 658, 697),
-    ('liz_death', 8, 1536, 1566),
+    # (name, capture file index, slot, first frame, last frame)
+    ('liz_walk', 0, 8, 420, 451),
+    ('liz_attack', 0, 8, 658, 697),
+    ('liz_death', 0, 8, 1536, 1566),
+    ('blue_walk', 1, 8, 404, 435),       # two clubs in each hand pair
+    ('blue_throw', 1, 6, 1623, 1658),    # throws a club at +8 and +27
+    ('blue_walk2', 1, 6, 1660, 1691),    # after throwing
+    ('blue_death', 1, 6, 1946, 1977),
 ]
+# Club projectile 0 at $10C740 in the blue run: spins through 8 cells, 2 frames each.
+CLUB = ('club', 1, 0x10c740, 1632, 1647)
+
+
+def club_pieces(s, base):
+    x, y = s.w(base + 0x1e), s.w(base + 0x22)
+    for i in range(256):
+        d0, py, code, px = (int(v) for v in s.spr[i * 4:i * 4 + 4])
+        if code & 0x1fff and (px & 0x1ff) == x - 8 and (py & 0x1ff) == y - 8:
+            return [(d0 & 0xc00f, -8, code & 0x1fff, -8)]
+    return []
 
 
 def norm(p):
@@ -43,23 +63,25 @@ def norm(p):
 
 
 def main():
-    snapf, out = sys.argv[1], sys.argv[2]
+    snapfs, out = sys.argv[1:-1], sys.argv[-1]
     os.makedirs(out, exist_ok=True)
     spr = decode_packed(load_region(ROMDIR, 'pc090oj'), 16, 16).astype(int)
     frames = {}
-    want = {f for _, _, a, b in SEQUENCES for f in range(a, b + 1)}
+    want = {(fi, f) for _, fi, _, a, b in SEQUENCES + [CLUB] for f in range(a, b + 1)}
     pal = colbank = None
-    for s in read_snaps(snapf):
-        if s.frame in want:
-            frames[s.frame] = s
-            if pal is None:
-                pal, colbank = palette_rgb(s.pal), (s.sprctrl & 0xe0) >> 1
+    for fi, snapf in enumerate(snapfs):
+        for s in read_snaps(snapf):
+            if (fi, s.frame) in want:
+                frames[fi, s.frame] = s
+                if pal is None:
+                    pal, colbank = palette_rgb(s.pal), (s.sprctrl & 0xe0) >> 1
 
     poses, pose_ids, anims = [], {}, {}
-    for name, slot, a, b in SEQUENCES:
+    for name, fi, slot, a, b in SEQUENCES + [CLUB]:
         seq = []
         for f in range(a, b + 1):
-            p = slot_pieces(frames[f], slot)
+            s = frames[fi, f]
+            p = club_pieces(s, slot) if name == 'club' else slot_pieces(s, slot)
             if not p:
                 continue
             k = norm(p)
@@ -73,17 +95,28 @@ def main():
                 seq.append([pid, 1])
         anims[name] = seq
 
-    # Cells: unique (code, arcade palette). Colors per arcade palette -> PCE palette.
-    cells, cell_ids = [], {}
+    # Cells: unique (image up to flips, arcade palette). Colors per arcade palette ->
+    # PCE palette. cell_of[(code, palette)] = (cell, extra X flip, extra Y flip).
+    cells, cell_ids, cell_of = [], {}, {}
     pal_ids = {}
     for p in poses:
         for attr, dy, code, dx in p:
             ap = (attr & 0xf) | colbank
             pal_ids.setdefault(ap, len(pal_ids))
-            key = (code, ap)
-            if key not in cell_ids:
-                cell_ids[key] = len(cells)
-                cells.append(key)
+            if (code, ap) in cell_of:
+                continue
+            g = spr[code]
+            for fx, fy in ((0, 0), (1, 0), (0, 1), (1, 1)):
+                h = g[:, ::-1] if fx else g
+                h = h[::-1] if fy else h
+                key = (h.tobytes(), ap)
+                if key in cell_ids:
+                    cell_of[code, ap] = (cell_ids[key], fx, fy)
+                    break
+            else:
+                cell_ids[g.tobytes(), ap] = len(cells)
+                cell_of[code, ap] = (len(cells), 0, 0)
+                cells.append((code, ap))
     assert len(pal_ids) <= 15
 
     def to9(c):
@@ -120,8 +153,10 @@ def main():
             f.write(f'epose_{i}:\t\tdb\t{len(p)}\n')
             for attr, dy, code, dx in p:
                 ap = (attr & 0xf) | colbank
-                a = (1 + pal_ids[ap]) | (0x40 if attr & 0x4000 else 0) | (0x80 if attr & 0x8000 else 0)
-                f.write(f'\t\tdb\t{dx & 0xff}, {dy & 0xff}, {cell_ids[(code, ap)]}, ${a:02X}\n')
+                c, fx, fy = cell_of[code, ap]
+                a = ((1 + pal_ids[ap]) | (0x40 if bool(attr & 0x4000) != bool(fx) else 0)
+                     | (0x80 if bool(attr & 0x8000) != bool(fy) else 0))
+                f.write(f'\t\tdb\t{dx & 0xff}, {dy & 0xff}, {c}, ${a:02X}\n')
         f.write('\nepose_table:\n')
         for i in range(len(poses)):
             f.write(f'\t\tdw\tepose_{i}\n')

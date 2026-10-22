@@ -126,8 +126,18 @@ weapon pickups, and leftward scrolling.
   Rastan's height, 65 frames into the round and then at gaps of 49, 81 and 65 frames in turn (measured with a
   passive Rastan, `tools/object_census.py`). No lane at the edge, no lizardman. The port's collision map keeps the
   code's low nibble (all the engine tests) and the lane flag in bit 4.
+- **Blue club throwers** (four-armed, sprite cells `$2E8`..; `sim/scripts/blue.txt` at checkpoint 2): from world
+  x 1500 they take turns with lizardmen. They walk up the same way, stop 88-143 px from Rastan and throw two clubs
+  (8 and 27 frames into a 36-frame throw), back off and come again. Clubs are projectile objects (arcade slots at
+  `$10C740`): 1.5 px/frame, spinning through 8 cells; a high pair (20 px above the thrower's anchor) then a low pair
+  (13 px above, sinking to 6). A club costs 3072 like a lizardman's hit; the sword knocks clubs away; one hit kills
+  the thrower, with the shared explosion.
+- **Enemy VRAM:** cells that are flips of each other are stored once, so lizardmen, throwers, clubs and the explosion
+  fit in 105 resident cells (`$5C00-$76FF`; the HUD moved to `$7700`). Later kinds (chimeras, the woman warrior,
+  the castle's enemies) will need cells loaded per section.
 - `tools/pce_enemies.py` converts the captured lizardman poses (`tools/enemy_capture.py` reads the
-  arcade's object slots). `tools/test_enemies.py` checks hits, deaths and the frame budget.
+  arcade's object slots). `tools/test_enemies.py` checks hits, deaths, spawns, the throwers' clubs and the frame budget
+  (the `god.pce` test build keeps Rastan unhurt so the bot reaches later sections).
 - `tools/player_frames.py` decodes Rastan's metasprite tables statically from the ROM, for later.
 
 **HUD** (`src/hud.asm`, `tools/pce_hud.py`): the arcade draws it with sprites, and so does the port, using
@@ -206,7 +216,9 @@ The headless runner is built with `tools/tgrun/build.sh`, after running `make` i
 - [x] Down thrust and up thrust (DOWN+II / UP+II in a jump)
 - [x] Stage 1 lizardmen (approximate): walk in, club attacks, knockback, death bursts; health and stage restart
 - [x] HUD: lives, icon, health bar (drains like the arcade's), ROUND 1
+- [x] Enemy spawns on the arcade's lanes, with its timing; blue club throwers
 - [ ] The rest of stage 1's enemies, items, and the boss
+- [ ] Restart at the arcade's checkpoints after a death (needs per-checkpoint tile preloads)
 
 ## Licenses
 

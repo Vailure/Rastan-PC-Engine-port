@@ -67,9 +67,15 @@ $(BUILD)/waterfall.snp: sim/sim sim/maincpu.bin $(BUILD)/waterfall.txt
 $(PLAYER)/player.bin: tools/pce_player.py tools/fgmap.py sim/maincpu.bin $(BUILD)/actions.snp $(BUILD)/attract.snp $(BUILD)/thrusts.snp $(BUILD)/lizard.snp $(BUILD)/waterfall.snp
 	cd tools && python3 pce_player.py ../sim/maincpu.bin ../$(BUILD)/actions.snp ../$(BUILD)/attract.snp ../$(BUILD)/thrusts.snp ../$(BUILD)/lizard.snp ../$(BUILD)/waterfall.snp ../$(PLAYER)
 
+# Blue club throwers at checkpoint 2: they throw at a passive Rastan, then he
+# walks into them swinging.
+$(BUILD)/blue.snp: sim/sim sim/maincpu.bin sim/scripts/blue.txt
+	@mkdir -p $(BUILD)
+	sim/sim sim/maincpu.bin sim/scripts/blue.txt $@ 1
+
 ENEMIES    := $(BUILD)/enemies
-$(ENEMIES)/enemies.bin: tools/pce_enemies.py tools/enemy_capture.py $(BUILD)/lizard.snp
-	cd tools && python3 pce_enemies.py ../$(BUILD)/lizard.snp ../$(ENEMIES)
+$(ENEMIES)/enemies.bin: tools/pce_enemies.py tools/enemy_capture.py $(BUILD)/lizard.snp $(BUILD)/blue.snp
+	cd tools && python3 pce_enemies.py ../$(BUILD)/lizard.snp ../$(BUILD)/blue.snp ../$(ENEMIES)
 
 # HUD cells (lives, icon, health bar, ROUND) from the arcade's HUD sprites.
 $(BUILD)/hud/hud.bin: tools/pce_hud.py $(BUILD)/actions.snp
@@ -79,27 +85,33 @@ GAME_DEPS  := src/main.asm src/player.asm src/enemies.asm src/hud.asm src/dyncol
 
 $(BUILD)/rastan.pce: $(GAME_DEPS)
 	@mkdir -p $(BUILD)/opt
-	printf "CAMERA_TEST = 0\nNO_ENEMIES = 0\n" > $(BUILD)/opt/options.inc
+	printf "CAMERA_TEST = 0\nNO_ENEMIES = 0\nGOD_MODE = 0\n" > $(BUILD)/opt/options.inc
 	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt):$$PCE_INCLUDE $(PCEAS) --newproc --strip -m -l 2 -S -gA --raw ../src/main.asm -o rastan.pce
 
 # Test build: the pad drives the camera directly and Rastan is not drawn.
 $(BUILD)/camtest.pce: $(GAME_DEPS)
 	@mkdir -p $(BUILD)/opt_test
-	printf "CAMERA_TEST = 1\nNO_ENEMIES = 1\n" > $(BUILD)/opt_test/options.inc
+	printf "CAMERA_TEST = 1\nNO_ENEMIES = 1\nGOD_MODE = 0\n" > $(BUILD)/opt_test/options.inc
 	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_test):$$PCE_INCLUDE $(PCEAS) --newproc --strip -l 0 --raw ../src/main.asm -o camtest.pce
 
 # Scroll the ROM through the whole stage and compare with the converter preview.
 # Test build: no enemies, for the movement checks.
 $(BUILD)/noenemy.pce: $(GAME_DEPS)
 	@mkdir -p $(BUILD)/opt_noen
-	printf "CAMERA_TEST = 0\nNO_ENEMIES = 1\n" > $(BUILD)/opt_noen/options.inc
+	printf "CAMERA_TEST = 0\nNO_ENEMIES = 1\nGOD_MODE = 0\n" > $(BUILD)/opt_noen/options.inc
 	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_noen):$$PCE_INCLUDE $(PCEAS) --newproc --strip -l 0 --raw ../src/main.asm -o noenemy.pce
 
-test: $(BUILD)/camtest.pce $(BUILD)/noenemy.pce $(BUILD)/rastan.pce tools/tgrun/tgrun
+# Test build: enemies on, but they can't hurt Rastan (to reach later sections).
+$(BUILD)/god.pce: $(GAME_DEPS)
+	@mkdir -p $(BUILD)/opt_god
+	printf "CAMERA_TEST = 0\nNO_ENEMIES = 0\nGOD_MODE = 1\n" > $(BUILD)/opt_god/options.inc
+	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_god):$$PCE_INCLUDE $(PCEAS) --newproc --strip -l 0 --raw ../src/main.asm -o god.pce
+
+test: $(BUILD)/camtest.pce $(BUILD)/noenemy.pce $(BUILD)/rastan.pce $(BUILD)/god.pce tools/tgrun/tgrun
 	python3 tools/test_scroll.py $(BUILD)/camtest.pce $(STAGE)/preview.png $(BUILD)/test $$(seq 62 37 2950)
 	PAD=46 python3 tools/test_scroll.py $(BUILD)/camtest.pce $(STAGE)/preview.png $(BUILD)/test_down 80 120 160 300
 	python3 tools/test_player.py $(BUILD)/noenemy.pce
-	python3 tools/test_enemies.py $(BUILD)/rastan.pce
+	python3 tools/test_enemies.py $(BUILD)/rastan.pce $(BUILD)/god.pce
 	python3 tools/test_effects.py $(BUILD)/noenemy.pce $(STAGE)/dyncolor.inc
 
 tools/tgrun/tgrun: tools/tgrun/tgrun.c

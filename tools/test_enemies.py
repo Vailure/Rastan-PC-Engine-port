@@ -1,4 +1,5 @@
-"""test_enemies.py rom : headless checks for the stage 1 lizardmen.
+"""test_enemies.py rom god_rom : headless checks for the stage 1 lizardmen and blue
+club throwers (god_rom: the same game with Rastan unhurt, to reach them).
 
 Compared with the arcade (sim/scripts/lizard.txt): a passive Rastan is hit in
 quarters of his health and dies on the fourth hit; swinging regularly kills
@@ -12,7 +13,7 @@ import sys
 HERE = os.path.dirname(__file__)
 TGRUN = os.path.join(HERE, 'tgrun', 'tgrun')
 LST = os.path.join(HERE, '..', 'src', 'main.lst')
-rom = sys.argv[1]
+rom, god = sys.argv[1], sys.argv[2]
 fails = []
 
 
@@ -28,11 +29,11 @@ for ln in open(LST):
     if m:
         sym[m.group(2)] = int(m.group(1), 16) - 0x2000
 LO = 0
-NE = 4
-HI = max(sym['e_yh'] + NE, sym['p_y'] + 2, sym['e_state'] + NE, sym['loop_cnt'] + 2, sym['lives'] + 1, sym['hud_disp'] + 1)
+NE, NO = 4, 8
+HI = max(sym['e_kind'] + NO, sym['e_yh'] + NO, sym['p_y'] + 2, sym['e_state'] + NE, sym['loop_cnt'] + 2, sym['lives'] + 1, sym['hud_disp'] + 1)
 
 
-def run(frames, args):
+def run(frames, args, rom=rom):
     out = subprocess.run([TGRUN, rom, str(frames), '/dev/null'] + [str(a) for a in args], capture_output=True,
                          text=True, check=True, env=dict(os.environ, TGRUN_PEEK=f'{LO:x},{HI}')).stdout
     rows = []
@@ -43,6 +44,9 @@ def run(frames, args):
                          es=b[sym['e_state']:sym['e_state'] + NE],
                          ey=[b[sym['e_yl'] + i] | b[sym['e_yh'] + i] << 8 for i in range(NE)],
                          py=b[sym['p_y']] | b[sym['p_y'] + 1] << 8,
+                         obj=[dict(kind=b[sym['e_kind'] + i], st=b[sym['e_state'] + i],
+                                   x=b[sym['e_xl'] + i] | b[sym['e_xh'] + i] << 8,
+                                   y=b[sym['e_yl'] + i] | b[sym['e_yh'] + i] << 8) for i in range(NO)],
                          loop=b[sym['loop_cnt']] | b[sym['loop_cnt'] + 1] << 8,
                          lives=b[sym['lives']], bar=b[sym['hud_disp']]))
     return rows
@@ -90,7 +94,35 @@ kills = sum(1 for a, b in zip(r, r[1:]) for i in range(NE) if a['es'][i] != 4 an
 check('swinging kills lizardmen', kills >= 10, f'{kills} kills')
 check('swinging keeps him unhurt', min(x['hp'] for x in r[20:]) == 48, f"min hp {min(x['hp'] for x in r[20:])}")
 
-# 3. Frame budget with enemies on screen while walking and fighting.
+# 3. Blue club throwers (god build: the rope route with a jump every second up to
+# x 1500, then he stands): only lizardmen before x 1500, then the two take turns;
+# they throw clubs that fly at 1.5 px/frame, a high pair (anchor - 20) then a low
+# pair (anchor - 13, sinking 7).
+args = ['60', '1215', '05']
+for f in range(100, 1215, 60):
+    args += [f, f + 3, '40']
+r = run(1900, args, god)
+spawned = [(b['frame'], o['kind'], o['x']) for a, b in zip(r, r[1:]) for i, o in enumerate(b['obj'][:NE])
+           if not a['obj'][i]['st'] and o['st']]
+kinds = [k for _, k, _ in spawned]
+check('only lizardmen before x 1500', all(k == 0 for _, k, x in spawned if x < 1500), f'{spawned[:4]}')
+late = [k for _, k, x in spawned if x >= 1500]
+check('lizardmen and blue throwers take turns from x 1500', late[:4] in ([1, 0, 1, 0], [0, 1, 0, 1]), f'kinds {late}')
+tracks, cur = [], {}
+for x in r:
+    for i, o in enumerate(x['obj'][NE:]):
+        if o['st'] and o['kind'] == 2:
+            cur.setdefault(i, []).append((x['frame'], o['x'], o['y']))
+        elif i in cur:
+            tracks.append(cur.pop(i))
+check('blue throwers throw clubs', len(tracks) >= 4, f'{len(tracks)} clubs, flights of {[len(t) for t in tracks]} frames')
+speeds = [abs(t[16][1] - t[0][1]) / 16 for t in tracks if len(t) > 16]
+check('clubs fly at 1.5 px/frame', speeds and all(s == 1.5 for s in speeds), f'{speeds}')
+heights = [(t[0][2], t[-1][2]) for t in tracks if len(t) >= 14]
+check('high clubs fly straight, low ones sink 7 px',
+      all(b - a in (0, 7) for a, b in heights) and {b - a for a, b in heights} == {0, 7}, f'{heights}')
+
+# 4. Frame budget with enemies on screen while walking and fighting.
 args = [60, 1500, '04']
 for f in range(80, 1500, 30):
     args += [f, f + 1, '80']
