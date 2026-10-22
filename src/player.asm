@@ -922,14 +922,35 @@ move_down_nl:	jsr	floor_below
 		bne	move_down_nl
 .done:		rts
 
-; move_up - dy (negative) pixels up. Rastan jumps through platforms.
-move_up:	lda	<p_y
+; move_up - dy (negative) pixels up. Rastan jumps through platforms, but a
+; solid cell (code 1) over his head (p_y - 25) stops the rise: the jump turns
+; into its fall (the arcade: he can't jump up through the castle's ledges).
+move_up:	lda	<p_y			; cy = p_y - 25, cx = p_x
+		sec
+		sbc	#25
+		sta	<cy
+		lda	<p_y + 1
+		sbc	#0
+		sta	<cy + 1
+		lda	<p_x
+		sta	<cx
+		lda	<p_x + 1
+		sta	<cx + 1
+		jsr	coll_at
+		and	#$0F
+		cmp	#1
+		beq	.bump
+		lda	<p_y
 		bne	!+
 		dec	<p_y + 1
 !:		dec	<p_y
 		inc	<dy
 		bne	move_up
 		rts
+.bump:		lda	<p_jfall		; Rising on the table: fall back down it.
+		bne	!+
+		inc	<p_jfall
+!:		rts
 
 ; ---------------------------------------------------------------------------
 ; Collision probes. Carry set = blocked / floor found.
