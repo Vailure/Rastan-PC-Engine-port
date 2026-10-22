@@ -27,7 +27,10 @@ from the ROMs (`*.bin`, snapshots, renders, disassembly) is git-ignored.
 | `tools/trace_player.py` | Runs the ROM headless and prints Rastan's state per frame |
 | `tools/m68k/`, `tools/lockstep.py` | 68000 decoder and reference interpreter, checked call-by-call against the arcade |
 | `tools/callgraph.py` | Code reachable from a routine |
-| `src/player.asm` | Rastan: states, movement, collision, ropes, camera, sprite streaming |
+| `src/player.asm` | Rastan: states, movement, collision, ropes, damage, camera, sprite streaming |
+| `src/enemies.asm` | Stage 1 lizardmen |
+| `tools/pce_enemies.py`, `tools/enemy_capture.py` | Enemy poses from the arcade's object slots → PCE sprites |
+| `tools/test_enemies.py` | Headless checks for hits, kills and frame budget |
 | `sim/` | Headless Rastan main-CPU simulator (Musashi 68000) and a linear disassembler |
 | `sim/scripts/` | Input scripts for the simulator |
 
@@ -52,7 +55,7 @@ The build:
 - LEFT/RIGHT: walk
 - DOWN: crouch
 - I: jump (UP+I for the high jump; a direction for a forward jump)
-- II: attack, standing or crouched; also works in the air
+- II: attack, standing or crouched; in a jump, DOWN+II is the down thrust and UP+II the up thrust
 - UP: grab a rope; UP and DOWN climb it, and I jumps off
 
 The camera only scrolls forward. Falling off the bottom of the map restarts the stage.
@@ -105,6 +108,24 @@ Animation timings are measured from the same runs.
 Not done yet: enemies and damage, slopes, waterfall currents, the other collision codes, rope attacks,
 weapon pickups, and leftward scrolling.
 
+### Damage and enemies (milestone 3, approximate)
+
+- **Health:** Rastan has 12 units of health (the arcade's 12288 at `$10C13A`, 3072 per lizardman hit).
+  Each hit knocks him back with the hurt animation and gives 90 frames of invulnerability.
+  When health runs out, the stage restarts.
+- **Sword hitboxes:** standing, crouched and jump swings reach 56 px in front of him; the down
+  and up thrusts hit below and above him.
+- **Lizardmen** (`src/enemies.asm`): measured in the arcade from `sim/scripts/lizard.txt`. They enter at
+  the right edge, walk at 7/8 px/frame, swing twice when about 52 px away, back off, and come again.
+  One sword hit kills them. Up to 3 at once; their 83 sprite cells stay resident in VRAM at `$5C00`.
+- `tools/pce_enemies.py` converts the captured lizardman poses (`tools/enemy_capture.py` reads the
+  arcade's object slots). `tools/test_enemies.py` checks hits, deaths and the frame budget.
+- `tools/player_frames.py` decodes Rastan's metasprite tables statically from the ROM, for later.
+
+All VDC register sequences now run with interrupts held off. The core library's vblank handler
+restores the VDC register select from its `vdc_reg` shadow, which direct `st0` selects don't update.
+An interrupt in the middle of an upload sent the rest of it to the wrong register.
+
 ### Exact port (in progress, tooling only)
 
 The plan for arcade-exact behavior is to translate the player code itself: 2,577 instructions reachable from `$05132A`,
@@ -155,7 +176,10 @@ The headless runner is built with `tools/tgrun/build.sh`, after running `make` i
 - [ ] Data compression (metatiles, LZ)
 - [x] Rastan (approximate): walk, crouch, attacks, jumps, ropes, collision, camera
 - [ ] Rastan (exact): translate the arcade player code (interpreter done and verified)
-- [ ] Enemies
+- [x] Down thrust and up thrust (DOWN+II / UP+II in a jump)
+- [x] Stage 1 lizardmen (approximate): walk in, club attacks, knockback, death bursts; health and stage restart
+- [ ] Health bar / HUD
+- [ ] The rest of stage 1's enemies, items, and the boss
 
 ## Licenses
 

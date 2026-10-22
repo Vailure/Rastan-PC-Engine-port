@@ -1,6 +1,6 @@
 """Build Rastan's PC Engine sprite data and stage collision from the arcade program.
 
-usage: pce_player.py maincpu.bin actions.snp attract.snp thrusts.snp outdir
+usage: pce_player.py maincpu.bin actions.snp attract.snp thrusts.snp lizard.snp outdir
 
 Poses are captured from the arcade's own player sprite list ($10D1B2, 8-byte entries
 [attr, y, code, x]) at known frames of sim/scripts/actions.txt, relative to the
@@ -41,6 +41,8 @@ POSES_ATTRACT = {'climb1': 4455, 'climb2': 4459, 'climb3': 4463, 'climb4': 4493}
 # transition poses, then the sword-down pose held until landing), and
 # UP+attack in a high jump.
 POSES_THRUSTS = {'dthr1': 532, 'dthr2': 536, 'dthr3': 540, 'uthr': 731}
+# Being hit by a lizardman (sim/scripts/lizard.txt, passive Rastan): 3 poses, 23 frames.
+POSES_HURT = {'hurt1': 667, 'hurt2': 674, 'hurt3': 682}
 
 # Animations: (pose, frames) lists measured from the arcade (see README).
 # A duration of 0 holds the pose forever.
@@ -57,6 +59,7 @@ ANIMS = {
     'climb': [('climb1', 3), ('climb2', 3), ('climb3', 3), ('climb4', 3)],
     'dthrust': [('dthr1', 4), ('dthr2', 4), ('dthr3', 0)],
     'uthrust': [('uthr', 8)],
+    'hurt': [('hurt1', 7), ('hurt2', 8), ('hurt3', 8)],
     'jatk': [('jatk1', 1), ('jatk2', 1), ('jatk3', 1), ('jatk4', 2), ('jatk5', 10),
              ('jatk4', 2), ('jatk3', 2), ('jatk2', 2), ('jatk1', 2)],
 }
@@ -87,7 +90,7 @@ def to9(rgb):
 
 def main():
     rom = open(sys.argv[1], 'rb').read()
-    snapf, attractf, thrustf, out = sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
+    snapf, attractf, thrustf, lizardf, out = sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6]
     os.makedirs(out, exist_ok=True)
     spr = decode_packed(load_region(ROMDIR, 'pc090oj'), 16, 16).astype(int)
     act = capture(snapf, POSES)
@@ -96,7 +99,9 @@ def main():
     caps.update({n: att[f] for n, f in POSES_ATTRACT.items()})
     thr = capture(thrustf, POSES_THRUSTS)
     caps.update({n: thr[f] for n, f in POSES_THRUSTS.items()})
-    all_poses = list(POSES) + list(POSES_ATTRACT) + list(POSES_THRUSTS)
+    hurt = capture(lizardf, POSES_HURT)
+    caps.update({n: hurt[f] for n, f in POSES_HURT.items()})
+    all_poses = list(POSES) + list(POSES_ATTRACT) + list(POSES_THRUSTS) + list(POSES_HURT)
 
     # Compose each pose into an RGB image around the anchor (anchor at (64, 96)).
     AX, AY, W, H = 64, 96, 128, 128

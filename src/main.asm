@@ -58,6 +58,7 @@ core_main:	call	init_screen
 		tia	palette_data, VCE_CTW, 512
 
 		jsr	player_init
+		jsr	enemies_init
 		jsr	stage_start
 
 ; Main loop: one iteration per frame, starting right after VBLANK.
@@ -72,9 +73,13 @@ core_main:	call	init_screen
 		jsr	stream_ahead
 	.else
 		jsr	player_update		; Compute the next frame.
+	.if	!NO_ENEMIES
+		jsr	enemies_update
+	.endif
 		jsr	camera_update
 		jsr	stream_ahead		; Make its columns resident.
 		jsr	player_draw		; SATB for the next frame.
+		jsr	enemies_draw
 	.endif
 		bra	.frame
 
@@ -99,9 +104,11 @@ stage_start:	call	set_dspoff
 		jsr	set_scroll_regs
 	.else
 		jsr	player_init_pos
+		jsr	enemies_reset
 		jsr	camera_update
 		jsr	set_scroll_regs
 		jsr	player_draw
+		jsr	enemies_draw
 	.endif
 		call	wait_vsync		; SATB DMA, then show the screen.
 		call	set_dspon
@@ -111,6 +118,8 @@ stage_start:	call	set_dspoff
 ; set_scroll_regs - write scroll_x/scroll_y to BXR/BYR.
 
 set_scroll_regs:
+		php				; VDC writes: keep the IRQ out (see stream_column).
+		sei
 		st0	#VDC_BXR
 		lda	<scroll_x + 0
 		sta	VDC_DL
@@ -123,6 +132,7 @@ set_scroll_regs:
 		lda	<scroll_y + 1
 		and	#$01
 		sta	VDC_DH
+		plp
 		rts
 
 ; ---------------------------------------------------------------------------
@@ -225,6 +235,12 @@ stream_ahead:	lda	<scroll_x + 1		; tmp = scroll_x >> 3
 ; Record: u8 n; n * (u16 tile#, 32 bytes); 64 * u16 BAT words.
 
 stream_column:
+		; The VBLANK IRQ selects VDC_CR and, on exit, restores VDC_AR from the
+		; core's vdc_reg shadow, which st0 does not update. An IRQ in the middle
+		; of an upload would send the rest of it to the wrong register, so VDC
+		; sequences run with interrupts held off.
+		php
+		sei
 		; Pointer table entry = stage_data + next_col * 3 (in 1st bank).
 		lda	#^stage_data
 		tam3
@@ -334,7 +350,8 @@ stream_column:
 		inc	<next_col + 0
 		bne	!+
 		inc	<next_col + 1
-!:		rts
+!:		plp
+		rts
 
 inc_ptr_1:	inc	<rec_ptr + 0
 		bne	!+
@@ -396,6 +413,7 @@ init_screen	.proc
 		.endp
 
 		include	"player.asm"
+		include	"enemies.asm"
 
 ; ---------------------------------------------------------------------------
 ; Data.
@@ -405,6 +423,7 @@ init_screen	.proc
 		.page	3
 palette_data:	incbin	"palette.bin"
 sprite_palette:	incbin	"sprpal.bin"
+enemy_palettes:	incbin	"enepal.bin"
 
 		.bank	$10
 		.page	3
@@ -417,3 +436,7 @@ player_data:	incbin	"player.bin"
 		.bank	$56
 		.page	5
 collision_data:	incbin	"collision.bin"
+
+		.bank	$58
+		.page	3
+enemy_cells:	incbin	"enemies.bin"

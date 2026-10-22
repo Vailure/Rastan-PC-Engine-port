@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include "shared.h"
 #include "pce.h"
+#include "vdc.h"
 
 #define SCR_W 352
 #define SCR_H 240
@@ -56,5 +57,10 @@ int main(int argc, char **argv)
         }
     }
     write_ppm(argv[3], pixels);
+    if (getenv("TGRUN_VRAM")) {        /* TGRUN_VRAM=file : dump the 64KB of VRAM at the end */
+        FILE *v = fopen(getenv("TGRUN_VRAM"), "wb");
+        fwrite(vram, 1, 0x10000, v);
+        fclose(v);
+    }
     return 0;
 }
