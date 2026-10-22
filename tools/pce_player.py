@@ -221,7 +221,11 @@ def main():
     for c in range(368):
         for r in range(16):
             p = block_collision(rom, int(blk[r, c]))
-            k = bytes(int(v) & 0xff for v in p.flat)
+            # Engine byte: the collision code's low nibble (1 solid, 2 rope, 3/4/7
+            # floors, 6 water, 8 deadly; $7E/$80/$82 reduce to $E/0/2) and bit 4 for
+            # an enemy lane (arcade spawn marker $3A in the high byte, at the
+            # height of an enemy's anchor, 16 px above a floor).
+            k = bytes((int(v) & 0x0f) | (0x10 if int(v) >> 8 == 0x3a else 0) for v in p.flat)
             colmap.append(pats.setdefault(k, len(pats)))
     data = colmap + b''.join(sorted(pats, key=pats.get))
     assert len(data) <= 8192

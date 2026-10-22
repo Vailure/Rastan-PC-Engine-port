@@ -13,7 +13,8 @@
 
 		include	"enemies.inc"
 
-NUM_EN		=	3
+NUM_EN		=	4		; The arcade keeps at most 4 lizardmen alive.
+EN_SATB_MAX	=	64 - EN_SATB_FIRST
 EN_SATB_FIRST	=	7 + 24		; SATB entries after the HUD's 7 and Rastan's 24.
 EN_VRAM		=	$5C00		; Resident enemy cells.
 EN_PATTERN	=	EN_VRAM >> 5
@@ -24,7 +25,6 @@ ES_ATTACK	=	2
 ES_RETREAT	=	3
 ES_DYING	=	4
 
-SPAWN_DELAY	=	90		; Frames between spawns.
 ATTACK_RANGE	=	52
 RETREAT_FRAMES	=	48
 
@@ -34,6 +34,8 @@ ex:		ds	2		; Scratch coordinates.
 ey:		ds	2
 etmp:		ds	2
 spawn_timer:	ds	1
+spawn_step:	ds	1		; Index into spawn_gaps.
+lane_best:	ds	2		; Nearest lane so far: y, distance.
 en_satb:	ds	1		; Entries written this frame.
 en_satb_prev:	ds	1
 
@@ -118,8 +120,9 @@ enemies_reset:	ldx	#NUM_EN - 1
 !:		stz	e_state, x
 		dex
 		bpl	!-
-		lda	#SPAWN_DELAY
+		lda	#SPAWN_FIRST
 		sta	<spawn_timer
+		stz	<spawn_step
 		rts
 
 ; ---------------------------------------------------------------------------
@@ -140,56 +143,91 @@ enemies_update:	jsr	try_spawn
 		bpl	.loop
 		rts
 
-; try_spawn - every SPAWN_DELAY frames, put a lizardman just off the right
-; edge, standing on the first floor found scanning down the screen.
+; try_spawn - lizardmen enter at the right edge on an enemy lane (the
+; arcade's spawn marker $3A, collision bit 4, in the cell at an enemy's anchor
+; height, 16 px above its floor). Of the lanes in that column the one nearest
+; Rastan's height is used; no lane, no lizardman. Measured with a passive
+; Rastan: the first comes 65 frames into the round, then gaps of 49, 81, 65
+; frames in turn, at most 4 alive.
+SPAWN_FIRST	=	65
+SPAWN_X		=	276		; scroll_x + 256 + 20: just past the right edge.
+
 try_spawn:	dec	<spawn_timer
 		bne	.no
-		lda	#SPAWN_DELAY
+		ldx	<spawn_step		; Next gap.
+		lda	spawn_gaps, x
 		sta	<spawn_timer
+		inx
+		cpx	#3
+		bcc	!+
+		clx
+!:		stx	<spawn_step
 		ldx	#NUM_EN - 1		; Free slot?
 !:		lda	e_state, x
 		beq	.slot
 		dex
 		bpl	!-
 .no:		rts
-.slot:		lda	<scroll_x		; x = scroll_x + 256 + 20
+.slot:		lda	<scroll_x
 		clc
-		adc	#<276
+		adc	#<SPAWN_X
 		sta	<cx
 		lda	<scroll_x + 1
-		adc	#>276
+		adc	#>SPAWN_X
 		sta	<cx + 1
-		lda	<scroll_y		; Scan y from scroll_y + 16 down.
-		clc
-		adc	#16
-		sta	<cy
-		lda	<scroll_y + 1
-		adc	#0
-		sta	<cy + 1
-		ldy	#26			; 26 rows of 8px.
-.scan:		phx
-		phy
-		jsr	coll_at
-		jsr	is_floor
-		ply
-		plx
-		bcs	.found
-		lda	<cy
+		lda	<p_y			; Rastan's row at lane height: (p_y + 8) >> 3.
 		clc
 		adc	#8
+		sta	<etmp
+		lda	<p_y + 1
+		adc	#0
+		lsr	a
+		ror	<etmp
+		lsr	a
+		ror	<etmp
+		lsr	a
+		ror	<etmp
+		lda	#$FF			; Best distance so far: none.
+		sta	<lane_best + 1
+		stz	<etmp + 1		; Row 0..63 down the whole column.
+.scan:		lda	<etmp + 1		; cy = row * 8
+		asl	a
+		asl	a
+		asl	a
 		sta	<cy
-		bcc	!+
-		inc	<cy + 1
-!:		dey
-		bne	.scan
-		rts
-.found:		lda	<cy			; Floor tile top = cy & ~7; anchor 16 above.
-		and	#$F8
+		cla
+		rol	a
+		sta	<cy + 1
+		phx
+		jsr	coll_at
+		plx
+		and	#$10
+		beq	.next
+		lda	<etmp + 1		; |row - Rastan's row|
 		sec
-		sbc	#16
+		sbc	<etmp
+		bcs	!+
+		eor	#$FF
+		inc	a
+!:		cmp	<lane_best + 1
+		bcs	.next
+		sta	<lane_best + 1
+		lda	<etmp + 1
+		sta	<lane_best
+.next:		inc	<etmp + 1
+		lda	<etmp + 1
+		cmp	#64
+		bcc	.scan
+		lda	<lane_best + 1
+		cmp	#$FF
+		beq	.no
+		lda	<lane_best		; Anchor = lane row * 8.
+		asl	a
+		asl	a
+		asl	a
 		sta	e_yl, x
-		lda	<cy + 1
-		sbc	#0
+		cla
+		rol	a
 		sta	e_yh, x
 		lda	<cx
 		sta	e_xl, x
@@ -202,6 +240,8 @@ try_spawn:	dec	<spawn_timer
 		lda	#<anim_liz_walk
 		ldy	#>anim_liz_walk
 		jmp	enemy_set_anim
+
+spawn_gaps:	db	49, 81, 65
 
 ; ---------------------------------------------------------------------------
 ; enemy_think - X = slot.
@@ -393,7 +433,7 @@ enemy_step:	pha
 		phx
 		jsr	coll_at
 		plx
-		and	#$7F
+		and	#$0F
 		cmp	#1
 		beq	.blocked
 		; Ledge: floor at anchor + 17.
@@ -715,7 +755,13 @@ piece_pos:	lda	[ep], y			; dx, mirrored when facing right
 		rts
 
 ; emit_piece - write one SATB entry from cy/ctx and the cell/attr at [ep],y.
-emit_piece:	lda	<ctx			; y + 64
+emit_piece:	lda	<en_satb		; SATB full: skip the piece.
+		cmp	#EN_SATB_MAX
+		bcc	!+
+		iny
+		iny
+		rts
+!:		lda	<ctx			; y + 64
 		clc
 		adc	#64
 		sta	VDC_DL

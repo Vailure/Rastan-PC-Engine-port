@@ -391,7 +391,7 @@ hazard_probe:	clc
 		lda	<p_x + 1
 		sta	<cx + 1
 		jsr	coll_at
-		and	#$7F
+		and	#$0F
 		cmp	#7
 		beq	.kill
 		cmp	#8
@@ -586,7 +586,7 @@ rope_probe:	sta	<ctmp
 		lda	<p_x + 1
 		sta	<cx + 1
 		jsr	coll_at
-		and	#$7F
+		and	#$0F
 		cmp	#2
 		beq	!+
 		clc
@@ -622,7 +622,7 @@ rope_grab:	lda	<p_nograb
 		phx
 		jsr	coll_at
 		plx
-		and	#$7F
+		and	#$0F
 		cmp	#2
 		beq	.grab
 		dex
@@ -890,7 +890,7 @@ wall_column:	ldx	#3
 		phx
 		jsr	coll_at
 		plx
-		and	#$7F
+		and	#$0F
 		cmp	#1
 		beq	.blocked
 		dex
@@ -902,7 +902,7 @@ wall_column:	ldx	#3
 .heights:	db	20, 4, -12, -28
 
 ; is_floor - carry set if collision code A is something to stand on.
-is_floor:	and	#$7F
+is_floor:	and	#$0F
 		cmp	#8
 		bcs	.no
 		tax

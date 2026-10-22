@@ -120,7 +120,12 @@ weapon pickups, and leftward scrolling.
   and up thrusts hit below and above him.
 - **Lizardmen** (`src/enemies.asm`): measured in the arcade from `sim/scripts/lizard.txt`. They enter at
   the right edge, walk at 7/8 px/frame, swing twice when about 52 px away, back off, and come again.
-  One sword hit kills them. Up to 3 at once; their 83 sprite cells stay resident in VRAM at `$5C00`.
+  One sword hit kills them. Up to 4 at once (the arcade's limit); their 83 sprite cells stay resident in VRAM at `$5C00`.
+- **Spawns:** the arcade marks enemy lanes in the map: spawn marker `$3A` in the high byte of a cell's collision
+  code, at an enemy's anchor height (16 px above its floor). A lizardman enters at the right edge on the lane nearest
+  Rastan's height, 65 frames into the round and then at gaps of 49, 81 and 65 frames in turn (measured with a
+  passive Rastan, `tools/object_census.py`). No lane at the edge, no lizardman. The port's collision map keeps the
+  code's low nibble (all the engine tests) and the lane flag in bit 4.
 - `tools/pce_enemies.py` converts the captured lizardman poses (`tools/enemy_capture.py` reads the
   arcade's object slots). `tools/test_enemies.py` checks hits, deaths and the frame budget.
 - `tools/player_frames.py` decodes Rastan's metasprite tables statically from the ROM, for later.

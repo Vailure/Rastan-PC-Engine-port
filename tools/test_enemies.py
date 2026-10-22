@@ -28,7 +28,8 @@ for ln in open(LST):
     if m:
         sym[m.group(2)] = int(m.group(1), 16) - 0x2000
 LO = 0
-HI = max(sym['e_state'] + 3, sym['loop_cnt'] + 2, sym['lives'] + 1, sym['hud_disp'] + 1)
+NE = 4
+HI = max(sym['e_yh'] + NE, sym['p_y'] + 2, sym['e_state'] + NE, sym['loop_cnt'] + 2, sym['lives'] + 1, sym['hud_disp'] + 1)
 
 
 def run(frames, args):
@@ -39,7 +40,9 @@ def run(frames, args):
         f, r = ln.split(':')
         b = [int(v, 16) for v in r.split()]
         rows.append(dict(frame=int(f), hp=b[sym['p_hp']], x=b[sym['p_x']] | b[sym['p_x'] + 1] << 8,
-                         es=b[sym['e_state']:sym['e_state'] + 3],
+                         es=b[sym['e_state']:sym['e_state'] + NE],
+                         ey=[b[sym['e_yl'] + i] | b[sym['e_yh'] + i] << 8 for i in range(NE)],
+                         py=b[sym['p_y']] | b[sym['p_y'] + 1] << 8,
                          loop=b[sym['loop_cnt']] | b[sym['loop_cnt'] + 1] << 8,
                          lives=b[sym['lives']], bar=b[sym['hud_disp']]))
     return rows
@@ -67,12 +70,23 @@ back = next(i for i in range(dead, len(r)) if hp_all[i] == 48)
 check('a death costs a life and refills the bar', r[back]['lives'] == r[first]['lives'] - 1 and r[back]['bar'] == 48,
       f"lives {r[first]['lives']} -> {r[back]['lives']}, bar {r[back]['bar']}")
 
+# Spawns (arcade, passive Rastan): gaps of 49, 81, 65 frames in turn while a slot is
+# free, at most 4 alive, on the enemy lane at Rastan's height (round 1 start: y 304).
+r = run(400, [])
+spawns = [(b['frame'], b['ey'][i]) for a, b in zip(r, r[1:]) for i in range(NE) if not a['es'][i] and b['es'][i]]
+gaps = [b[0] - a[0] for a, b in zip(spawns, spawns[1:])]
+check('lizardmen come at gaps of 49, 81, 65 frames', gaps[:3] == [49, 81, 65] or gaps[:3] == [81, 65, 49]
+      or gaps[:3] == [65, 49, 81], f'gaps {gaps}')
+check('they spawn on the lane at his height (y 304)', spawns and {y for _, y in spawns} == {304},
+      f'y {sorted({y for _, y in spawns})}, Rastan y {r[-1]["py"]}')
+check('at most 4 alive', max(sum(1 for s in x['es'] if s) for x in r) <= 4)
+
 # 2. Swinging every 30 frames: lizardmen die in one hit, Rastan stays healthy.
 args = []
 for f in range(100, 1500, 30):
     args += [f, f + 1, '80']
 r = run(1500, args)
-kills = sum(1 for a, b in zip(r, r[1:]) for i in range(3) if a['es'][i] != 4 and b['es'][i] == 4)
+kills = sum(1 for a, b in zip(r, r[1:]) for i in range(NE) if a['es'][i] != 4 and b['es'][i] == 4)
 check('swinging kills lizardmen', kills >= 10, f'{kills} kills')
 check('swinging keeps him unhurt', min(x['hp'] for x in r[20:]) == 48, f"min hp {min(x['hp'] for x in r[20:])}")
 
