@@ -11,6 +11,8 @@ Arcade values (round 1 census, sim/scripts/chimera.txt; see README):
   after appearing, (4418, 334) at 199, (4495, 316) at 249, (4572, 295) at 349.
 - The woman warrior appears at (4523, 304) when Rastan reaches 4355, runs left
   hopping down 32 px steps, and turns about 50 px past him.
+- In the castle (x 8200 on) sword and mace soldiers come in turn, stop about
+  60 px away and swing; a swing that reaches costs 12 units.
 """
 import sys
 from peek import peek
@@ -25,7 +27,7 @@ def check(name, ok, detail=''):
         fails.append(name)
 
 
-EK_LIZARD, EK_BLUE, EK_CHIM, EK_FIRE, EK_ROCK, EK_GARG, EK_WOMAN = 0, 1, 5, 6, 7, 8, 10
+EK_LIZARD, EK_BLUE, EK_CHIM, EK_FIRE, EK_ROCK, EK_GARG, EK_WOMAN, EK_SWORD, EK_MACE = 0, 1, 5, 6, 7, 8, 10, 11, 12
 ES_WALK, ES_ATTACK, ES_DYING = 1, 2, 4
 OBJ = {'e_state': 17, 'e_kind': 17, 'e_xl': 17, 'e_xh': 17, 'e_yl': 17, 'e_yh': 17, 'e_alt': 17}
 SEL, I, RIGHT = '10', '40', '04'
@@ -139,6 +141,24 @@ ys = sorted({y for _, _, y, _, _ in w})
 check('she hops down the 32 px steps', 336 in ys and 368 in ys, f'levels {[y for y in ys if y % 32 == 16]}')
 turn = next(((x, px) for _, x, _, px, m in w if m == 2), None)
 check('she turns about 50 px past him', turn and 45 <= turn[1] - turn[0] <= 60, f'{turn}')
+
+# Castle soldiers: warp to checkpoint 4 and walk right (they hurt; no god mode).
+keys = [100, 100, SEL] + sum([[110 + 6 * k, 110 + 6 * k, RIGHT] for k in range(4)], []) + [150, 150, I, 200, 900, '04']
+r = run(rom, 900, keys)
+r2 = peek(rom, 900, keys, {'p_hp': 1})
+kinds = []
+for i in range(200, len(r)):          # (after the warp)
+    for k in range(4):
+        if r[i]['e_state'][k] and not r[i - 1]['e_state'][k]:
+            kinds.append(r[i]['e_kind'][k])
+check('in the castle, sword and mace soldiers come in turn', len(kinds) >= 2 and all(a != b and {a, b} == {EK_SWORD, EK_MACE} for a, b in zip(kinds, kinds[1:])),
+      f'kinds {kinds}')
+att = [(i, k) for i in range(1, len(r)) for k in range(4) if r[i]['e_state'][k] == ES_ATTACK
+       and r[i - 1]['e_state'][k] != ES_ATTACK and r[i]['e_kind'][k] in (EK_SWORD, EK_MACE)]
+dist = [x_of(r[i], k) - w16(r[i]['p_x']) for i, k in att]
+check('they stop about 60 px away to swing', att and all(50 <= abs(d) <= 62 for d in dist), f'{dist}')
+drops = [r2[i - 1]['p_hp'][0] - r2[i]['p_hp'][0] for i in range(1, len(r2)) if r2[i]['p_hp'][0] < r2[i - 1]['p_hp'][0]]
+check('a swing that reaches costs 12 units', drops and set(drops) == {12}, f'{drops}')
 
 print(f'{len(fails)} failure(s)')
 sys.exit(1 if fails else 0)

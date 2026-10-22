@@ -186,6 +186,14 @@ Not done yet: slopes, waterfall currents, the other collision codes, rope attack
 - **Woman warrior** (`src/woman.asm`; `sim/scripts/woman.txt`): at x 4523, appearing when Rastan reaches 4355. In the
   arcade she doesn't stop to fight: she runs left at 1 px/frame hopping down the 32 px steps, turns about 50 px past
   Rastan, runs back right at 1.5 px/frame hopping up, and leaves. Touching her hurts; one hit kills her (300).
+- **Castle soldiers** (`sim/scripts/castle.txt`): from x 8200 sword and mace soldiers come in turn on the lanes.
+  The arcade's two share a body and differ by weapon; both walk in, stand about 60 px away and swing (3-frame steps),
+  then walk on. They use the lizardmen's loop (walk in, two swings, back off, come again) with their own hit pose
+  and reach; a swing that reaches costs 12 units. The arcade gave 900 for a sword and a mace soldier dying together;
+  the port splits it 300 / 600.
+- **No torn frames:** the SATB is DMA'd at the start of VBLANK, before the object cell uploads, so `enemies_draw`
+  plans which slots will get new cells at the next VBLANK (same order and budget) and draws each slot with the pose
+  its buffer will hold. A frame never shows an old layout over new cells.
 - The converter drops sprite pieces the arcade parks off-screen (y 272-479), which some objects keep in their lists.
 - **Object slots:** 0-3 walkers (11 cells each), 4 item and 5 its bat (4 cells), 6-8 specials such as boulders and
   the gargoyle's body and wings (13 cells), 9-16 projectiles (2 cells): 107 cells at `$5C00-$76BF`.

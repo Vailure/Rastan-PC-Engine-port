@@ -51,6 +51,9 @@ EK_ROCK		=	7		; Boulder.
 EK_GARG		=	8		; Gargoyle: body,
 EK_WINGS	=	9		; and wings.
 EK_WOMAN	=	10		; The woman warrior.
+EK_SWORD	=	11		; Castle soldiers: sword,
+EK_MACE		=	12		; mace.
+SOLDIER_RANGE	=	60
 
 ITEM_SLOT	=	NUM_EN		; Big slots after the walkers'.
 BAT_SLOT	=	NUM_EN + 1
@@ -96,6 +99,7 @@ e_kind:		ds	NUM_OBJ
 e_range:	ds	NUM_OBJ		; Attack distance.
 e_alt:		ds	NUM_OBJ		; Blue: next throw is low.
 e_shown:	ds	NUM_OBJ		; Pose whose cells are in the slot's buffer ($FF none).
+e_plan:		ds	NUM_OBJ		; Pose its buffer will hold next frame (enemies_draw).
 items_done:	ds	1		; Items spawned this life (bit per item).
 rocks_done:	ds	1		; Boulders spawned this life.
 gargs_done:	ds	1		; Gargoyles spawned this life.
@@ -305,7 +309,8 @@ try_spawn:	dec	<spawn_timer
 		stz	e_alt, x
 		; Kind (round 1 census, tools/census_all.py): lizardmen only before
 		; world x 1500; then blue throwers and lizardmen take turns; from
-		; x 2400 throwers, chimeras and lizardmen in turn.
+		; x 2400 throwers, chimeras and lizardmen in turn; in the castle (x 8200)
+		; sword and mace soldiers.
 		cla
 		ldy	<cx + 1
 		cpy	#>1500
@@ -316,7 +321,18 @@ try_spawn:	dec	<spawn_timer
 		bcc	.kind
 !:		ldy	<spawn_kind
 		iny
-		lda	<cx			; x >= 2400: a cycle of 3.
+		lda	<cx			; x >= 8200 (the castle): sword and mace soldiers.
+		cmp	#<8200
+		lda	<cx + 1
+		sbc	#>8200
+		bcc	!+
+		cpy	#2
+		bcc	.castle
+		cly
+.castle:	sty	<spawn_kind
+		lda	spawn_castle, y
+		bra	.kind
+!:		lda	<cx			; x >= 2400: a cycle of 3.
 		cmp	#<2400
 		lda	<cx + 1
 		sbc	#>2400
@@ -340,6 +356,7 @@ try_spawn:	dec	<spawn_timer
 spawn_gaps:	db	49, 81, 65
 spawn_two:	db	EK_LIZARD, EK_BLUE
 spawn_three:	db	EK_BLUE, EK_CHIM, EK_LIZARD
+spawn_castle:	db	EK_SWORD, EK_MACE
 
 ; ---------------------------------------------------------------------------
 ; enemy_think - X = slot.
@@ -393,8 +410,9 @@ enemy_think:	lda	e_kind, x
 		; --- Walk toward Rastan.
 !:		jsr	face_player
 		jsr	player_dist		; etmp = |p_x - e_x|, carry: |dy| small
-		lda	e_kind, x
-		beq	.liz_near
+		lda	e_kind, x		; Melee kinds (all but the thrower):
+		eor	#EK_BLUE		; Rastan level with it (carry; eor keeps it).
+		bne	.liz_near
 		; Blue: Rastan level with it or up to 64 px below (ey = dy).
 		lda	<ey
 		clc
@@ -427,8 +445,9 @@ enemy_think:	lda	e_kind, x
 .walk:		lda	e_face, x		; Step toward the facing direction.
 		jmp	enemy_step
 
-.attack:	lda	e_kind, x
-		beq	.club_swing
+.attack:	ldy	e_kind, x
+		cpy	#EK_BLUE
+		bne	.club_swing
 		; Blue: clubs leave the hand 8 and 27 frames into the throw.
 		inc	e_timer, x
 		lda	e_timer, x
@@ -439,9 +458,9 @@ enemy_think:	lda	e_kind, x
 .throw:		jsr	throw_club
 		bra	.wait
 
-.club_swing:	; The club is out in pose 6: hit Rastan once per swing if in range.
-		lda	e_pose, x
-		cmp	#POSE_LIZ_CLUB_OUT
+.club_swing:	; The weapon is out in the kind's hit pose: hit Rastan once per
+		lda	e_pose, x		; swing if in range (its attack range + 8).
+		cmp	kind_hitpose, y
 		bne	.armed
 		lda	e_struck, x
 		bne	.wait
@@ -450,9 +469,12 @@ enemy_think:	lda	e_kind, x
 		bcc	.wait
 		lda	<etmp + 1
 		bne	.wait
-		lda	<etmp
-		cmp	#ATTACK_RANGE + 8
-		bcs	.wait
+		lda	e_range, x
+		clc
+		adc	#8
+		cmp	<etmp
+		bcc	.wait
+		beq	.wait
 		phx
 		lda	e_face, x		; Knock Rastan the way the club swings.
 		beq	!+
@@ -553,33 +575,43 @@ rand:		lda	<rng
 
 ; Per-kind data: lizardman, blue thrower, club.
 kind_walk_l:	db	<anim_liz_walk, <anim_blue_walk, <anim_club, 0, <anim_bat, <anim_chim_walk, <anim_fireball
-		db	<anim_boulder, <anim_garg_body, <anim_garg_wings, <anim_woman_walk
+		db	<anim_boulder, <anim_garg_body, <anim_garg_wings, <anim_woman_walk, <anim_sword_walk
+		db	<anim_mace_walk
 kind_walk_h:	db	>anim_liz_walk, >anim_blue_walk, >anim_club, 0, >anim_bat, >anim_chim_walk, >anim_fireball
-		db	>anim_boulder, >anim_garg_body, >anim_garg_wings, >anim_woman_walk
-kind_attack_l:	db	<anim_liz_attack, <anim_blue_throw, 0
-kind_attack_h:	db	>anim_liz_attack, >anim_blue_throw, 0
-kind_retreat_l:	db	<anim_liz_walk, <anim_blue_walk2, 0
-kind_retreat_h:	db	>anim_liz_walk, >anim_blue_walk2, 0
+		db	>anim_boulder, >anim_garg_body, >anim_garg_wings, >anim_woman_walk, >anim_sword_walk
+		db	>anim_mace_walk
+kind_attack_l:	db	<anim_liz_attack, <anim_blue_throw, 0, 0, 0, 0, 0, 0, 0, 0, 0, <anim_sword_attack
+		db	<anim_mace_attack
+kind_attack_h:	db	>anim_liz_attack, >anim_blue_throw, 0, 0, 0, 0, 0, 0, 0, 0, 0, >anim_sword_attack
+		db	>anim_mace_attack
+kind_retreat_l:	db	<anim_liz_walk, <anim_blue_walk2, 0, 0, 0, 0, 0, 0, 0, 0, 0, <anim_sword_walk
+		db	<anim_mace_walk
+kind_retreat_h:	db	>anim_liz_walk, >anim_blue_walk2, 0, 0, 0, 0, 0, 0, 0, 0, 0, >anim_sword_walk
+		db	>anim_mace_walk
+kind_hitpose:	db	POSE_LIZ_CLUB_OUT, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, POSE_SWORD_OUT, POSE_MACE_OUT
 kind_death_l:	db	<anim_liz_death, <anim_blue_death, 0, 0, 0, <anim_chim_death, 0, 0, 0, 0, <anim_woman_death
+		db	<anim_sword_death, <anim_mace_death
 kind_death_h:	db	>anim_liz_death, >anim_blue_death, 0, 0, 0, >anim_chim_death, 0, 0, 0, 0, >anim_woman_death
-kind_range:	db	ATTACK_RANGE, 88, 0, 0, 0, 0, 0, 0, 0, 0, 0
+		db	>anim_sword_death, >anim_mace_death
+kind_range:	db	ATTACK_RANGE, 88, 0, 0, 0, 0, 0, 0, 0, 0, 0, SOLDIER_RANGE, SOLDIER_RANGE
 ; Arcade: lizardman 300, blue thrower 200, bat 200, chimera 300.
-kind_score:	db	$03, $02, 0, 0, $02, $03, 0, 0, 0, 0, $03
+; Castle soldiers: the arcade gave 900 for a sword and a mace soldier dying together.
+kind_score:	db	$03, $02, 0, 0, $02, $03, 0, 0, 0, 0, $03, $03, $06
 kind_bank:	db	GRP_SECT1_BANK, GRP_SECT1_BANK, GRP_SECT1_BANK, GRP_ITEMS_BANK, GRP_ITEMS_BANK
 		db	GRP_CHIMERA_BANK, GRP_CHIMERA_BANK, GRP_ROCKS_BANK, GRP_GARGOYLE_BANK, GRP_GARGOYLE_BANK
-		db	GRP_WOMAN_BANK
+		db	GRP_WOMAN_BANK, GRP_CASTLE_BANK, GRP_CASTLE_BANK
 kind_ptab_l:	db	<grp_sect1_ptab, <grp_sect1_ptab, <grp_sect1_ptab, <grp_items_ptab, <grp_items_ptab
 		db	<grp_chimera_ptab, <grp_chimera_ptab, <grp_rocks_ptab, <grp_gargoyle_ptab, <grp_gargoyle_ptab
-		db	<grp_woman_ptab
+		db	<grp_woman_ptab, <grp_castle_ptab, <grp_castle_ptab
 kind_ptab_h:	db	>grp_sect1_ptab, >grp_sect1_ptab, >grp_sect1_ptab, >grp_items_ptab, >grp_items_ptab
 		db	>grp_chimera_ptab, >grp_chimera_ptab, >grp_rocks_ptab, >grp_gargoyle_ptab, >grp_gargoyle_ptab
-		db	>grp_woman_ptab
+		db	>grp_woman_ptab, >grp_castle_ptab, >grp_castle_ptab
 ; Body box: x = anchor + cx +/- half, y = anchor - top .. anchor + bot
 ; (the item and bat boxes from their sprites' extent).
-kind_top:	db	36, 48, 8, 2, 25, 30, 6, 20, 40, 32, 38
-kind_bot:	db	16, 16, 16, 30, 7, 16, 6, 12, 47, 16, 16
-kind_half:	db	16, 16, 8, 20, 16, 30, 6, 15, 23, 48, 15
-kind_cx:	db	0, 0, 0, -8, -2, 0, 4, -3, -1, -1, 0
+kind_top:	db	36, 48, 8, 2, 25, 30, 6, 20, 40, 32, 38, 40, 40
+kind_bot:	db	16, 16, 16, 30, 7, 16, 6, 12, 47, 16, 16, 16, 16
+kind_half:	db	16, 16, 8, 20, 16, 30, 6, 15, 23, 48, 15, 16, 16
+kind_cx:	db	0, 0, 0, -8, -2, 0, 4, -3, -1, -1, 0, 0, 0
 
 ; ---------------------------------------------------------------------------
 ; throw_club - X = blue thrower: a club leaves its hand toward Rastan.
@@ -1068,6 +1100,7 @@ enemy_anim:	lda	e_animt, x
 
 enemies_draw:	php				; VDC writes: IRQ held off (see stream_column).
 		sei
+		jsr	plan_uploads
 		st0	#VDC_MAWR
 		lda	#<(SATB_ADDR + EN_SATB_FIRST * 4)
 		sta	VDC_DL
@@ -1078,7 +1111,7 @@ enemies_draw:	php				; VDC writes: IRQ held off (see stream_column).
 		ldx	#NUM_OBJ - 1
 .slot:		lda	e_state, x
 		beq	.next
-		lda	e_shown, x		; Nothing uploaded yet: not drawn.
+		lda	e_plan, x		; Nothing in its buffer next frame: not drawn.
 		cmp	#$FF
 		beq	.next
 		jsr	map_kind
@@ -1112,7 +1145,7 @@ draw_one:	lda	slot_pat_l, x		; Pattern of the buffer's first cell.
 		sta	<dr_pat
 		lda	slot_pat_h, x
 		sta	<dr_pat + 1
-		lda	e_shown, x
+		lda	e_plan, x
 		jsr	pose_ptr
 		; Screen anchor: ex = e_x - scroll_x, ey = e_y - scroll_y.
 		lda	e_xl, x
@@ -1309,8 +1342,10 @@ objects_upload:	php
 		ldx	<up_next
 .loop:		lda	e_state, x
 		beq	.next
-		lda	e_pose, x
+		lda	e_plan, x
 		cmp	e_shown, x
+		beq	.next
+		cmp	#$FF
 		beq	.next
 		jsr	upload_one
 .next:		inx
@@ -1329,9 +1364,50 @@ objects_upload:	php
 		plp
 		rts
 
-; upload_one - X = slot: its pose's cells into its buffer, if they fit.
-upload_one:	jsr	map_kind
+; plan_uploads - which slots get their new pose's cells at the next VBLANK:
+; the same order and budget objects_upload uses. The SATB written now (and
+; DMA'd at that VBLANK, just before the upload) then shows each slot with the
+; pose its buffer holds, so a frame never mixes an old layout with new cells.
+plan_uploads:	tma4
+		pha
+		lda	#UPLOAD_BUDGET
+		sta	<up_left
+		lda	#NUM_OBJ
+		sta	<up_count
+		ldx	<up_next
+.loop:		lda	e_shown, x		; Default: what it holds now.
+		sta	e_plan, x
+		lda	e_state, x
+		beq	.next
 		lda	e_pose, x
+		cmp	e_shown, x
+		beq	.next
+		jsr	map_kind
+		lda	e_pose, x
+		jsr	pose_ptr
+		lda	[ep]			; Cells it needs: fit this VBLANK?
+		cmp	<up_left
+		beq	!+
+		bcs	.next
+!:		eor	#$FF
+		sec
+		adc	<up_left
+		sta	<up_left
+		lda	e_pose, x
+		sta	e_plan, x
+.next:		inx
+		cpx	#NUM_OBJ
+		bcc	!+
+		clx
+!:		dec	<up_count
+		bne	.loop
+		pla
+		tam4
+		rts
+
+; upload_one - X = slot: its planned pose's cells into its buffer.
+upload_one:	jsr	map_kind
+		lda	e_plan, x
 		jsr	pose_ptr
 		lda	[ep]			; Cells this pose needs.
 		cmp	<up_left
@@ -1380,7 +1456,7 @@ upload_one:	jsr	map_kind
 		jsr	ram_tia
 		dec	<up_piece
 		bne	.piece
-		lda	e_pose, x
+		lda	e_plan, x
 		sta	e_shown, x
 .later:		rts
 

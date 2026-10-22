@@ -18,6 +18,7 @@ FILES = {
     'chimera': 'chimera.snp',    # sim/scripts/chimera.txt: chimeras from checkpoint segment 4
     'gargoyle': 'gargoyle.snp',  # sim/scripts/gargoyle.txt: the gargoyle from checkpoint segment 8
     'woman': 'woman.snp',        # sim/scripts/woman.txt: the woman warrior (x 4523)
+    'castle': 'castle.snp',      # sim/scripts/castle.txt: castle soldiers (mace slot 4, sword slot 6)
 }
 
 GROUPS = {
@@ -62,6 +63,15 @@ GROUPS = {
         ('woman_hop', 'woman', 7, 3141, 3169),
         ('woman_death', 'woman', 7, 3239, 3269),
     ],
+    # Castle soldiers: the same body with a mace or a sword; walk, two swings, death.
+    'castle': [
+        ('mace_walk', 'castle', 4, 2526, 2557),
+        ('mace_attack', 'castle', 4, 2622, 2699),
+        ('mace_death', 'castle', 4, 2726, 2756),
+        ('sword_walk', 'castle', 6, 2526, 2557),
+        ('sword_attack', 'castle', 6, 2622, 2699),
+        ('sword_death', 'castle', 6, 2726, 2756),
+    ],
 }
 
 # Scripted flights, replayed relative to the spawn point:
@@ -77,4 +87,6 @@ GROUP_MAX = {'items': 4, 'rocks': 13, 'gargoyle': 13}
 # Poses the engine refers to by number: (group, animation, step) -> symbol.
 POSE_SYMBOLS = {
     ('sect1', 'liz_attack', 3): 'POSE_LIZ_CLUB_OUT',
+    ('castle', 'mace_attack', 6): 'POSE_MACE_OUT',      # arcade anim 166: the swing's reach
+    ('castle', 'sword_attack', 6): 'POSE_SWORD_OUT',
 }
