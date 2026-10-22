@@ -44,6 +44,8 @@ def pieces(s, k):
             continue
         d0, py, code, px = (int(v) for v in s.spr[e * 4:e * 4 + 4])
         code &= 0x1fff
+        if 272 <= (py & 0x1ff) < 480:      # parked off-screen (unused piece)
+            continue
         if code:
             out.append((d0 & 0xc00f, ((py - y + 256) & 511) - 256, code, ((px - x + 256) & 511) - 256))
     return out

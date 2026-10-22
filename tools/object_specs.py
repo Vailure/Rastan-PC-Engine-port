@@ -17,6 +17,7 @@ FILES = {
     'star': 'item_star.snp',     # sim/scripts/item_star.txt: the morning star (segment $0C)
     'chimera': 'chimera.snp',    # sim/scripts/chimera.txt: chimeras from checkpoint segment 4
     'gargoyle': 'gargoyle.snp',  # sim/scripts/gargoyle.txt: the gargoyle from checkpoint segment 8
+    'woman': 'woman.snp',        # sim/scripts/woman.txt: the woman warrior (x 4523)
 }
 
 GROUPS = {
@@ -54,6 +55,12 @@ GROUPS = {
     'gargoyle': [
         ('garg_body', 'gargoyle', 9, 900, 900),
         ('garg_wings', 'gargoyle', 10, 875, 890),
+    ],
+    # The woman warrior (arcade slot 7): walk, hop down a step, death.
+    'woman': [
+        ('woman_walk', 'woman', 7, 3105, 3120),
+        ('woman_hop', 'woman', 7, 3141, 3169),
+        ('woman_death', 'woman', 7, 3239, 3269),
     ],
 }
 

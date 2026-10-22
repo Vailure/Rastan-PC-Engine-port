@@ -50,6 +50,7 @@ EK_FIRE		=	6		; and its fireballs.
 EK_ROCK		=	7		; Boulder.
 EK_GARG		=	8		; Gargoyle: body,
 EK_WINGS	=	9		; and wings.
+EK_WOMAN	=	10		; The woman warrior.
 
 ITEM_SLOT	=	NUM_EN		; Big slots after the walkers'.
 BAT_SLOT	=	NUM_EN + 1
@@ -98,6 +99,7 @@ e_shown:	ds	NUM_OBJ		; Pose whose cells are in the slot's buffer ($FF none).
 items_done:	ds	1		; Items spawned this life (bit per item).
 rocks_done:	ds	1		; Boulders spawned this life.
 gargs_done:	ds	1		; Gargoyles spawned this life.
+woman_done:	ds	1		; The woman warrior spawned this life.
 ram_tia:	ds	8		; tia src, VDC_DL, 128 / rts (source patched per cell).
 
 		.code
@@ -175,6 +177,7 @@ enemies_reset:	ldx	#NUM_OBJ - 1
 		stz	items_done
 		stz	rocks_done
 		stz	gargs_done
+		stz	woman_done
 		lda	#SPAWN_FIRST
 		sta	<spawn_timer
 		stz	<spawn_step
@@ -190,6 +193,7 @@ enemies_update:	lda	<dbg_noenemy		; Debug menu: no walkers (items still come).
 !:		jsr	item_spawn
 		jsr	rock_spawn
 		jsr	garg_spawn
+		jsr	woman_spawn
 		ldx	#NUM_OBJ - 1
 .loop:		lda	e_state, x
 		beq	.next
@@ -375,6 +379,9 @@ enemy_think:	lda	e_kind, x
 		cmp	#EK_CHIM
 		bne	!+
 		jmp	chim_think
+!:		cmp	#EK_WOMAN
+		bne	!+
+		jmp	woman_think
 !:		lda	e_state, x
 		cmp	#ES_ATTACK
 		bne	!+
@@ -546,30 +553,33 @@ rand:		lda	<rng
 
 ; Per-kind data: lizardman, blue thrower, club.
 kind_walk_l:	db	<anim_liz_walk, <anim_blue_walk, <anim_club, 0, <anim_bat, <anim_chim_walk, <anim_fireball
-		db	<anim_boulder, <anim_garg_body, <anim_garg_wings
+		db	<anim_boulder, <anim_garg_body, <anim_garg_wings, <anim_woman_walk
 kind_walk_h:	db	>anim_liz_walk, >anim_blue_walk, >anim_club, 0, >anim_bat, >anim_chim_walk, >anim_fireball
-		db	>anim_boulder, >anim_garg_body, >anim_garg_wings
+		db	>anim_boulder, >anim_garg_body, >anim_garg_wings, >anim_woman_walk
 kind_attack_l:	db	<anim_liz_attack, <anim_blue_throw, 0
 kind_attack_h:	db	>anim_liz_attack, >anim_blue_throw, 0
 kind_retreat_l:	db	<anim_liz_walk, <anim_blue_walk2, 0
 kind_retreat_h:	db	>anim_liz_walk, >anim_blue_walk2, 0
-kind_death_l:	db	<anim_liz_death, <anim_blue_death, 0, 0, 0, <anim_chim_death, 0, 0, 0, 0
-kind_death_h:	db	>anim_liz_death, >anim_blue_death, 0, 0, 0, >anim_chim_death, 0, 0, 0, 0
-kind_range:	db	ATTACK_RANGE, 88, 0, 0, 0, 0, 0, 0, 0, 0
+kind_death_l:	db	<anim_liz_death, <anim_blue_death, 0, 0, 0, <anim_chim_death, 0, 0, 0, 0, <anim_woman_death
+kind_death_h:	db	>anim_liz_death, >anim_blue_death, 0, 0, 0, >anim_chim_death, 0, 0, 0, 0, >anim_woman_death
+kind_range:	db	ATTACK_RANGE, 88, 0, 0, 0, 0, 0, 0, 0, 0, 0
 ; Arcade: lizardman 300, blue thrower 200, bat 200, chimera 300.
-kind_score:	db	$03, $02, 0, 0, $02, $03, 0, 0, 0, 0
+kind_score:	db	$03, $02, 0, 0, $02, $03, 0, 0, 0, 0, $03
 kind_bank:	db	GRP_SECT1_BANK, GRP_SECT1_BANK, GRP_SECT1_BANK, GRP_ITEMS_BANK, GRP_ITEMS_BANK
 		db	GRP_CHIMERA_BANK, GRP_CHIMERA_BANK, GRP_ROCKS_BANK, GRP_GARGOYLE_BANK, GRP_GARGOYLE_BANK
+		db	GRP_WOMAN_BANK
 kind_ptab_l:	db	<grp_sect1_ptab, <grp_sect1_ptab, <grp_sect1_ptab, <grp_items_ptab, <grp_items_ptab
 		db	<grp_chimera_ptab, <grp_chimera_ptab, <grp_rocks_ptab, <grp_gargoyle_ptab, <grp_gargoyle_ptab
+		db	<grp_woman_ptab
 kind_ptab_h:	db	>grp_sect1_ptab, >grp_sect1_ptab, >grp_sect1_ptab, >grp_items_ptab, >grp_items_ptab
 		db	>grp_chimera_ptab, >grp_chimera_ptab, >grp_rocks_ptab, >grp_gargoyle_ptab, >grp_gargoyle_ptab
+		db	>grp_woman_ptab
 ; Body box: x = anchor + cx +/- half, y = anchor - top .. anchor + bot
 ; (the item and bat boxes from their sprites' extent).
-kind_top:	db	36, 48, 8, 2, 25, 30, 6, 20, 40, 32
-kind_bot:	db	16, 16, 16, 30, 7, 16, 6, 12, 47, 16
-kind_half:	db	16, 16, 8, 20, 16, 30, 6, 15, 23, 48
-kind_cx:	db	0, 0, 0, -8, -2, 0, 4, -3, -1, -1
+kind_top:	db	36, 48, 8, 2, 25, 30, 6, 20, 40, 32, 38
+kind_bot:	db	16, 16, 16, 30, 7, 16, 6, 12, 47, 16, 16
+kind_half:	db	16, 16, 8, 20, 16, 30, 6, 15, 23, 48, 15
+kind_cx:	db	0, 0, 0, -8, -2, 0, 4, -3, -1, -1, 0
 
 ; ---------------------------------------------------------------------------
 ; throw_club - X = blue thrower: a club leaves its hand toward Rastan.

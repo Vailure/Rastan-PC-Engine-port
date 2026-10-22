@@ -33,6 +33,7 @@ from the ROMs (`*.bin`, snapshots, renders, disassembly) is git-ignored.
 | `src/chimera.asm` | Chimeras and their fireballs |
 | `src/boulder.asm` | Boulders (rockfall, rolling) |
 | `src/gargoyle.asm` | The gargoyle (replays the arcade's flight path) |
+| `src/woman.asm` | The woman warrior |
 | `src/hud.asm`, `tools/pce_hud.py` | HUD from the arcade's HUD sprites |
 | `src/debug.asm` | Checkpoints (death restarts, warps) and the debug menu |
 | `tools/test_debug.py` | Checks the menu, warps, invincibility and checkpoint restarts |
@@ -182,6 +183,10 @@ Not done yet: slopes, waterfall currents, the other collision codes, rope attack
   about 410 frames), and swings and thrusts did nothing to it. The converter records that path from the capture as
   runs of per-frame steps (`PATHS` in `tools/object_specs.py`), and the port replays it with two objects, body and
   wings (arcade slots 9 and 10). Touching the body hurts.
+- **Woman warrior** (`src/woman.asm`; `sim/scripts/woman.txt`): at x 4523, appearing when Rastan reaches 4355. In the
+  arcade she doesn't stop to fight: she runs left at 1 px/frame hopping down the 32 px steps, turns about 50 px past
+  Rastan, runs back right at 1.5 px/frame hopping up, and leaves. Touching her hurts; one hit kills her (300).
+- The converter drops sprite pieces the arcade parks off-screen (y 272-479), which some objects keep in their lists.
 - **Object slots:** 0-3 walkers (11 cells each), 4 item and 5 its bat (4 cells), 6-8 specials such as boulders and
   the gargoyle's body and wings (13 cells), 9-16 projectiles (2 cells): 107 cells at `$5C00-$76BF`.
 - **Object sprites:** each object slot has its own VRAM buffer (see Object slots).

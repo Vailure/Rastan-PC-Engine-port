@@ -110,13 +110,9 @@ rock_think:	jsr	touch_hurts
 		beq	.r
 		jsr	rock_floor
 		bcc	.r
-		lda	e_yl, x			; Landed: sit on the floor cell's top,
-		clc				; and roll.
-		adc	#ROCK_FOOT
-		and	#$F8
-		sec
-		sbc	#ROCK_FOOT
-		sta	e_yl, x
+		lda	#ROCK_FOOT		; Landed: sit on the floor cell's top,
+		tay				; and roll.
+		jsr	snap_floor
 		lda	#RM_ROLL
 		sta	e_alt, x
 .r:		rts
@@ -132,6 +128,25 @@ rock_think:	jsr	touch_hurts
 		jsr	rock_floor		; Nothing under it: fall.
 		bcs	.r
 		stz	e_alt, x		; RM_FALL
+		rts
+
+; snap_floor - X's y = ((y + A) & ~7) - Y: the anchor Y px above the top of
+; the floor cell probed A px below it.
+snap_floor:	clc
+		adc	e_yl, x
+		sta	<etmp
+		lda	e_yh, x
+		adc	#0
+		sta	<etmp + 1
+		sty	<ex
+		lda	<etmp
+		and	#$F8
+		sec
+		sbc	<ex
+		sta	e_yl, x
+		lda	<etmp + 1
+		sbc	#0
+		sta	e_yh, x
 		rts
 
 ; rock_floor - carry set if X stands on a floor (probe at x, y + ROCK_FOOT).
