@@ -16,6 +16,7 @@ FILES = {
     'fire': 'item_fire.snp',     # sim/scripts/item_fire.txt: the fire sword (segment 4)
     'star': 'item_star.snp',     # sim/scripts/item_star.txt: the morning star (segment $0C)
     'chimera': 'chimera.snp',    # sim/scripts/chimera.txt: chimeras from checkpoint segment 4
+    'gargoyle': 'gargoyle.snp',  # sim/scripts/gargoyle.txt: the gargoyle from checkpoint segment 8
 }
 
 GROUPS = {
@@ -48,11 +49,23 @@ GROUPS = {
     'rocks': [
         ('boulder', 'chimera', 14, 1294, 1341),
     ],
+    # The gargoyle: body (arcade slot 9) and wings (slot 10), one flap cycle each
+    # (the body keeps one pose).
+    'gargoyle': [
+        ('garg_body', 'gargoyle', 9, 900, 900),
+        ('garg_wings', 'gargoyle', 10, 875, 890),
+    ],
 }
 
-# Pieces per pose, where a group's objects use smaller slot buffers (default 12;
-# src/enemies.asm: items and bats 4, projectiles 2 - single-piece here).
-GROUP_MAX = {'items': 4}
+# Scripted flights, replayed relative to the spawn point:
+# name -> (group, capture, slot, first frame, last frame).
+PATHS = {
+    'gargoyle': ('gargoyle', 'gargoyle', 9, 861, 1271),
+}
+
+# Pieces per pose (src/enemies.asm slot buffers): walkers 11 (the default), items and
+# bats 4, specials 13; projectiles 2 (single-piece here).
+GROUP_MAX = {'items': 4, 'rocks': 13, 'gargoyle': 13}
 
 # Poses the engine refers to by number: (group, animation, step) -> symbol.
 POSE_SYMBOLS = {

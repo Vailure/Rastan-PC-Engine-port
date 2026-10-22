@@ -32,6 +32,7 @@ from the ROMs (`*.bin`, snapshots, renders, disassembly) is git-ignored.
 | `src/items.asm` | Weapon items and their bats |
 | `src/chimera.asm` | Chimeras and their fireballs |
 | `src/boulder.asm` | Boulders (rockfall, rolling) |
+| `src/gargoyle.asm` | The gargoyle (replays the arcade's flight path) |
 | `src/hud.asm`, `tools/pce_hud.py` | HUD from the arcade's HUD sprites |
 | `src/debug.asm` | Checkpoints (death restarts, warps) and the debug menu |
 | `tools/test_debug.py` | Checks the menu, warps, invincibility and checkpoint restarts |
@@ -176,8 +177,13 @@ Not done yet: slopes, waterfall currents, the other collision codes, rope attack
 - **Boulders** (`src/boulder.asm`): appear when Rastan is 169 px left of their spot, hop, and fall at 2 px/frame. The
   two at x 2898 fall through everything and wrap from the bottom of the world to the top (a rockfall); the ones at
   4601 and 6674 land (9 px above the floor), roll left at 7/6 px/frame and drop off ledges. Touching one hurts.
-- **Object slots:** 0-3 walkers (12 cells each), 4 item and 5 its bat (4 cells), 6-8 specials such as boulders
-  (12 cells), 9-16 projectiles (2 cells): 108 cells at `$5C00-$76FF`.
+- **Gargoyle** (`src/gargoyle.asm`; `sim/scripts/gargoyle.txt`): at x 4608 and 6841, 176 px ahead of Rastan. In the
+  arcade it flies the same path every time whatever Rastan does (glide in, hover, dive past him, turn, swoop back;
+  about 410 frames), and swings and thrusts did nothing to it. The converter records that path from the capture as
+  runs of per-frame steps (`PATHS` in `tools/object_specs.py`), and the port replays it with two objects, body and
+  wings (arcade slots 9 and 10). Touching the body hurts.
+- **Object slots:** 0-3 walkers (11 cells each), 4 item and 5 its bat (4 cells), 6-8 specials such as boulders and
+  the gargoyle's body and wings (13 cells), 9-16 projectiles (2 cells): 107 cells at `$5C00-$76BF`.
 - **Object sprites:** each object slot has its own VRAM buffer (see Object slots).
   When an object's pose changes, its cells are copied there during VBLANK (14 cells a frame at most), so any number of
   kinds can appear in the round. `tools/pce_objects.py` builds the data from captures listed in

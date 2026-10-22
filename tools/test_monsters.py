@@ -7,6 +7,8 @@ Arcade values (round 1 census, sim/scripts/chimera.txt; see README):
 - Fireballs fly left at 1.75 px/frame. A chimera is worth 300.
 - Boulders appear when Rastan is 169 px left of their spot; the one at 4601
   lands on the ledge at y 311, rolls left at 7/6 px/frame and drops to y 343.
+- The gargoyle at 4608 flies the arcade's fixed path: at (4512, 289) 126 frames
+  after appearing, (4418, 334) at 199, (4495, 316) at 249, (4572, 295) at 349.
 """
 import sys
 from peek import peek
@@ -21,7 +23,7 @@ def check(name, ok, detail=''):
         fails.append(name)
 
 
-EK_LIZARD, EK_BLUE, EK_CHIM, EK_FIRE, EK_ROCK = 0, 1, 5, 6, 7
+EK_LIZARD, EK_BLUE, EK_CHIM, EK_FIRE, EK_ROCK, EK_GARG = 0, 1, 5, 6, 7, 8
 ES_WALK, ES_ATTACK, ES_DYING = 1, 2, 4
 OBJ = {'e_state': 17, 'e_kind': 17, 'e_xl': 17, 'e_xh': 17, 'e_yl': 17, 'e_yh': 17}
 SEL, I, RIGHT = '10', '40', '04'
@@ -104,10 +106,10 @@ gain = [bcd(r[i]['score']) - bcd(r[i - 1]['score']) for i, _ in kills]
 check('a sword hit kills a chimera, worth 300', kills and 300 in gain, f'{len(kills)} killed, score steps {gain}')
 
 # Boulder at 4601 (checkpoint 2, the same jumping route).
-keys = [100, 100, SEL, 110, 110, RIGHT, 116, 116, RIGHT, 150, 150, I, 200, 1000, '05']
-for f in range(220, 1000, 60):
+keys = [100, 100, SEL, 110, 110, RIGHT, 116, 116, RIGHT, 150, 150, I, 200, 1100, "05"]
+for f in range(220, 1100, 60):
     keys += [f, f + 3, I]
-r = run(god, 1000, keys)
+r = run(god, 1100, keys)
 rk = [(i, x_of(f, k), f['e_yl'][k] | f['e_yh'][k] << 8, w16(f['p_x'])) for i, f in enumerate(r) for k in (6, 7, 8)
       if f['e_state'][k] and f['e_kind'][k] == EK_ROCK]
 check('a boulder appears when Rastan is 169 px left of 4601', rk and rk[0][1] == 4601 and abs(rk[0][3] - (4601 - 169)) <= 3,
@@ -117,6 +119,14 @@ check('it lands at y 311, rolls, then drops to y 343', 311 in ys and 343 in ys, 
 roll = [(i, x) for i, x, y, _ in rk if y == 311]
 v = (roll[0][1] - roll[-1][1]) / (roll[-1][0] - roll[0][0]) if len(roll) > 30 else 0
 check('rolling left at 7/6 px/frame', abs(v - 7 / 6) < 0.05, f'{v:.3f}')
+
+# The gargoyle (same run).
+g = [(i, x_of(f, k), f['e_yl'][k] | f['e_yh'][k] << 8) for i, f in enumerate(r) for k in (6, 7, 8)
+     if f['e_state'][k] and f['e_kind'][k] == EK_GARG]
+ARC = {126: (4512, 289), 199: (4418, 334), 249: (4495, 316), 349: (4572, 295)}
+got = {d: next(((x, y) for i, x, y in g if i - g[0][0] == d), None) for d in ARC} if g else {}
+check("the gargoyle flies the arcade's path", g and all(got[d] and abs(got[d][0] - ARC[d][0]) <= 1
+      and abs(got[d][1] - ARC[d][1]) <= 1 for d in ARC), f'{got}')
 
 print(f'{len(fails)} failure(s)')
 sys.exit(1 if fails else 0)
