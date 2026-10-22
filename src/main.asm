@@ -100,10 +100,7 @@ core_main:	lda	#GAME_BANK		; (the boot mapping already has it there)
 		jsr	player_update		; Compute the next frame.
 		jsr	props_update		; (the cave block: solid, breakable)
 	.if	!NO_ENEMIES
-		lda	<dbg_noenemy
-		bne	!+
-		jsr	enemies_update
-!:
+		jsr	enemies_update		; (debug ENEMIES OFF: no walkers)
 	.endif
 		jsr	camera_update
 		jsr	stream_ahead		; Make its columns resident.
@@ -462,6 +459,7 @@ GAME_BANK	=	$04
 		.bank	GAME_BANK
 		.page	6
 		include	"enemies.asm"
+		include	"items.asm"
 		include	"props.asm"
 
 ; Checkpoints and the debug menu: bank DEBUG_BANK, in MPR2 ($4000) all the time.
@@ -495,6 +493,14 @@ player_data:	incbin	"player.bin"
 		.bank	$56
 		.page	5
 collision_data:	incbin	"collision.bin"
+
+		.bank	$57
+		.page	3
+		include	"weapon_tab.inc"	; Weapon piece lists per pose (build/player).
+
+		.bank	$58
+		.page	3
+weapon_cells:	incbin	"weapons.bin"
 
 		include	"objects_data.inc"	; Object cells ($60..) and pose banks.
 

@@ -28,14 +28,17 @@ from the ROMs (`*.bin`, snapshots, renders, disassembly) is git-ignored.
 | `tools/m68k/`, `tools/lockstep.py` | 68000 decoder and reference interpreter, checked call-by-call against the arcade |
 | `tools/callgraph.py` | Code reachable from a routine |
 | `src/player.asm` | Rastan: states, movement, collision, ropes, damage, camera, sprite streaming |
-| `src/enemies.asm` | Stage 1 lizardmen |
+| `src/enemies.asm` | Stage 1 enemies and the object system (per-slot sprite buffers, uploads in VBLANK) |
+| `src/items.asm` | Weapon items and their bats |
 | `src/hud.asm`, `tools/pce_hud.py` | HUD from the arcade's HUD sprites |
 | `src/debug.asm` | Checkpoints (death restarts, warps) and the debug menu |
 | `tools/test_debug.py` | Checks the menu, warps, invincibility and checkpoint restarts |
 | `src/dyncolor.asm` | Waterfall color cycle and the sky change (VCE lists from `pce_stage.py`) |
 | `tools/test_effects.py` | Checks the waterfall cycle, sky switch, hazards and death |
-| `tools/pce_enemies.py`, `tools/enemy_capture.py` | Enemy poses from the arcade's object slots → PCE sprites |
+| `tools/pce_objects.py`, `tools/object_specs.py` | Object poses (enemies, projectiles, items) from the arcade's object slots → PCE sprites |
+| `tools/census_all.py`, `tools/track.py` | Every arcade object of a run with its sprite pieces; one slot over time |
 | `tools/test_enemies.py` | Headless checks for hits, kills and frame budget |
+| `tools/test_items.py`, `tools/peek.py` | Checks weapons, items and bats; reads named RAM variables from a headless run |
 | `sim/` | Headless Rastan main-CPU simulator (Musashi 68000) and a linear disassembler |
 | `sim/scripts/` | Input scripts for the simulator |
 
@@ -72,10 +75,11 @@ UP/DOWN pick a line, LEFT/RIGHT change a value, I applies, SELECT or II closes.
 |---|---|
 | Warp to checkpoint 0-5 | Restart at one of the arcade's round 1 checkpoints (segments 0, 4, 8, 12, 16, 19) |
 | Invincible | Enemies, water and deadly tiles do no harm (falling off the map still kills) |
-| Enemies | On/off |
+| Enemies | Walkers on/off (items and their bats still come) |
 | Refill health | Full health bar |
 | Lives | 1-9 |
 | Slow motion | Game logic at 1/2, 1/4 or 1/8 speed |
+| Weapon | 1 sword, 2 axe, 3 morning star, 4 fire sword (for 3000 frames) |
 | Resume | Close the menu |
 
 The header shows Rastan's world position and the current checkpoint.
@@ -104,8 +108,8 @@ cd tools && python3 contact.py ../out/play1.snp ../out/play1.png 700 900 1100
 - **Size:** round 1 is 488 KB. Compressing the BAT columns and patterns is a later task,
   because six rounds at this rate would not fit in 8 Mbit.
 
-VRAM layout: BAT `$0000`, streamed tiles `$1000-$4FFF` (#`$100-$4FF`), Rastan's two sprite pattern
-buffers `$5000`/`$5600`, SATB `$7F00`.
+VRAM layout: BAT `$0000`, streamed tiles `$1000-$4BFF`, props `$4C00`, Rastan's two sprite pattern
+buffers `$5000`/`$5600` (20 body cells + 4 weapon cells each), object buffers `$5C00-$767F`, HUD `$7700`, SATB `$7F00`.
 
 ## Rastan (milestone 2, approximate)
 
@@ -125,8 +129,7 @@ buffers `$5000`/`$5600`, SATB `$7F00`.
 `sim/scripts/actions.txt` makes him walk, crouch, attack and jump. The rope poses come from the attract demo.
 Animation timings are measured from the same runs.
 
-Not done yet: enemies and damage, slopes, waterfall currents, the other collision codes, rope attacks,
-weapon pickups, and leftward scrolling.
+Not done yet: slopes, waterfall currents, the other collision codes, rope attacks, and leftward scrolling.
 
 ### Damage and enemies (milestone 3, approximate)
 
@@ -135,6 +138,19 @@ weapon pickups, and leftward scrolling.
   When health runs out, the stage restarts.
 - **Sword hitboxes:** standing, crouched and jump swings reach 56 px in front of him; the down
   and up thrusts hit below and above him.
+- **Weapons** (arcade `$10D2FA`; timer `$10D326`): the sword, or an item's axe, morning star or fire sword for
+  3000 frames, back to the sword at the end or on a death. Rastan's sprite in the arcade is three parts, each from
+  its own ROM table: body, legs and weapon, with the weapon frame chosen by `$10D244`. The port keeps the body and
+  legs as its composited poses and draws the weapon as up to 4 extra sprites behind them, taken straight from the
+  weapon's ROM table for the pose's weapon frame (`tools/pce_player.py` checks every captured pose's weapon pieces
+  against that table). Only the morning star reaches further: 88 px, and 16 px more for the thrusts. The fire sword's
+  flame cycles its cells (+0/+2/+4/+6, 2 frames each); only its 2 cells are re-uploaded.
+- **Items and bats** (`src/items.asm`; `sim/scripts/item.txt`, `item_fire.txt`, `item_star.txt`): four items hang
+  in round 1: axes at x 1004 (in the cave) and 3854, the fire sword at 2893, the morning star at 6829. Each appears
+  when Rastan is 164 px left of it, with a bat 20 px below. Touching an item, or hitting it with the weapon, takes it.
+  The bat flies off away from Rastan (about 75 frames), hovers over him, dives onto him and clings: 1024 health
+  (4 bar units) when it brushes him in flight, 2048 (8 units) every 45 frames while clinging, no knockback.
+  One hit kills it. A death brings the items back.
 - **Lizardmen** (`src/enemies.asm`): measured in the arcade from `sim/scripts/lizard.txt`. They enter at
   the right edge, walk at 7/8 px/frame, swing twice when about 52 px away, back off, and come again.
   One sword hit kills them. Up to 4 at once (the arcade's limit); their 83 sprite cells stay resident in VRAM at `$5C00`.
@@ -149,18 +165,19 @@ weapon pickups, and leftward scrolling.
   `$10C740`): 1.5 px/frame, spinning through 8 cells; a high pair (20 px above the thrower's anchor) then a low pair
   (13 px above, sinking to 6). A club costs 3072 like a lizardman's hit; the sword knocks clubs away; one hit kills
   the thrower, with the shared explosion.
-- **Enemy VRAM:** cells that are flips of each other are stored once, so lizardmen, throwers, clubs and the explosion
-  fit in 105 resident cells (`$5C00-$76FF`; the HUD moved to `$7700`). Later kinds (chimeras, the woman warrior,
-  the castle's enemies) will need cells loaded per section.
+- **Object sprites:** each object slot has its own VRAM buffer (6 slots of 15 cells, 8 of 2 cells, `$5C00-$767F`).
+  When an object's pose changes, its cells are copied there during VBLANK (14 cells a frame at most), so any number of
+  kinds can appear in the round. `tools/pce_objects.py` builds the data from captures listed in
+  `tools/object_specs.py`: the pieces each arcade slot drew (the simulator records which slot wrote each sprite
+  entry), deduplicated into poses and animations per group, with cells stored once up to flips.
 - **Cave block** (`src/props.asm`, `tools/pce_props.py`, `sim/scripts/block.txt`): the brown block over the cave
   entrance (arcade object slot 0, cells `$179`.., spawned by map marker `$48`) fills the 32 px gap in the ground.
   It is solid (`coll_at` asks the active prop first); a down thrust that reaches it crumbles it in three steps of
   6 frames and the gap opens. Standing swings don't break it (checked in the arcade). Props' cells are loaded on
   demand into `$4C00-$4FFF`, so the BG tile pool is now 960 slots (peak use 932).
-- `tools/pce_enemies.py` converts the captured lizardman poses (`tools/enemy_capture.py` reads the
-  arcade's object slots). `tools/test_enemies.py` checks hits, deaths, spawns, the throwers' clubs and the frame budget
+- `tools/test_enemies.py` checks hits, deaths, spawns, the throwers' clubs and the frame budget
   (the `god.pce` test build keeps Rastan unhurt so the bot reaches later sections).
-- `tools/player_frames.py` decodes Rastan's metasprite tables statically from the ROM, for later.
+- `tools/player_frames.py` decodes Rastan's metasprite tables statically from the ROM (used for the weapons).
 
 **HUD** (`src/hud.asm`, `tools/pce_hud.py`): the arcade draws it with sprites, and so does the port, using
 the arcade's own cells. The bar is 6 cells x 8 levels (code 981 - level), 48 units for 12288 health, so a lizardman
@@ -249,9 +266,10 @@ The headless runner is built with `tools/tgrun/build.sh`, after running `make` i
 - [x] HUD: lives, icon, health bar (drains like the arcade's), ROUND 1
 - [x] Enemy spawns on the arcade's lanes, with its timing; blue club throwers
 - [x] The cave block (solid, broken by a down thrust)
-- [ ] The rest of stage 1's enemies, items, and the boss
+- [x] Weapons (axe, morning star, fire sword) and round 1's weapon items, with their bats
+- [ ] The rest of stage 1's enemies and the boss
 - [x] Restart at the arcade's checkpoints after a death (stream fast-forward, no preload data)
-- [x] Debug menu (SELECT): checkpoint warp, invincible, enemies on/off, health, lives, slow motion
+- [x] Debug menu (SELECT): checkpoint warp, invincible, enemies on/off, health, lives, slow motion, weapon
 
 ## Licenses
 

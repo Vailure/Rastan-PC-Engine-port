@@ -17,9 +17,22 @@
 PLAYER_BANK	=	^player_data
 COLL_BANK	=	^collision_data
 
-SPR_BUF_A	=	$5000		; Two pattern buffers, 24 cells each.
-SPR_BUF_B	=	$5600
+SPR_BUF_A	=	$5000		; Two pattern buffers, 24 cells each:
+SPR_BUF_B	=	$5600		; the pose's (up to 20), then the weapon's (up to 4).
 MAX_CELLS	=	24
+WEAPON_CELL	=	20		; First weapon cell in a buffer.
+WEAPON_BANK	=	^weapon_cells	; Weapon cells (64), 128 bytes each, from $6000.
+WTAB_BANK	=	^weapon_vtab	; Weapon piece lists (weapon_tab.inc, pce_player.py).
+
+; Weapons (arcade $10D2FA): the sword, or one taken from an item for 3000
+; frames (arcade timer $10D326). The weapon is drawn behind the body from
+; the arcade's own weapon frames (see pce_player.py); the morning star
+; reaches 32 px further forward, 16 px further up and down.
+WPN_SWORD	=	1
+WPN_AXE		=	2
+WPN_STAR	=	3
+WPN_FIRE	=	4
+WEAPON_FRAMES	=	3000
 
 ; States.
 ST_STAND	=	0
@@ -71,6 +84,11 @@ sb_x1:		ds	2
 sb_y0:		ds	2
 sb_y1:		ds	2		; Freeze the animation (climbing, not moving).
 p_prev_cells:	ds	1
+p_weapon:	ds	1		; WPN_*.
+p_wtime:	ds	2		; Frames left with a taken weapon.
+p_var:		ds	1		; Weapon drawing variant: weapon - 1, or 3 + flame step.
+p_var_up:	ds	1		; Variant shown with p_pose_up.
+p_wcount:	ds	1		; Weapon pieces this frame.
 cx:		ds	2		; Collision probe position.
 cy:		ds	2
 cp:		ds	2
@@ -81,6 +99,12 @@ dx:		ds	1		; Signed per-frame deltas.
 dy:		ds	1
 pad:		ds	1
 padtrg:		ds	1
+
+		.bss
+p_bufpose:	ds	2		; Per buffer: pose whose body cells it holds ($FF none),
+p_bufwpose:	ds	2		; pose and variant whose weapon cells it holds.
+p_bufvar:	ds	2
+p_wbuf:		ds	16		; Weapon pieces: dx, dy, cell, SATB flags.
 
 		.code
 
@@ -100,8 +124,9 @@ player_init:	lda	#<START_X
 		stz	<p_nograb
 		stz	<p_buf
 		stz	<p_prev_cells
-		lda	#$FF
-		sta	<p_pose_up
+		jsr	player_invalidate
+		lda	#WPN_SWORD
+		sta	<p_weapon
 		jsr	enter_stand
 
 		; Sprite palette 0 (VCE colors 256-271).
@@ -122,6 +147,18 @@ player_update:	lda	#COLL_BANK		; Collision data at $A000.
 		lda	<p_invuln
 		beq	!+
 		dec	<p_invuln
+!:		lda	<p_weapon		; A taken weapon runs out.
+		cmp	#WPN_SWORD
+		beq	!+
+		lda	<p_wtime
+		bne	.wdec
+		dec	<p_wtime + 1
+.wdec:		dec	a
+		sta	<p_wtime
+		ora	<p_wtime + 1
+		bne	!+
+		lda	#WPN_SWORD
+		sta	<p_weapon
 !:
 		lda	joynow
 		sta	<pad
@@ -439,7 +476,29 @@ player_hit:
 		jmp	set_anim
 .no:		rts
 
-; sword_box - carry set and sb_* set if Rastan's sword is out this frame.
+; player_drain - A = health units lost without being knocked back (a bat).
+player_drain:
+	.if	GOD_MODE
+		rts
+	.endif
+		ldx	<dbg_god
+		bne	.no
+		ldx	<p_state
+		cpx	#ST_DEAD
+		beq	.no
+		sta	<ctmp
+		lda	<p_hp
+		sec
+		sbc	<ctmp
+		bcs	!+
+		cla				; (cla leaves the flags alone)
+!:		sta	<p_hp
+		tax
+		bne	.no
+		jmp	enter_dead
+.no:		rts
+
+; sword_box - carry set and sb_* set if Rastan's weapon is out this frame.
 sword_box:	lda	<p_state
 		cmp	#ST_ATTACK
 		beq	.stand
@@ -482,7 +541,12 @@ sword_box:	lda	<p_state
 		ldy	#2
 		bra	.vert
 .up:		ldy	#3
-.vert:		lda	<p_x			; x: p_x - 10 .. p_x + 10
+.vert:		lda	<p_weapon		; The morning star: rows 4, 5.
+		cmp	#WPN_STAR
+		bne	!+
+		iny
+		iny
+!:		lda	<p_x			; x: p_x - 10 .. p_x + 10
 		sec
 		sbc	#10
 		sta	<sb_x0
@@ -497,13 +561,19 @@ sword_box:	lda	<p_state
 		adc	#0
 		sta	<sb_x1 + 1
 		bra	.yrange
-.front:		; Facing right: p_x .. p_x + 56; left: p_x - 56 .. p_x.
+.front:		; Facing right: p_x .. p_x + reach; left: p_x - reach .. p_x.
+		lda	#56			; The weapon's reach.
+		ldx	<p_weapon
+		cpx	#WPN_STAR
+		bne	!+
+		lda	#88
+!:		sta	<ctmp
 		lda	<p_face
 		bne	.left
 		lda	<p_x
 		sta	<sb_x0
 		clc
-		adc	#56
+		adc	<ctmp
 		sta	<sb_x1
 		lda	<p_x + 1
 		sta	<sb_x0 + 1
@@ -513,7 +583,7 @@ sword_box:	lda	<p_state
 .left:		lda	<p_x
 		sta	<sb_x1
 		sec
-		sbc	#56
+		sbc	<ctmp
 		sta	<sb_x0
 		lda	<p_x + 1
 		sta	<sb_x1 + 1
@@ -540,9 +610,9 @@ sword_box:	lda	<p_state
 !:		adc	<p_y + 1
 		sax
 		rts
-		;	stand, crouch, down thrust, up thrust
-.y0:		db	-28, 0, 8, -64
-.y1:		db	8, 24, 44, -20
+		;	stand, crouch, down thrust, up thrust, (morning star) down, up
+.y0:		db	-28, 0, 8, -64, 8, -80
+.y1:		db	8, 24, 44, -20, 60, -20
 
 ; --- On a rope: UP climbs, DOWN slides, I jumps off.
 st_climb:	lda	#1
@@ -741,7 +811,28 @@ enter_air:	lda	#ST_AIR
 		ldx	#>anim_jump
 		jmp	set_anim
 
+; player_invalidate - forget what the pattern buffers hold.
+player_invalidate:
+		lda	#$FF
+		sta	<p_pose_up
+		sta	p_bufpose
+		sta	p_bufpose + 1
+		sta	p_bufwpose
+		sta	p_bufwpose + 1
+		rts
+
+; player_set_weapon - A = weapon; a taken one lasts WEAPON_FRAMES.
+player_set_weapon:
+		sta	<p_weapon
+		lda	#<WEAPON_FRAMES
+		sta	<p_wtime
+		lda	#>WEAPON_FRAMES
+		sta	<p_wtime + 1
+		rts
+
 player_init_pos:
+		lda	#WPN_SWORD		; A life starts with the sword.
+		sta	<p_weapon
 		lda	#PLAYER_HP
 		sta	<p_hp
 		stz	<p_invuln
@@ -1155,7 +1246,80 @@ camera_update:	lda	<p_x			; tmp = p_x - 136
 player_draw:	php				; VDC writes: IRQ held off (see stream_column).
 		sei
 		jsr	anim_tick
-		; Map the pose record (pose table at the start of player_data).
+		; Weapon variant: weapon - 1; the fire sword's flame steps every 2 frames.
+		lda	<p_weapon
+		dec	a
+		cmp	#WPN_FIRE - 1
+		bcc	!+
+		lda	<p_frame
+		lsr	a
+		and	#3
+		clc
+		adc	#WPN_FIRE - 1
+!:		sta	<p_var
+		; This pose's weapon pieces into p_wbuf.
+		lda	#WTAB_BANK
+		tam3
+		lda	<p_var
+		asl	a
+		tay
+		lda	weapon_vtab, y
+		sta	<ctx
+		lda	weapon_vtab + 1, y
+		sta	<ctx + 1
+		lda	<p_pose
+		asl	a
+		tay
+		lda	[ctx], y
+		sta	<cp
+		iny
+		lda	[ctx], y
+		sta	<cp + 1
+		lda	[cp]
+		sta	<p_wcount
+		asl	a
+		asl	a
+		tax
+		beq	.wdone
+		ldy	#1
+!:		lda	[cp], y
+		sta	p_wbuf - 1, y
+		iny
+		dex
+		bne	!-
+.wdone:
+		; Changed: show it from the hidden buffer, uploading what that buffer lacks.
+		stz	<cty			; Body cells to upload: no.
+		lda	<p_pose
+		cmp	<p_pose_up
+		bne	.new
+		lda	<p_var
+		cmp	<p_var_up
+		beq	.map
+.new:		lda	<p_pose
+		sta	<p_pose_up
+		lda	<p_var
+		sta	<p_var_up
+		lda	<p_buf
+		eor	#1
+		sta	<p_buf
+		tax
+		lda	<p_pose
+		cmp	p_bufpose, x
+		beq	!+
+		sta	p_bufpose, x
+		inc	<cty			; Body cells: yes (below, once mapped).
+!:		cmp	p_bufwpose, x
+		bne	.wup
+		lda	<p_var
+		cmp	p_bufvar, x
+		beq	.map
+.wup:		lda	<p_pose
+		sta	p_bufwpose, x
+		lda	<p_var
+		sta	p_bufvar, x
+		jsr	upload_weapon
+.map:		; Map the pose record (pose table at the start of player_data).
 		lda	#PLAYER_BANK
 		tam3
 		lda	<p_pose
@@ -1178,14 +1342,9 @@ player_draw:	php				; VDC writes: IRQ held off (see stream_column).
 		lda	[cp]
 		sta	<p_ncells
 
-		lda	<p_pose
-		cmp	<p_pose_up
+		lda	<cty
 		beq	.satb
-		sta	<p_pose_up
-		lda	<p_buf			; Upload into the hidden buffer.
-		eor	#1
-		sta	<p_buf
-		st0	#VDC_MAWR
+		st0	#VDC_MAWR		; Body cells into the (new) shown buffer.
 		stz	VDC_DL
 		lda	#>SPR_BUF_A
 		ldx	<p_buf
@@ -1229,7 +1388,8 @@ player_draw:	php				; VDC writes: IRQ held off (see stream_column).
 		and	#4
 		beq	!+
 		stz	<p_ncells
-!:		; SATB entries 0..ncells-1, then clear what the last pose used.
+		stz	<p_wcount
+!:		; SATB entries 0..ncells-1, the weapon's, then clear what the last frame used.
 		st0	#VDC_MAWR
 		lda	#<(SATB_ADDR + HUD_ENTRIES * 4)	; After the HUD's entries.
 		sta	VDC_DL
@@ -1246,7 +1406,7 @@ player_draw:	php				; VDC writes: IRQ held off (see stream_column).
 		ldy	#1			; offset of (dx, dy) pairs
 .ent:		cpx	<p_ncells
 		bcc	!+
-		jmp	.clear
+		jmp	.weapon
 !:		; y = p_y + dy - scroll_y + 64
 		iny
 		lda	[cp], y			; dy
@@ -1330,7 +1490,99 @@ player_draw:	php				; VDC writes: IRQ held off (see stream_column).
 		inc	a
 		tay
 		jmp	.ent
-.clear:		cpx	<p_prev_cells		; Zero leftover entries.
+.weapon:	; Weapon pieces (behind the body): p_wbuf, cells WEAPON_CELL...
+		cly
+.went:		cpy	<p_wcount
+		bne	!+
+		jmp	.clear
+!:		phy
+		tya
+		asl	a
+		asl	a
+		tay				; Y = piece * 4
+		lda	p_wbuf + 1, y		; y = p_y + dy - scroll_y + 64
+		sta	<cty
+		clc
+		adc	<p_y
+		sta	<ctx
+		lda	<cty
+		and	#$80
+		beq	!+
+		lda	#$FF
+!:		adc	<p_y + 1
+		sta	<ctx + 1
+		lda	<ctx
+		sec
+		sbc	<scroll_y
+		sta	<ctx
+		lda	<ctx + 1
+		sbc	<scroll_y + 1
+		sta	<ctx + 1
+		lda	<ctx
+		clc
+		adc	#64
+		sta	VDC_DL
+		lda	<ctx + 1
+		adc	#0
+		and	#$03
+		sta	VDC_DH
+		lda	p_wbuf, y		; x = p_x + dx (left: -dx - 16) - scroll_x + 32
+		phy
+		ldy	<p_face
+		beq	!+
+		eor	#$FF
+		sec
+		sbc	#15
+!:		ply
+		sta	<cty
+		clc
+		adc	<p_x
+		sta	<ctx
+		lda	<cty
+		and	#$80
+		beq	!+
+		lda	#$FF
+!:		adc	<p_x + 1
+		sta	<ctx + 1
+		lda	<ctx
+		sec
+		sbc	<scroll_x
+		sta	<ctx
+		lda	<ctx + 1
+		sbc	<scroll_x + 1
+		sta	<ctx + 1
+		lda	<ctx
+		clc
+		adc	#32
+		sta	VDC_DL
+		lda	<ctx + 1
+		adc	#0
+		and	#$03
+		sta	VDC_DH
+		pla				; pattern = base + (WEAPON_CELL + piece) * 2
+		pha
+		clc
+		adc	#WEAPON_CELL
+		asl	a
+		clc
+		adc	<ctmp
+		sta	VDC_DL
+		lda	#(SPR_BUF_A >> 13)
+		adc	#0
+		sta	VDC_DH
+		lda	#$80			; palette 0, in front of BG; flips (+ X when facing left)
+		sta	VDC_DL
+		lda	p_wbuf + 3, y
+		ldy	<p_face
+		beq	!+
+		eor	#$08
+!:		sta	VDC_DH
+		ply
+		iny
+		inx
+		jmp	.went
+.clear:		stx	<cty			; Entries this frame.
+.clr:		cpx	<p_prev_cells		; Zero leftover entries.
 		bcs	.end
 		st1	#0
 		st2	#0
@@ -1341,8 +1593,41 @@ player_draw:	php				; VDC writes: IRQ held off (see stream_column).
 		st1	#0
 		st2	#0
 		inx
-		bra	.clear
-.end:		lda	<p_ncells
+		bra	.clr
+.end:		lda	<cty
 		sta	<p_prev_cells
 		plp
 		rts
+
+; upload_weapon - p_wbuf's cells into buffer p_buf from cell WEAPON_CELL on.
+upload_weapon:	lda	<p_wcount
+		beq	.r
+		lda	#WEAPON_BANK
+		tam3
+		st0	#VDC_MAWR
+		stz	VDC_DL
+		lda	#>(SPR_BUF_A + WEAPON_CELL * 64)
+		ldx	<p_buf
+		beq	!+
+		lda	#>(SPR_BUF_B + WEAPON_CELL * 64)
+!:		sta	VDC_DH
+		st0	#VDC_VWR
+		ldx	<p_wcount
+		ldy	#2			; cell byte of piece 0
+.cell:		lda	p_wbuf, y		; source = $6000 + cell * 128
+		lsr	a
+		pha
+		cla
+		ror	a
+		sta	ram_tia + 1
+		pla
+		ora	#$60
+		sta	ram_tia + 2
+		jsr	ram_tia
+		iny
+		iny
+		iny
+		iny
+		dex
+		bne	.cell
+.r:		rts

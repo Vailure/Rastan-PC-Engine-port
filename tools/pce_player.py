@@ -22,6 +22,7 @@ from PIL import Image
 from arcade_gfx import load_region, decode_packed
 from snap import read_snaps, palette_rgb
 from fgmap import fg_blocks, block_collision
+from player_frames import frames as part_frames, PARTS
 
 ROMDIR = os.environ.get('RASTAN_ROMS', os.path.join(os.path.dirname(__file__), '..', 'roms', 'rastan'))
 
@@ -74,19 +75,47 @@ JUMP_TABLES = {'jump_low': 0x5B548, 'jump_high': 0x5B516, 'jump_low_fwd': 0x5B5A
 
 
 def capture(snapf, poses):
+    """frame -> (body pieces, palette, color bank, weapon frame, weapon mirrored).
+
+    The first 4 sprite entries are the weapon (frame $10D244 of the weapon's part table,
+    see player_frames.py); they are left out of the pose and drawn from WEAPONS instead.
+    Weapon frame -1: no weapon drawn in this pose."""
     want = set(poses.values())
     out = {}
     for s in read_snaps(snapf):
         if s.frame in want:
             px, py = s.w(0x10d0be), s.w(0x10d0c0)
-            pieces = []
+            pieces, weapon = [], []
             for i in range(15):
                 b = 0x10d1b2 + i * 8
                 attr, y, code, x = (s.w(b + k * 2) for k in range(4))
                 if code:
-                    pieces.append((attr, (y & 0x1ff) - py, code, (x & 0x1ff) - px))
-            out[s.frame] = (pieces, palette_rgb(s.pal), (s.sprctrl & 0xe0) >> 1)
+                    (weapon if i < 4 else pieces).append((attr, (y & 0x1ff) - py, code, (x & 0x1ff) - px))
+            fi, mirror = -1, 0
+            if weapon:
+                fi = s.w(0x10d244)
+                mirror = weapon[0][0] & 0x4000 ^ WTAB[1][fi][0][3] & 0x4000
+                assert sorted(weapon) == sorted(weapon_pieces(1, fi, mirror)), (snapf, s.frame)
+            out[s.frame] = (pieces, palette_rgb(s.pal), (s.sprctrl & 0xe0) >> 1, fi, mirror)
     return out
+
+
+def weapon_pieces(w, fi, mirror, flame=0):
+    """Weapon w's sprite pieces (attr, dy, code, dx) for weapon frame fi, relative to the anchor."""
+    out = []
+    for code, dx, dy, attr in WTAB[w][fi]:
+        if mirror:
+            dx, attr = -dx - 16, attr ^ 0x4000
+        out.append((attr, dy + 1, code + flame, dx))
+    return out
+
+
+# Weapons ($10D2FA): 1 sword, 2 axe, 3 morning star, 4 fire sword. The fire sword's
+# flame cycles its cells by +0/+2/+4/+6, 2 frames each.
+WEAPON_PARTS = {1: 'sword', 2: 'weapon2', 3: 'weapon3', 4: 'weapon4'}
+FLAMES = 4
+WTAB = {}
+BODY_CELLS = 20                 # of a 24-cell pose buffer; the weapon uses the last 4
 
 
 def to9(rgb):
@@ -97,6 +126,8 @@ def main():
     rom = open(sys.argv[1], 'rb').read()
     snapf, attractf, thrustf, lizardf, waterf, out = sys.argv[2:8]
     os.makedirs(out, exist_ok=True)
+    for w, n in WEAPON_PARTS.items():
+        WTAB[w] = part_frames(rom, PARTS[n])
     spr = decode_packed(load_region(ROMDIR, 'pc090oj'), 16, 16).astype(int)
     act = capture(snapf, POSES)
     att = capture(attractf, POSES_ATTRACT)
@@ -114,7 +145,7 @@ def main():
     AX, AY, W, H = 96, 112, 192, 176    # canvas around the anchor (death sparkles spread wide)
     imgs = {}
     for name in all_poses:
-        pieces, pal, colbank = caps[name]
+        pieces, pal, colbank = caps[name][:3]
         img = np.full((H, W, 3), -1, int)
         for attr, dy, code, dx in pieces:
             g = spr[code]
@@ -127,9 +158,28 @@ def main():
                         img[AY + dy + yy, AX + dx + xx] = pal[col + g[yy, xx]]
         imgs[name] = img
 
+    # Weapon cells: every piece of every weapon frame (all flame steps for the fire sword).
+    pieces0, pal0, bank0 = caps['idle'][:3]
+    wcodes = []
+    for w in WEAPON_PARTS:
+        for fr in WTAB[w]:
+            for code, dx, dy, attr in fr:
+                for k in range(FLAMES if w == 4 else 1):
+                    if (code + 2 * k, attr & 15) not in wcodes:
+                        wcodes.append((code + 2 * k, attr & 15))
+    wimgs = {}
+    for code, c in wcodes:
+        g = spr[code]
+        img = np.full((16, 16, 3), -1, int)
+        for yy in range(16):
+            for xx in range(16):
+                if g[yy, xx]:
+                    img[yy, xx] = pal0[((c | bank0) * 16) + g[yy, xx]]
+        wimgs[code, c] = img
+
     # Shared 15-color sprite palette (9-bit), merging nearest colors if needed.
     colors = {}
-    for img in imgs.values():
+    for img in list(imgs.values()) + list(wimgs.values()):
         m = img[..., 0] >= 0
         for c in img[m]:
             k = to9(c)
@@ -155,7 +205,7 @@ def main():
                 c = idx[cy:cy + 16, cx:cx + 16]
                 if c.any():
                     cells.append((cx - AX, cy - AY, c))
-        assert len(cells) <= 24, (name, len(cells))
+        assert len(cells) <= BODY_CELLS, (name, len(cells))
         rec = bytearray([len(cells)])
         for dx, dy, _ in cells:
             rec += bytes([dx & 0xff, dy & 0xff])
@@ -189,6 +239,51 @@ def main():
     for r, g, b in [(0, 0, 0)] + list(pal9) + [(0, 0, 0)] * (15 - len(pal9)):
         vce += ((g << 6) | (r << 3) | b).to_bytes(2, 'little')
     open(f'{out}/sprpal.bin', 'wb').write(vce)
+
+    # Weapon cells (weapons.bin, 128 bytes each) and weapon_tab.inc: per variant
+    # (1-3: weapons 1-3, 4-7: fire sword flame steps 0-3), a word per pose pointing at
+    # count, then per piece dx, dy, cell, SATB attribute high byte ($08 X flip, $80 Y flip).
+    wblob = bytearray()
+    for key in wcodes:
+        img = wimgs[key]
+        idx = np.zeros((16, 16), np.uint8)
+        for y, x in zip(*np.nonzero(img[..., 0] >= 0)):
+            idx[y, x] = remap[to9(img[y, x])]
+        b = bytearray(128)
+        for p in range(4):
+            for y in range(16):
+                v = 0
+                for x in range(16):
+                    if (idx[y, x] >> p) & 1:
+                        v |= 0x8000 >> x
+                b[p * 32 + y * 2] = v & 0xff
+                b[p * 32 + y * 2 + 1] = v >> 8
+        wblob += b
+    assert len(wcodes) < 256
+    open(f'{out}/weapons.bin', 'wb').write(wblob)
+    lists, labels = {}, []
+    with open(f'{out}/weapon_tab.inc', 'w') as f:
+        f.write('; Generated by tools/pce_player.py\nweapon_vtab:\n')
+        variants = [(1, 0), (2, 0), (3, 0)] + [(4, k) for k in range(FLAMES)]
+        for v in range(len(variants)):
+            f.write(f'\t\tdw\twv_{v}\n')
+        body = []
+        for v, (w, k) in enumerate(variants):
+            f.write(f'wv_{v}:\n')
+            for name in all_poses:
+                fi, mirror = caps[name][3:5]
+                pcs = weapon_pieces(w, fi, mirror, 2 * k) if fi >= 0 else []
+                rec = [len(pcs)]
+                for attr, dy, code, dx in pcs:
+                    rec += [dx & 0xff, dy & 0xff, wcodes.index((code, attr & 15)),
+                            (0x08 if attr & 0x4000 else 0) | (0x80 if attr & 0x8000 else 0)]
+                rec = tuple(rec)
+                if rec not in lists:
+                    lists[rec] = f'wl_{len(lists)}'
+                    body.append(f'{lists[rec]}:\tdb\t' + ', '.join(str(x) for x in rec) + '\n')
+                f.write(f'\t\tdw\t{lists[rec]}\t; {name}\n')
+        f.writelines(body)
+    print(f'weapons: {len(wcodes)} cells, {len(lists)} piece lists')
 
     # Jump tables (skip the sentinel), terminated by $FF.
     names = all_poses

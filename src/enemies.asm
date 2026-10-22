@@ -41,6 +41,11 @@ ES_DYING	=	4
 EK_LIZARD	=	0		; Kinds (e_kind).
 EK_BLUE		=	1
 EK_CLUB		=	2
+EK_ITEM		=	3		; A weapon item (slot ITEM_SLOT),
+EK_BAT		=	4		; and the bat that comes with it (BAT_SLOT).
+
+ITEM_SLOT	=	NUM_EN		; Big slots after the walkers'.
+BAT_SLOT	=	NUM_EN + 1
 
 ATTACK_RANGE	=	52
 RETREAT_FRAMES	=	48
@@ -83,6 +88,7 @@ e_kind:		ds	NUM_OBJ
 e_range:	ds	NUM_OBJ		; Attack distance.
 e_alt:		ds	NUM_OBJ		; Blue: next throw is low.
 e_shown:	ds	NUM_OBJ		; Pose whose cells are in the slot's buffer ($FF none).
+items_done:	ds	1		; Items spawned this life (bit per item).
 ram_tia:	ds	8		; tia src, VDC_DL, 128 / rts (source patched per cell).
 
 		.code
@@ -157,6 +163,7 @@ enemies_reset:	ldx	#NUM_OBJ - 1
 		sta	e_shown, x
 		dex
 		bpl	!-
+		stz	items_done
 		lda	#SPAWN_FIRST
 		sta	<spawn_timer
 		stz	<spawn_step
@@ -166,7 +173,10 @@ enemies_reset:	ldx	#NUM_OBJ - 1
 ; ---------------------------------------------------------------------------
 ; enemies_update
 
-enemies_update:	jsr	try_spawn
+enemies_update:	lda	<dbg_noenemy		; Debug menu: no walkers (items still come).
+		bne	!+
+		jsr	try_spawn
+!:		jsr	item_spawn
 		ldx	#NUM_OBJ - 1
 .loop:		lda	e_state, x
 		beq	.next
@@ -303,6 +313,12 @@ enemy_think:	lda	e_kind, x
 		cmp	#EK_CLUB
 		bne	!+
 		jmp	club_think
+!:		cmp	#EK_ITEM
+		bne	!+
+		jmp	item_think
+!:		cmp	#EK_BAT
+		bne	!+
+		jmp	bat_think
 !:		lda	e_state, x
 		cmp	#ES_DYING
 		bne	!+
@@ -464,20 +480,24 @@ rand:		lda	<rng
 		rts
 
 ; Per-kind data: lizardman, blue thrower, club.
-kind_walk_l:	db	<anim_liz_walk, <anim_blue_walk, <anim_club
-kind_walk_h:	db	>anim_liz_walk, >anim_blue_walk, >anim_club
+kind_walk_l:	db	<anim_liz_walk, <anim_blue_walk, <anim_club, 0, <anim_bat
+kind_walk_h:	db	>anim_liz_walk, >anim_blue_walk, >anim_club, 0, >anim_bat
 kind_attack_l:	db	<anim_liz_attack, <anim_blue_throw, 0
 kind_attack_h:	db	>anim_liz_attack, >anim_blue_throw, 0
 kind_retreat_l:	db	<anim_liz_walk, <anim_blue_walk2, 0
 kind_retreat_h:	db	>anim_liz_walk, >anim_blue_walk2, 0
 kind_death_l:	db	<anim_liz_death, <anim_blue_death, 0
 kind_death_h:	db	>anim_liz_death, >anim_blue_death, 0
-kind_range:	db	ATTACK_RANGE, 88, 0
-kind_bank:	db	GRP_SECT1_BANK, GRP_SECT1_BANK, GRP_SECT1_BANK
-kind_ptab_l:	db	<grp_sect1_ptab, <grp_sect1_ptab, <grp_sect1_ptab
-kind_ptab_h:	db	>grp_sect1_ptab, >grp_sect1_ptab, >grp_sect1_ptab
-kind_top:	db	36, 48, 8		; Body box: anchor - top .. anchor + 16,
-kind_half:	db	16, 16, 8		; x +/- half (club: +/- 8 around its centre).
+kind_range:	db	ATTACK_RANGE, 88, 0, 0, 0
+kind_bank:	db	GRP_SECT1_BANK, GRP_SECT1_BANK, GRP_SECT1_BANK, GRP_ITEMS_BANK, GRP_ITEMS_BANK
+kind_ptab_l:	db	<grp_sect1_ptab, <grp_sect1_ptab, <grp_sect1_ptab, <grp_items_ptab, <grp_items_ptab
+kind_ptab_h:	db	>grp_sect1_ptab, >grp_sect1_ptab, >grp_sect1_ptab, >grp_items_ptab, >grp_items_ptab
+; Body box: x = anchor + cx +/- half, y = anchor - top .. anchor + bot
+; (the item and bat boxes from their sprites' extent).
+kind_top:	db	36, 48, 8, 2, 25
+kind_bot:	db	16, 16, 16, 30, 7
+kind_half:	db	16, 16, 8, 20, 16
+kind_cx:	db	0, 0, 0, -8, -2
 
 ; ---------------------------------------------------------------------------
 ; throw_club - X = blue thrower: a club leaves its hand toward Rastan.
@@ -766,19 +786,64 @@ enemy_step:	pha
 		rts
 
 ; sword_vs_enemy - carry set if Rastan's sword box overlaps this object's
-; body (x - half .. x + half, y - top .. y + 16; kind_half, kind_top).
+; body box (kind_cx, kind_half, kind_top, kind_bot).
 sword_vs_enemy:	phx
 		jsr	sword_box
 		plx
-		bcs	!+
+		bcs	box_vs_enemy
 		rts
-!:		ldy	e_kind, x
-		; sb_x0 <= e_x + half ?
-		lda	e_xl, x
+
+; body_vs_enemy - carry set if Rastan's body (p_x +/- 12, p_y - 24 ..
+; p_y + 24) overlaps this object's body box.
+body_vs_enemy:	lda	<p_x
+		sec
+		sbc	#12
+		sta	<sb_x0
+		lda	<p_x + 1
+		sbc	#0
+		sta	<sb_x0 + 1
+		lda	<p_x
+		clc
+		adc	#12
+		sta	<sb_x1
+		lda	<p_x + 1
+		adc	#0
+		sta	<sb_x1 + 1
+		lda	<p_y
+		sec
+		sbc	#24
+		sta	<sb_y0
+		lda	<p_y + 1
+		sbc	#0
+		sta	<sb_y0 + 1
+		lda	<p_y
+		clc
+		adc	#24
+		sta	<sb_y1
+		lda	<p_y + 1
+		adc	#0
+		sta	<sb_y1 + 1
+		; (fall through)
+
+; box_vs_enemy - carry set if the box sb_* overlaps X's body box.
+box_vs_enemy:	ldy	e_kind, x
+		lda	kind_cx, y		; etmp = e_x + cx (signed)
+		pha
+		clc
+		adc	e_xl, x
+		sta	<etmp
+		pla
+		and	#$80
+		beq	!+
+		lda	#$FF
+!:		adc	e_xh, x
+		sta	<etmp + 1
+		; sb_x0 <= centre + half ?
+		lda	<etmp
 		clc
 		adc	kind_half, y
 		sta	<ex
-		lda	e_xh, x
+		lda	<etmp + 1
 		adc	#0
 		sta	<ex + 1
 		lda	<ex
@@ -786,12 +851,12 @@ sword_vs_enemy:	phx
 		lda	<ex + 1
 		sbc	<sb_x0 + 1
 		bmi	.no
-		; e_x - half <= sb_x1 ?
-		lda	e_xl, x
+		; centre - half <= sb_x1 ?
+		lda	<etmp
 		sec
 		sbc	kind_half, y
 		sta	<ex
-		lda	e_xh, x
+		lda	<etmp + 1
 		sbc	#0
 		sta	<ex + 1
 		lda	<sb_x1
@@ -799,10 +864,10 @@ sword_vs_enemy:	phx
 		lda	<sb_x1 + 1
 		sbc	<ex + 1
 		bmi	.no
-		; sb_y0 <= e_y + 16 ?
+		; sb_y0 <= e_y + bot ?
 		lda	e_yl, x
 		clc
-		adc	#16
+		adc	kind_bot, y
 		sta	<ey
 		lda	e_yh, x
 		adc	#0

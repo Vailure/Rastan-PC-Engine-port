@@ -64,7 +64,7 @@ $(BUILD)/waterfall.txt: tools/make_bot.py
 $(BUILD)/waterfall.snp: sim/sim sim/maincpu.bin $(BUILD)/waterfall.txt
 	sim/sim sim/maincpu.bin $(BUILD)/waterfall.txt $@ 1
 
-$(PLAYER)/player.bin: tools/pce_player.py tools/fgmap.py sim/maincpu.bin $(BUILD)/actions.snp $(BUILD)/attract.snp $(BUILD)/thrusts.snp $(BUILD)/lizard.snp $(BUILD)/waterfall.snp
+$(PLAYER)/player.bin: tools/pce_player.py tools/player_frames.py tools/fgmap.py sim/maincpu.bin $(BUILD)/actions.snp $(BUILD)/attract.snp $(BUILD)/thrusts.snp $(BUILD)/lizard.snp $(BUILD)/waterfall.snp
 	cd tools && python3 pce_player.py ../sim/maincpu.bin ../$(BUILD)/actions.snp ../$(BUILD)/attract.snp ../$(BUILD)/thrusts.snp ../$(BUILD)/lizard.snp ../$(BUILD)/waterfall.snp ../$(PLAYER)
 
 # Blue club throwers at checkpoint 2: they throw at a passive Rastan, then he
@@ -73,10 +73,20 @@ $(BUILD)/blue.snp: sim/sim sim/maincpu.bin sim/scripts/blue.txt
 	@mkdir -p $(BUILD)
 	sim/sim sim/maincpu.bin sim/scripts/blue.txt $@ 1
 
+# Weapon items and their bats: the axe in the cave (the bot breaks the block and
+# takes it), the fire sword and the morning star (bot runs from checkpoints).
+$(BUILD)/item.snp: sim/sim sim/maincpu.bin sim/scripts/item.txt
+	@mkdir -p $(BUILD)
+	sim/sim sim/maincpu.bin sim/scripts/item.txt $@ 1
+
+$(BUILD)/item_%.snp: sim/sim sim/maincpu.bin sim/scripts/item_%.txt
+	@mkdir -p $(BUILD)
+	sim/sim sim/maincpu.bin sim/scripts/item_$*.txt $@ 1
+
 # Object (enemy, projectile, item) poses: groups and captures in tools/object_specs.py.
 # Cells start at bank $60; each group's poses and anims get the next banks.
 OBJECTS    := $(BUILD)/objects
-$(OBJECTS)/objcells.bin: tools/pce_objects.py tools/object_specs.py $(BUILD)/lizard.snp $(BUILD)/blue.snp
+$(OBJECTS)/objcells.bin: tools/pce_objects.py tools/object_specs.py $(BUILD)/lizard.snp $(BUILD)/blue.snp $(BUILD)/item.snp $(BUILD)/item_fire.snp $(BUILD)/item_star.snp
 	cd tools && python3 pce_objects.py ../$(BUILD) ../$(OBJECTS) 0x60
 
 # HUD cells (lives, icon, health bar, ROUND) from the arcade's HUD sprites.
@@ -96,7 +106,7 @@ $(BUILD)/debug/font.bin: $(HUC)/examples/asm/elmer/font/font8x8-ascii-bold-short
 	@mkdir -p $(BUILD)/debug
 	dd if=$< of=$@ bs=8 skip=16 count=64 status=none
 
-GAME_DEPS  := src/main.asm src/player.asm src/enemies.asm src/props.asm src/hud.asm src/dyncolor.asm src/debug.asm $(BUILD)/debug/font.bin $(STAGE)/stage.bin $(PLAYER)/player.bin $(OBJECTS)/objcells.bin $(BUILD)/hud/hud.bin $(BUILD)/props/props.bin
+GAME_DEPS  := src/main.asm src/player.asm src/enemies.asm src/items.asm src/props.asm src/hud.asm src/dyncolor.asm src/debug.asm $(BUILD)/debug/font.bin $(STAGE)/stage.bin $(PLAYER)/player.bin $(OBJECTS)/objcells.bin $(BUILD)/hud/hud.bin $(BUILD)/props/props.bin
 
 $(BUILD)/rastan.pce: $(GAME_DEPS)
 	@mkdir -p $(BUILD)/opt
@@ -129,6 +139,7 @@ test: $(BUILD)/camtest.pce $(BUILD)/noenemy.pce $(BUILD)/rastan.pce $(BUILD)/god
 	python3 tools/test_enemies.py $(BUILD)/rastan.pce $(BUILD)/god.pce
 	python3 tools/test_effects.py $(BUILD)/noenemy.pce $(STAGE)/dyncolor.inc
 	python3 tools/test_debug.py $(BUILD)/rastan.pce $(BUILD)/noenemy.pce
+	python3 tools/test_items.py $(BUILD)/rastan.pce $(BUILD)/god.pce $(BUILD)/noenemy.pce
 
 tools/tgrun/tgrun: tools/tgrun/tgrun.c
 	HUC=$(abspath $(HUC)) tools/tgrun/build.sh

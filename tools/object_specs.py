@@ -12,6 +12,9 @@ Slots are the arcade's 64-byte object slots from $10C2C0 (0-2 map objects, 4-8 e
 FILES = {
     'lizard': 'lizard.snp',      # sim/scripts/lizard.txt: passive, then swinging Rastan at the start
     'blue': 'blue.snp',          # sim/scripts/blue.txt: the same at checkpoint 2
+    'item': 'item.snp',          # sim/scripts/item.txt: the axe in the cave and its bat
+    'fire': 'item_fire.snp',     # sim/scripts/item_fire.txt: the fire sword (segment 4)
+    'star': 'item_star.snp',     # sim/scripts/item_star.txt: the morning star (segment $0C)
 }
 
 GROUPS = {
@@ -25,6 +28,13 @@ GROUPS = {
         ('blue_walk2', 'blue', 6, 1660, 1691),
         ('blue_death', 'blue', 6, 1946, 1977),
         ('club', 'blue', 18, 1632, 1647),
+    ],
+    # Weapon items (slot 17, a 16-frame shimmer) and the bat that guards each (slot 16).
+    'items': [
+        ('item_axe', 'item', 17, 1057, 1072),
+        ('item_fire', 'fire', 17, 1296, 1311),
+        ('item_star', 'star', 17, 873, 888),
+        ('bat', 'item', 16, 1100, 1131),
     ],
 }
 

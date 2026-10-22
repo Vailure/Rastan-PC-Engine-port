@@ -122,8 +122,10 @@ for x in r:
         elif i in cur:
             tracks.append(cur.pop(i))
 check('blue throwers throw clubs', len(tracks) >= 4, f'{len(tracks)} clubs, flights of {[len(t) for t in tracks]} frames')
-speeds = [abs(t[16][1] - t[0][1]) / 16 for t in tracks if len(t) > 16]
-check('clubs fly at 1.5 px/frame', speeds and all(s == 1.5 for s in speeds), f'{speeds}')
+# Over whole flights: RAM is sampled at a fixed point of each emulated frame, and
+# the game's logic can finish just before or just after it, so one sample may lag.
+speeds = [round(abs(t[-1][1] - t[0][1]) / (len(t) - 1), 2) for t in tracks if len(t) > 30]
+check('clubs fly at 1.5 px/frame', speeds and all(abs(s - 1.5) < 0.05 for s in speeds), f'{speeds}')
 heights = [(t[0][2], t[-1][2]) for t in tracks if len(t) >= 14]
 check('high clubs fly straight, low ones sink 7 px',
       all(b - a in (0, 7) for a, b in heights) and {b - a for a, b in heights} == {0, 7}, f'{heights}')

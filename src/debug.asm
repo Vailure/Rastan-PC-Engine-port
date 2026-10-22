@@ -27,8 +27,8 @@ FONT_TILE	=	FONT_VRAM >> 4		; Tile number of ' '.
 MENU_COL	=	2			; Box position on screen (tiles).
 MENU_ROW	=	3
 MENU_W		=	28
-MENU_H		=	20
-MENU_LINES	=	7			; Selectable lines.
+MENU_H		=	22
+MENU_LINES	=	8			; Selectable lines.
 
 		.zp
 cur_cp:		ds	1		; Checkpoint a death restarts at.
@@ -248,7 +248,7 @@ menu_change:	ldx	<dbg_sel
 		sta	<hud_lives_dr
 		rts
 .slow:		cpx	#5
-		bne	.done
+		bne	.weapon
 		cmp	#1
 		beq	.slower
 		lda	<dbg_slow		; 0, 1, 3, 7: off, 1/2, 1/4, 1/8 speed.
@@ -262,6 +262,14 @@ menu_change:	ldx	<dbg_sel
 		rol	a
 		sta	<dbg_slow
 .done:		rts
+.weapon:	cpx	#6			; 1 sword, 2 axe, 3 morning star, 4 fire sword.
+		bne	.done
+		clc
+		adc	<p_weapon
+		beq	.done
+		cmp	#WPN_FIRE + 1
+		bcs	.done
+		jmp	player_set_weapon
 
 ; menu_apply - I on the selected line. Carry set to close the menu.
 menu_apply:	lda	<dbg_sel
@@ -278,7 +286,7 @@ menu_apply:	lda	<dbg_sel
 		sta	<p_hp
 		clc
 		rts
-.toggle:	cmp	#6			; Resume.
+.toggle:	cmp	#7			; Resume.
 		beq	.resume
 		lda	#1			; Other lines: I acts like RIGHT.
 		jsr	menu_change
@@ -495,7 +503,7 @@ menu_draw:	lda	<scroll_x		; dbg_col = scroll_x >> 3 (mod 64)
 
 		stz	<dbg_pal
 		ldx	#0
-		ldy	#19
+		ldy	#21
 		lda	#<txt_help
 		jsr	print_at_l
 		plp
@@ -520,10 +528,14 @@ menu_value:	cpy	#0
 		lda	<lives
 		jmp	print_digit_arrows
 .slow:		cpy	#5
-		bne	.done
+		bne	.weapon
 		lda	<dbg_slow		; 0, 1, 3, 7 -> speed 1, 2, 4, 8
 		inc	a
 		jmp	print_digit_arrows_div
+.weapon:	cpy	#6
+		bne	.done
+		lda	<p_weapon
+		jmp	print_digit_arrows
 .done:		rts
 
 ; ---------------------------------------------------------------------------
@@ -708,6 +720,7 @@ txt_enemies:	db	"ENEMIES", 0
 txt_health:	db	"REFILL HEALTH", 0
 txt_lives:	db	"LIVES", 0
 txt_slow:	db	"SLOW MOTION", 0
+txt_weapon:	db	"WEAPON", 0
 txt_resume:	db	"RESUME", 0
 txt_end:
 
@@ -717,4 +730,4 @@ txt_end:
 
 ; Line labels (low bytes in txt_page).
 menu_labels:	db	<txt_warp, <txt_god, <txt_enemies, <txt_health
-		db	<txt_lives, <txt_slow, <txt_resume
+		db	<txt_lives, <txt_slow, <txt_weapon, <txt_resume
