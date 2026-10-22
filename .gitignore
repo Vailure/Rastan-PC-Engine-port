@@ -3,6 +3,7 @@ roms/
 *.zip
 *.bin
 *.snp
+*.csnp
 sim/*.asm
 out/
 *.pce
@@ -22,3 +23,4 @@ build/
 *.sym
 sim/profile.out
 sim/ramtouch.bin
+

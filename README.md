@@ -107,6 +107,10 @@ weapon pickups, and leftward scrolling.
 
 ### Exact port (in progress, tooling only)
 
+The stricter CSN2 capture/replay contract, ROM-independent tests, and ordered
+translation gates are documented in [docs/EXACT_PLAYER.md](docs/EXACT_PLAYER.md).
+Run `make test-tooling` to check the capture and reference pipeline without arcade assets.
+
 The plan for arcade-exact behavior is to translate the player code itself: 2,577 instructions reachable from `$05132A`,
 about 1,100 executed per frame. `tools/m68k/` holds a decoder and a reference interpreter for the 68000 subset it uses.
 `sim` records RAM at each call's entry and exit (`callsnap`). `tools/lockstep.py` replays every call through the
@@ -161,3 +165,4 @@ The headless runner is built with `tools/tgrun/build.sh`, after running `make` i
 
 Musashi (`sim/musashi/`) is © Karl Stenerud, MIT license (see `README-musashi.txt`).
 *Rastan* is © Taito. This is a non-commercial fan project and distributes no Taito assets.
+

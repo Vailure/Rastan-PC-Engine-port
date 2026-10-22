@@ -14,6 +14,8 @@ void m68k_write_memory_8(unsigned int a, unsigned int v) {}
 void m68k_write_memory_16(unsigned int a, unsigned int v) {}
 void m68k_write_memory_32(unsigned int a, unsigned int v) {}
 int sim_int_ack(int l) { return 0; }
+/* Shared Musashi configuration enables the simulator instruction callback. */
+void sim_instr_hook(unsigned int pc) { (void)pc; }
 int main(int argc, char **argv)
 {
     FILE *f = fopen(argv[1], "rb"); fread(rom, 1, sizeof rom, f); fclose(f);
@@ -28,3 +30,4 @@ int main(int argc, char **argv)
     }
     return 0;
 }
+

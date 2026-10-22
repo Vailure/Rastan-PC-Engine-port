@@ -9,6 +9,8 @@ PCEAS      := $(HUC)/bin/pceas
 ROMS       ?= roms/rastan
 PALFRAME   ?= 1000
 BUILD      := build
+LOCKSTEP_SEED ?= 1
+LOCKSTEP_FRAMES ?= 6000
 STAGE      := $(BUILD)/stage1
 PLAYER     := $(BUILD)/player
 
@@ -20,8 +22,8 @@ all: $(BUILD)/rastan.pce
 sim/maincpu.bin: tools/extract_roms.py tools/arcade_gfx.py
 	python3 tools/extract_roms.py $(ROMS) sim
 
-sim/sim: sim/sim.c
-	$(MAKE) -C sim
+sim/sim sim/dasm: sim/sim.c sim/dasm.c $(wildcard sim/musashi/*.[ch] sim/musashi/softfloat/*)
+	$(MAKE) -C sim $(notdir $@)
 
 # Round 1 palette is captured from the arcade program running in the simulator.
 $(BUILD)/bot1.txt: tools/make_bot.py
@@ -74,17 +76,22 @@ tools/tgrun/tgrun: tools/tgrun/tgrun.c
 
 # Exact-port groundwork: record every player-update call under random input and
 # replay each through tools/m68k's reference interpreter (all 16 KB of RAM must match).
-sim/full.asm: sim/maincpu.bin sim/sim
+sim/full.asm: sim/maincpu.bin sim/dasm
 	sim/dasm sim/maincpu.bin 0 60000 > $@
 
 lockstep: sim/sim sim/full.asm
 	@mkdir -p $(BUILD)
-	python3 tools/make_fuzz.py $(BUILD)/fuzz.txt 1 6000
-	echo "callsnap 5132a $(BUILD)/fuzz.csnp" >> $(BUILD)/fuzz.txt
+	python3 tools/make_fuzz.py $(BUILD)/fuzz.txt $(LOCKSTEP_SEED) $(LOCKSTEP_FRAMES)
+	echo "callsnap2 5132a $(BUILD)/fuzz.csnp" >> $(BUILD)/fuzz.txt
 	sim/sim sim/maincpu.bin $(BUILD)/fuzz.txt /dev/null 1000
-	cd tools && python3 lockstep.py ../sim/maincpu.bin ../sim/full.asm ../$(BUILD)/fuzz.csnp 5132a
+	cd tools && python3 lockstep.py ../sim/maincpu.bin ../sim/full.asm ../$(BUILD)/fuzz.csnp 5132a --json ../$(BUILD)/lockstep.json --script ../$(BUILD)/fuzz.txt --seed $(LOCKSTEP_SEED)
+
+# No arcade ROMs or HuC checkout needed. Includes a synthetic Musashi capture.
+test-tooling: sim/sim sim/dasm
+	python3 -m unittest discover -s tests -v
 
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: all clean test lockstep
+.PHONY: all clean test test-tooling lockstep
+
