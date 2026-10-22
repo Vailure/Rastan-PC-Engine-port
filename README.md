@@ -34,6 +34,7 @@ from the ROMs (`*.bin`, snapshots, renders, disassembly) is git-ignored.
 | `src/boulder.asm` | Boulders (rockfall, rolling) |
 | `src/gargoyle.asm` | The gargoyle (replays the arcade's flight path) |
 | `src/woman.asm` | The woman warrior |
+| `src/jets.asm` | Fire jets over the castle's lava |
 | `src/hud.asm`, `tools/pce_hud.py` | HUD from the arcade's HUD sprites |
 | `src/debug.asm` | Checkpoints (death restarts, warps) and the debug menu |
 | `tools/test_debug.py` | Checks the menu, warps, invincibility and checkpoint restarts |
@@ -191,6 +192,11 @@ Not done yet: slopes, waterfall currents, the other collision codes, rope attack
   then walk on. They use the lizardmen's loop (walk in, two swings, back off, come again) with their own hit pose
   and reach; a swing that reaches costs 12 units. The arcade gave 900 for a sword and a mace soldier dying together;
   the port splits it 300 / 600.
+- **Fire jets** (`src/jets.asm`): over the lava pits at 10382, 10478 and 10574. Each erupts when Rastan is 172 px
+  left of it (the flame rises for 17 frames, dies down for 18, then a column flickers for 57) and again about 220
+  frames later while he is near; touching the flame hurts. They stay low at the lava surface, which in the port's
+  224-line view is below the screen while Rastan crosses at the upper level. Not done: the castle's ceiling spikes
+  (x 8328, 8488), whose bot captures show too little to model.
 - **No torn frames:** the SATB is DMA'd at the start of VBLANK, before the object cell uploads, so `enemies_draw`
   plans which slots will get new cells at the next VBLANK (same order and budget) and draws each slot with the pose
   its buffer will hold. A frame never shows an old layout over new cells.

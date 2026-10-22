@@ -122,7 +122,7 @@ $(BUILD)/debug/font.bin: $(HUC)/examples/asm/elmer/font/font8x8-ascii-bold-short
 	@mkdir -p $(BUILD)/debug
 	dd if=$< of=$@ bs=8 skip=16 count=64 status=none
 
-GAME_DEPS  := src/main.asm src/player.asm src/enemies.asm src/items.asm src/chimera.asm src/boulder.asm src/gargoyle.asm src/woman.asm src/props.asm src/hud.asm src/dyncolor.asm src/debug.asm $(BUILD)/debug/font.bin $(STAGE)/stage.bin $(PLAYER)/player.bin $(OBJECTS)/objcells.bin $(BUILD)/hud/hud.bin $(BUILD)/props/props.bin
+GAME_DEPS  := src/main.asm src/player.asm src/enemies.asm src/items.asm src/chimera.asm src/boulder.asm src/gargoyle.asm src/woman.asm src/jets.asm src/props.asm src/hud.asm src/dyncolor.asm src/debug.asm $(BUILD)/debug/font.bin $(STAGE)/stage.bin $(PLAYER)/player.bin $(OBJECTS)/objcells.bin $(BUILD)/hud/hud.bin $(BUILD)/props/props.bin
 
 $(BUILD)/rastan.pce: $(GAME_DEPS)
 	@mkdir -p $(BUILD)/opt

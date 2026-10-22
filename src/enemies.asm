@@ -39,6 +39,7 @@ ES_WALK		=	1
 ES_ATTACK	=	2
 ES_RETREAT	=	3
 ES_DYING	=	4
+ES_HIDDEN	=	5		; Thinks but is not drawn.
 
 EK_LIZARD	=	0		; Kinds (e_kind).
 EK_BLUE		=	1
@@ -53,6 +54,7 @@ EK_WINGS	=	9		; and wings.
 EK_WOMAN	=	10		; The woman warrior.
 EK_SWORD	=	11		; Castle soldiers: sword,
 EK_MACE		=	12		; mace.
+EK_JET		=	13		; Fire jet.
 SOLDIER_RANGE	=	60
 
 ITEM_SLOT	=	NUM_EN		; Big slots after the walkers'.
@@ -104,6 +106,7 @@ items_done:	ds	1		; Items spawned this life (bit per item).
 rocks_done:	ds	1		; Boulders spawned this life.
 gargs_done:	ds	1		; Gargoyles spawned this life.
 woman_done:	ds	1		; The woman warrior spawned this life.
+jet_wait:	ds	3		; Frames before each fire jet may erupt again.
 ram_tia:	ds	8		; tia src, VDC_DL, 128 / rts (source patched per cell).
 
 		.code
@@ -182,6 +185,9 @@ enemies_reset:	ldx	#NUM_OBJ - 1
 		stz	rocks_done
 		stz	gargs_done
 		stz	woman_done
+		stz	jet_wait
+		stz	jet_wait + 1
+		stz	jet_wait + 2
 		lda	#SPAWN_FIRST
 		sta	<spawn_timer
 		stz	<spawn_step
@@ -198,6 +204,7 @@ enemies_update:	lda	<dbg_noenemy		; Debug menu: no walkers (items still come).
 		jsr	rock_spawn
 		jsr	garg_spawn
 		jsr	woman_spawn
+		jsr	jets_spawn
 		ldx	#NUM_OBJ - 1
 .loop:		lda	e_state, x
 		beq	.next
@@ -377,6 +384,9 @@ enemy_think:	lda	e_kind, x
 !:		cmp	#EK_ROCK
 		bne	!+
 		jmp	rock_think
+!:		cmp	#EK_JET
+		bne	!+
+		jmp	jet_think
 !:		cmp	#EK_GARG
 		beq	!+
 		cmp	#EK_WINGS
@@ -576,10 +586,10 @@ rand:		lda	<rng
 ; Per-kind data: lizardman, blue thrower, club.
 kind_walk_l:	db	<anim_liz_walk, <anim_blue_walk, <anim_club, 0, <anim_bat, <anim_chim_walk, <anim_fireball
 		db	<anim_boulder, <anim_garg_body, <anim_garg_wings, <anim_woman_walk, <anim_sword_walk
-		db	<anim_mace_walk
+		db	<anim_mace_walk, <anim_jet_column
 kind_walk_h:	db	>anim_liz_walk, >anim_blue_walk, >anim_club, 0, >anim_bat, >anim_chim_walk, >anim_fireball
 		db	>anim_boulder, >anim_garg_body, >anim_garg_wings, >anim_woman_walk, >anim_sword_walk
-		db	>anim_mace_walk
+		db	>anim_mace_walk, >anim_jet_column
 kind_attack_l:	db	<anim_liz_attack, <anim_blue_throw, 0, 0, 0, 0, 0, 0, 0, 0, 0, <anim_sword_attack
 		db	<anim_mace_attack
 kind_attack_h:	db	>anim_liz_attack, >anim_blue_throw, 0, 0, 0, 0, 0, 0, 0, 0, 0, >anim_sword_attack
@@ -590,28 +600,29 @@ kind_retreat_h:	db	>anim_liz_walk, >anim_blue_walk2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
 		db	>anim_mace_walk
 kind_hitpose:	db	POSE_LIZ_CLUB_OUT, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, POSE_SWORD_OUT, POSE_MACE_OUT
 kind_death_l:	db	<anim_liz_death, <anim_blue_death, 0, 0, 0, <anim_chim_death, 0, 0, 0, 0, <anim_woman_death
-		db	<anim_sword_death, <anim_mace_death
+		db	<anim_sword_death, <anim_mace_death, 0
 kind_death_h:	db	>anim_liz_death, >anim_blue_death, 0, 0, 0, >anim_chim_death, 0, 0, 0, 0, >anim_woman_death
-		db	>anim_sword_death, >anim_mace_death
-kind_range:	db	ATTACK_RANGE, 88, 0, 0, 0, 0, 0, 0, 0, 0, 0, SOLDIER_RANGE, SOLDIER_RANGE
+		db	>anim_sword_death, >anim_mace_death, 0
+kind_range:	db	ATTACK_RANGE, 88, 0, 0, 0, 0, 0, 0, 0, 0, 0, SOLDIER_RANGE, SOLDIER_RANGE, 0
+kind_keep:	db	0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1	; No off-screen despawn.
 ; Arcade: lizardman 300, blue thrower 200, bat 200, chimera 300.
 ; Castle soldiers: the arcade gave 900 for a sword and a mace soldier dying together.
-kind_score:	db	$03, $02, 0, 0, $02, $03, 0, 0, 0, 0, $03, $03, $06
+kind_score:	db	$03, $02, 0, 0, $02, $03, 0, 0, 0, 0, $03, $03, $06, 0
 kind_bank:	db	GRP_SECT1_BANK, GRP_SECT1_BANK, GRP_SECT1_BANK, GRP_ITEMS_BANK, GRP_ITEMS_BANK
 		db	GRP_CHIMERA_BANK, GRP_CHIMERA_BANK, GRP_ROCKS_BANK, GRP_GARGOYLE_BANK, GRP_GARGOYLE_BANK
-		db	GRP_WOMAN_BANK, GRP_CASTLE_BANK, GRP_CASTLE_BANK
+		db	GRP_WOMAN_BANK, GRP_CASTLE_BANK, GRP_CASTLE_BANK, GRP_JETS_BANK
 kind_ptab_l:	db	<grp_sect1_ptab, <grp_sect1_ptab, <grp_sect1_ptab, <grp_items_ptab, <grp_items_ptab
 		db	<grp_chimera_ptab, <grp_chimera_ptab, <grp_rocks_ptab, <grp_gargoyle_ptab, <grp_gargoyle_ptab
-		db	<grp_woman_ptab, <grp_castle_ptab, <grp_castle_ptab
+		db	<grp_woman_ptab, <grp_castle_ptab, <grp_castle_ptab, <grp_jets_ptab
 kind_ptab_h:	db	>grp_sect1_ptab, >grp_sect1_ptab, >grp_sect1_ptab, >grp_items_ptab, >grp_items_ptab
 		db	>grp_chimera_ptab, >grp_chimera_ptab, >grp_rocks_ptab, >grp_gargoyle_ptab, >grp_gargoyle_ptab
-		db	>grp_woman_ptab, >grp_castle_ptab, >grp_castle_ptab
+		db	>grp_woman_ptab, >grp_castle_ptab, >grp_castle_ptab, >grp_jets_ptab
 ; Body box: x = anchor + cx +/- half, y = anchor - top .. anchor + bot
 ; (the item and bat boxes from their sprites' extent).
-kind_top:	db	36, 48, 8, 2, 25, 30, 6, 20, 40, 32, 38, 40, 40
-kind_bot:	db	16, 16, 16, 30, 7, 16, 6, 12, 47, 16, 16, 16, 16
-kind_half:	db	16, 16, 8, 20, 16, 30, 6, 15, 23, 48, 15, 16, 16
-kind_cx:	db	0, 0, 0, -8, -2, 0, 4, -3, -1, -1, 0, 0, 0
+kind_top:	db	36, 48, 8, 2, 25, 30, 6, 20, 40, 32, 38, 40, 40, 16
+kind_bot:	db	16, 16, 16, 30, 7, 16, 6, 12, 47, 16, 16, 16, 16, 40
+kind_half:	db	16, 16, 8, 20, 16, 30, 6, 15, 23, 48, 15, 16, 16, 16
+kind_cx:	db	0, 0, 0, -8, -2, 0, 4, -3, -1, -1, 0, 0, 0, 0
 
 ; ---------------------------------------------------------------------------
 ; throw_club - X = blue thrower: a club leaves its hand toward Rastan.
@@ -1009,14 +1020,13 @@ box_vs_enemy:	ldy	e_kind, x
 .no:		clc
 		rts
 
-; despawn_check - free enemies that drift far off-screen (kinds from EK_GARG
-; on leave by themselves).
+; despawn_check - free enemies that drift far off-screen (not kind_keep kinds).
 despawn_check:	lda	e_state, x
 		cmp	#ES_DYING
 		beq	.ok
-		lda	e_kind, x		; Gargoyles end with their path.
-		cmp	#EK_GARG
-		bcs	.ok
+		ldy	e_kind, x		; Gargoyles and jets end by themselves.
+		lda	kind_keep, y
+		bne	.ok
 		lda	e_xl, x			; x - scroll_x
 		sec
 		sbc	<scroll_x
@@ -1110,6 +1120,8 @@ enemies_draw:	php				; VDC writes: IRQ held off (see stream_column).
 		stz	<en_satb
 		ldx	#NUM_OBJ - 1
 .slot:		lda	e_state, x
+		beq	.next
+		cmp	#ES_HIDDEN
 		beq	.next
 		lda	e_plan, x		; Nothing in its buffer next frame: not drawn.
 		cmp	#$FF

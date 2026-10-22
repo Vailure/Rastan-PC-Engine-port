@@ -72,6 +72,11 @@ GROUPS = {
         ('sword_attack', 'castle', 6, 2622, 2699),
         ('sword_death', 'castle', 6, 2726, 2756),
     ],
+    # Fire jets over the castle's lava pits: the flame rising, then the column flickering.
+    'jets': [
+        ('jet_rise', 'castle', 1, 1481, 1497),
+        ('jet_column', 'castle', 0, 1477, 1485),
+    ],
 }
 
 # Scripted flights, replayed relative to the spawn point:
@@ -82,7 +87,7 @@ PATHS = {
 
 # Pieces per pose (src/enemies.asm slot buffers): walkers 11 (the default), items and
 # bats 4, specials 13; projectiles 2 (single-piece here).
-GROUP_MAX = {'items': 4, 'rocks': 13, 'gargoyle': 13}
+GROUP_MAX = {'items': 4, 'rocks': 13, 'gargoyle': 13, 'jets': 13}
 
 # Poses the engine refers to by number: (group, animation, step) -> symbol.
 POSE_SYMBOLS = {

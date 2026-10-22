@@ -13,6 +13,7 @@ Arcade values (round 1 census, sim/scripts/chimera.txt; see README):
   hopping down 32 px steps, and turns about 50 px past him.
 - In the castle (x 8200 on) sword and mace soldiers come in turn, stop about
   60 px away and swing; a swing that reaches costs 12 units.
+- Fire jets at 10382, 10478, 10574 erupt when Rastan is 172 px left of them.
 """
 import sys
 from peek import peek
@@ -27,7 +28,7 @@ def check(name, ok, detail=''):
         fails.append(name)
 
 
-EK_LIZARD, EK_BLUE, EK_CHIM, EK_FIRE, EK_ROCK, EK_GARG, EK_WOMAN, EK_SWORD, EK_MACE = 0, 1, 5, 6, 7, 8, 10, 11, 12
+EK_LIZARD, EK_BLUE, EK_CHIM, EK_FIRE, EK_ROCK, EK_GARG, EK_WOMAN, EK_SWORD, EK_MACE, EK_JET = 0, 1, 5, 6, 7, 8, 10, 11, 12, 13
 ES_WALK, ES_ATTACK, ES_DYING = 1, 2, 4
 OBJ = {'e_state': 17, 'e_kind': 17, 'e_xl': 17, 'e_xh': 17, 'e_yl': 17, 'e_yh': 17, 'e_alt': 17}
 SEL, I, RIGHT = '10', '40', '04'
@@ -159,6 +160,19 @@ dist = [x_of(r[i], k) - w16(r[i]['p_x']) for i, k in att]
 check('they stop about 60 px away to swing', att and all(50 <= abs(d) <= 62 for d in dist), f'{dist}')
 drops = [r2[i - 1]['p_hp'][0] - r2[i]['p_hp'][0] for i in range(1, len(r2)) if r2[i]['p_hp'][0] < r2[i - 1]['p_hp'][0]]
 check('a swing that reaches costs 12 units', drops and set(drops) == {12}, f'{drops}')
+
+# Fire jets: checkpoint 5, the jumping route (god build).
+keys = [100, 100, SEL] + sum([[110 + 6 * k, 110 + 6 * k, RIGHT] for k in range(5)], []) + [150, 150, I, 200, 900, '05']
+for f in range(220, 900, 60):
+    keys += [f, f + 3, I]
+r = run(god, 900, keys)
+starts = {}
+for i in range(1, len(r)):
+    for k in (6, 7, 8):
+        if r[i]['e_kind'][k] == EK_JET and r[i]['e_state'][k] and not r[i - 1]['e_state'][k]:
+            starts.setdefault(x_of(r[i], k), w16(r[i]['p_x']))
+check('fire jets erupt when Rastan is 172 px left of them', len(starts) == 3
+      and all(abs(px - (jx - 172)) <= 3 for jx, px in starts.items()), f'{starts}')
 
 print(f'{len(fails)} failure(s)')
 sys.exit(1 if fails else 0)
