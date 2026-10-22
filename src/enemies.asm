@@ -43,6 +43,8 @@ EK_BLUE		=	1
 EK_CLUB		=	2
 EK_ITEM		=	3		; A weapon item (slot ITEM_SLOT),
 EK_BAT		=	4		; and the bat that comes with it (BAT_SLOT).
+EK_CHIM		=	5		; Chimera,
+EK_FIRE		=	6		; and its fireballs.
 
 ITEM_SLOT	=	NUM_EN		; Big slots after the walkers'.
 BAT_SLOT	=	NUM_EN + 1
@@ -286,8 +288,9 @@ try_spawn:	dec	<spawn_timer
 		stz	e_face, x
 		stz	e_sub, x
 		stz	e_alt, x
-		; Kind: lizardmen only before world x 1500; from there blue throwers
-		; and lizardmen take turns (round 1 census, tools/object_census.py).
+		; Kind (round 1 census, tools/census_all.py): lizardmen only before
+		; world x 1500; then blue throwers and lizardmen take turns; from
+		; x 2400 throwers, chimeras and lizardmen in turn.
 		cla
 		ldy	<cx + 1
 		cpy	#>1500
@@ -296,15 +299,32 @@ try_spawn:	dec	<spawn_timer
 		ldy	<cx
 		cpy	#<1500
 		bcc	.kind
-!:		lda	<spawn_kind
-		eor	#1
-		sta	<spawn_kind
+!:		ldy	<spawn_kind
+		iny
+		lda	<cx			; x >= 2400: a cycle of 3.
+		cmp	#<2400
+		lda	<cx + 1
+		sbc	#>2400
+		bcs	.three
+		cpy	#2
+		bcc	!+
+		cly
+!:		sty	<spawn_kind
+		lda	spawn_two, y
+		bra	.kind
+.three:		cpy	#3
+		bcc	!+
+		cly
+!:		sty	<spawn_kind
+		lda	spawn_three, y
 .kind:		sta	e_kind, x
 		lda	#$FF
 		sta	e_shown, x
 		jmp	start_walk
 
 spawn_gaps:	db	49, 81, 65
+spawn_two:	db	EK_LIZARD, EK_BLUE
+spawn_three:	db	EK_BLUE, EK_CHIM, EK_LIZARD
 
 ; ---------------------------------------------------------------------------
 ; enemy_think - X = slot.
@@ -319,6 +339,9 @@ enemy_think:	lda	e_kind, x
 !:		cmp	#EK_BAT
 		bne	!+
 		jmp	bat_think
+!:		cmp	#EK_FIRE
+		bne	!+
+		jmp	fire_think
 !:		lda	e_state, x
 		cmp	#ES_DYING
 		bne	!+
@@ -328,18 +351,11 @@ enemy_think:	lda	e_kind, x
 .r:		rts
 !:		jsr	sword_vs_enemy		; Rastan's sword kills in one hit.
 		bcc	!+
-		lda	#ES_DYING
-		sta	e_state, x
-		ldy	e_kind, x
-		lda	kind_score, y		; Points (hundreds, BCD).
-		jsr	score_add
-		ldy	e_kind, x
-		lda	kind_death_l, y
-		pha
-		lda	kind_death_h, y
-		tay
-		pla
-		jmp	enemy_set_anim
+		jmp	kill_enemy
+!:		lda	e_kind, x
+		cmp	#EK_CHIM
+		bne	!+
+		jmp	chim_think
 !:		lda	e_state, x
 		cmp	#ES_ATTACK
 		bne	!+
@@ -447,6 +463,20 @@ enemy_think:	lda	e_kind, x
 		eor	#1
 		jmp	enemy_step
 
+; kill_enemy - X: points, then its death animation (ES_DYING frees it after).
+kill_enemy:	lda	#ES_DYING
+		sta	e_state, x
+		ldy	e_kind, x
+		lda	kind_score, y		; Points (hundreds, BCD).
+		jsr	score_add
+		ldy	e_kind, x
+		lda	kind_death_l, y
+		pha
+		lda	kind_death_h, y
+		tay
+		pla
+		jmp	enemy_set_anim
+
 ; start_walk - X = slot: walk toward Rastan with this kind's walk and range.
 start_walk:	lda	#ES_WALK
 		sta	e_state, x
@@ -464,6 +494,19 @@ start_walk:	lda	#ES_WALK
 		adc	<etmp
 		adc	e_range, x
 		sta	e_range, x
+		ldy	e_kind, x
+!:		cpy	#EK_CHIM		; Chimera: walk 16..206 frames, then breathe once.
+		bne	!+
+		jsr	rand
+		and	#$7F
+		clc
+		adc	#16
+		sta	e_timer, x
+		jsr	rand
+		and	#$3F
+		adc	e_timer, x
+		sta	e_timer, x
+		stz	e_alt, x
 		ldy	e_kind, x
 !:		lda	kind_walk_l, y
 		pha
@@ -483,25 +526,29 @@ rand:		lda	<rng
 		rts
 
 ; Per-kind data: lizardman, blue thrower, club.
-kind_walk_l:	db	<anim_liz_walk, <anim_blue_walk, <anim_club, 0, <anim_bat
-kind_walk_h:	db	>anim_liz_walk, >anim_blue_walk, >anim_club, 0, >anim_bat
+kind_walk_l:	db	<anim_liz_walk, <anim_blue_walk, <anim_club, 0, <anim_bat, <anim_chim_walk, <anim_fireball
+kind_walk_h:	db	>anim_liz_walk, >anim_blue_walk, >anim_club, 0, >anim_bat, >anim_chim_walk, >anim_fireball
 kind_attack_l:	db	<anim_liz_attack, <anim_blue_throw, 0
 kind_attack_h:	db	>anim_liz_attack, >anim_blue_throw, 0
 kind_retreat_l:	db	<anim_liz_walk, <anim_blue_walk2, 0
 kind_retreat_h:	db	>anim_liz_walk, >anim_blue_walk2, 0
-kind_death_l:	db	<anim_liz_death, <anim_blue_death, 0
-kind_death_h:	db	>anim_liz_death, >anim_blue_death, 0
-kind_range:	db	ATTACK_RANGE, 88, 0, 0, 0
-kind_score:	db	$03, $02, 0, 0, $02	; Arcade: lizardman 300, blue thrower 200, bat 200.
+kind_death_l:	db	<anim_liz_death, <anim_blue_death, 0, 0, 0, <anim_chim_death, 0
+kind_death_h:	db	>anim_liz_death, >anim_blue_death, 0, 0, 0, >anim_chim_death, 0
+kind_range:	db	ATTACK_RANGE, 88, 0, 0, 0, 0, 0
+; Arcade: lizardman 300, blue thrower 200, bat 200, chimera 300.
+kind_score:	db	$03, $02, 0, 0, $02, $03, 0
 kind_bank:	db	GRP_SECT1_BANK, GRP_SECT1_BANK, GRP_SECT1_BANK, GRP_ITEMS_BANK, GRP_ITEMS_BANK
+		db	GRP_CHIMERA_BANK, GRP_CHIMERA_BANK
 kind_ptab_l:	db	<grp_sect1_ptab, <grp_sect1_ptab, <grp_sect1_ptab, <grp_items_ptab, <grp_items_ptab
+		db	<grp_chimera_ptab, <grp_chimera_ptab
 kind_ptab_h:	db	>grp_sect1_ptab, >grp_sect1_ptab, >grp_sect1_ptab, >grp_items_ptab, >grp_items_ptab
+		db	>grp_chimera_ptab, >grp_chimera_ptab
 ; Body box: x = anchor + cx +/- half, y = anchor - top .. anchor + bot
 ; (the item and bat boxes from their sprites' extent).
-kind_top:	db	36, 48, 8, 2, 25
-kind_bot:	db	16, 16, 16, 30, 7
-kind_half:	db	16, 16, 8, 20, 16
-kind_cx:	db	0, 0, 0, -8, -2
+kind_top:	db	36, 48, 8, 2, 25, 30, 6
+kind_bot:	db	16, 16, 16, 30, 7, 16, 6
+kind_half:	db	16, 16, 8, 20, 16, 30, 6
+kind_cx:	db	0, 0, 0, -8, -2, 0, 4
 
 ; ---------------------------------------------------------------------------
 ; throw_club - X = blue thrower: a club leaves its hand toward Rastan.

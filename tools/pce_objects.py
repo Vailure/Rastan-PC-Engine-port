@@ -31,6 +31,7 @@ from object_specs import FILES, GROUPS, POSE_SYMBOLS
 ROMDIR = os.environ.get('RASTAN_ROMS', os.path.join(os.path.dirname(__file__), '..', 'roms', 'rastan'))
 PAL_SLOTS = [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14]   # 0 Rastan, 8 props, 15 HUD
 MAX_PIECES = 15                                           # object slot buffers hold 15 cells
+JITTER = 3                                                # poses this close count as one (see below)
 
 
 def pieces(s, k):
@@ -91,8 +92,16 @@ def main():
                         used_pals[q[4]] = palette_rgb(s.pal)[q[4] * 16:q[4] * 16 + 16]
                 k = norm([q[:4] for q in p])
                 if k not in ids:
-                    ids[k] = len(poses)
-                    poses.append(p)
+                    # The same cells in the same order, a few px apart (an object
+                    # shaking): reuse that pose, so its cells need no new upload.
+                    cells_k = [q[:3:2] for q in p]
+                    near = next((i for i, o in enumerate(poses) if [q[:3:2] for q in o] == cells_k
+                                 and all(abs(a[1] - b[1]) <= JITTER and abs(a[3] - b[3]) <= JITTER
+                                         for a, b in zip(o, p))), None)
+                    if near is None:
+                        near = len(poses)
+                        poses.append(p)
+                    ids[k] = near
                 pid = ids[k]
                 if seq and seq[-1][0] == pid:
                     seq[-1][1] += 1

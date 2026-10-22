@@ -30,6 +30,7 @@ from the ROMs (`*.bin`, snapshots, renders, disassembly) is git-ignored.
 | `src/player.asm` | Rastan: states, movement, collision, ropes, damage, camera, sprite streaming |
 | `src/enemies.asm` | Stage 1 enemies and the object system (per-slot sprite buffers, uploads in VBLANK) |
 | `src/items.asm` | Weapon items and their bats |
+| `src/chimera.asm` | Chimeras and their fireballs |
 | `src/hud.asm`, `tools/pce_hud.py` | HUD from the arcade's HUD sprites |
 | `src/debug.asm` | Checkpoints (death restarts, warps) and the debug menu |
 | `tools/test_debug.py` | Checks the menu, warps, invincibility and checkpoint restarts |
@@ -38,6 +39,7 @@ from the ROMs (`*.bin`, snapshots, renders, disassembly) is git-ignored.
 | `tools/pce_objects.py`, `tools/object_specs.py` | Object poses (enemies, projectiles, items) from the arcade's object slots → PCE sprites |
 | `tools/census_all.py`, `tools/track.py` | Every arcade object of a run with its sprite pieces; one slot over time |
 | `tools/test_enemies.py` | Headless checks for hits, kills and frame budget |
+| `tools/test_monsters.py` | Checks round 1's later enemies (chimeras, ...) |
 | `tools/test_items.py`, `tools/peek.py` | Checks weapons, items and bats; reads named RAM variables from a headless run |
 | `sim/` | Headless Rastan main-CPU simulator (Musashi 68000) and a linear disassembler |
 | `sim/scripts/` | Input scripts for the simulator |
@@ -165,6 +167,11 @@ Not done yet: slopes, waterfall currents, the other collision codes, rope attack
   `$10C740`): 1.5 px/frame, spinning through 8 cells; a high pair (20 px above the thrower's anchor) then a low pair
   (13 px above, sinking to 6). A club costs 3072 like a lizardman's hit; the sword knocks clubs away; one hit kills
   the thrower, with the shared explosion.
+- **Chimeras** (`src/chimera.asm`; `sim/scripts/chimera.txt`): from x 2400 throwers, chimeras and lizardmen come
+  in turn. A chimera walks left at 1/2 px/frame whatever Rastan does, stops once to breathe fire (about 113 frames;
+  fireballs leave 24 px ahead and 6 px up, 33 and 81 frames in), then walks on. Fireballs fly left at 1.75 px/frame.
+  Touching either hurts like a club; one hit kills a chimera (300) and knocks a fireball away. Poses that only shake
+  (same cells a few px apart) are merged by the converter, so they need no new uploads.
 - **Object sprites:** each object slot has its own VRAM buffer (6 slots of 15 cells, 8 of 2 cells, `$5C00-$767F`).
   When an object's pose changes, its cells are copied there during VBLANK (14 cells a frame at most), so any number of
   kinds can appear in the round. `tools/pce_objects.py` builds the data from captures listed in

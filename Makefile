@@ -75,6 +75,10 @@ $(BUILD)/blue.snp: sim/sim sim/maincpu.bin sim/scripts/blue.txt
 
 # Weapon items and their bats: the axe in the cave (the bot breaks the block and
 # takes it), the fire sword and the morning star (bot runs from checkpoints).
+$(BUILD)/chimera.snp: sim/sim sim/maincpu.bin sim/scripts/chimera.txt
+	@mkdir -p $(BUILD)
+	sim/sim sim/maincpu.bin sim/scripts/chimera.txt $@ 1
+
 $(BUILD)/item.snp: sim/sim sim/maincpu.bin sim/scripts/item.txt
 	@mkdir -p $(BUILD)
 	sim/sim sim/maincpu.bin sim/scripts/item.txt $@ 1
@@ -86,7 +90,7 @@ $(BUILD)/item_%.snp: sim/sim sim/maincpu.bin sim/scripts/item_%.txt
 # Object (enemy, projectile, item) poses: groups and captures in tools/object_specs.py.
 # Cells start at bank $60; each group's poses and anims get the next banks.
 OBJECTS    := $(BUILD)/objects
-$(OBJECTS)/objcells.bin: tools/pce_objects.py tools/object_specs.py $(BUILD)/lizard.snp $(BUILD)/blue.snp $(BUILD)/item.snp $(BUILD)/item_fire.snp $(BUILD)/item_star.snp
+$(OBJECTS)/objcells.bin: tools/pce_objects.py tools/object_specs.py $(BUILD)/lizard.snp $(BUILD)/blue.snp $(BUILD)/item.snp $(BUILD)/item_fire.snp $(BUILD)/item_star.snp $(BUILD)/chimera.snp
 	cd tools && python3 pce_objects.py ../$(BUILD) ../$(OBJECTS) 0x60
 
 # HUD cells (lives, icon, health bar, ROUND) from the arcade's HUD sprites.
@@ -106,7 +110,7 @@ $(BUILD)/debug/font.bin: $(HUC)/examples/asm/elmer/font/font8x8-ascii-bold-short
 	@mkdir -p $(BUILD)/debug
 	dd if=$< of=$@ bs=8 skip=16 count=64 status=none
 
-GAME_DEPS  := src/main.asm src/player.asm src/enemies.asm src/items.asm src/props.asm src/hud.asm src/dyncolor.asm src/debug.asm $(BUILD)/debug/font.bin $(STAGE)/stage.bin $(PLAYER)/player.bin $(OBJECTS)/objcells.bin $(BUILD)/hud/hud.bin $(BUILD)/props/props.bin
+GAME_DEPS  := src/main.asm src/player.asm src/enemies.asm src/items.asm src/chimera.asm src/props.asm src/hud.asm src/dyncolor.asm src/debug.asm $(BUILD)/debug/font.bin $(STAGE)/stage.bin $(PLAYER)/player.bin $(OBJECTS)/objcells.bin $(BUILD)/hud/hud.bin $(BUILD)/props/props.bin
 
 $(BUILD)/rastan.pce: $(GAME_DEPS)
 	@mkdir -p $(BUILD)/opt
@@ -140,6 +144,7 @@ test: $(BUILD)/camtest.pce $(BUILD)/noenemy.pce $(BUILD)/rastan.pce $(BUILD)/god
 	python3 tools/test_effects.py $(BUILD)/noenemy.pce $(STAGE)/dyncolor.inc
 	python3 tools/test_debug.py $(BUILD)/rastan.pce $(BUILD)/noenemy.pce
 	python3 tools/test_items.py $(BUILD)/rastan.pce $(BUILD)/god.pce $(BUILD)/noenemy.pce
+	python3 tools/test_monsters.py $(BUILD)/rastan.pce $(BUILD)/god.pce
 
 tools/tgrun/tgrun: tools/tgrun/tgrun.c
 	HUC=$(abspath $(HUC)) tools/tgrun/build.sh

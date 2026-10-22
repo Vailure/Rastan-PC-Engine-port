@@ -460,6 +460,7 @@ GAME_BANK	=	$04
 		.page	6
 		include	"enemies.asm"
 		include	"items.asm"
+		include	"chimera.asm"
 		include	"props.asm"
 
 ; Checkpoints and the debug menu: bank DEBUG_BANK, in MPR2 ($4000) all the time.
