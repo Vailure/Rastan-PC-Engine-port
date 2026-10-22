@@ -19,13 +19,18 @@
 ;
 ; ***************************************************************************
 
-		include	"enemies.inc"
+		include	"objects.inc"
 
-NUM_EN		=	4		; The arcade keeps at most 4 alive.
-NUM_OBJ		=	NUM_EN + 4	; ... plus up to 4 clubs in flight.
+NUM_EN		=	4		; The arcade keeps at most 4 walkers alive.
+NUM_BIG		=	6		; Slots 0-5: enemies (15-cell buffers),
+NUM_OBJ		=	NUM_BIG + 8	; 6-13: projectiles (2-cell buffers).
 EN_SATB_FIRST	=	7 + 24 + 4	; SATB entries after the HUD's 7, Rastan's 24, the props' 4.
-EN_VRAM		=	$5C00		; Resident enemy cells.
-EN_PATTERN	=	EN_VRAM >> 5
+EN_VRAM		=	$5C00		; Object cell buffers, $5C00-$767F.
+BIG_CELLS	=	15
+SMALL_CELLS	=	2
+EN_VRAM_END	=	EN_VRAM + (NUM_BIG * BIG_CELLS + (NUM_OBJ - NUM_BIG) * SMALL_CELLS) * 64
+SMALL_BASE	=	EN_VRAM + NUM_BIG * BIG_CELLS * 64
+UPLOAD_BUDGET	=	14		; Cells uploaded per VBLANK (about 11k cycles).
 
 ES_FREE		=	0
 ES_WALK		=	1
@@ -52,6 +57,11 @@ rng:		ds	1
 lane_best:	ds	2		; Nearest lane so far: y, distance.
 en_satb:	ds	1		; Entries written this frame.
 en_satb_prev:	ds	1
+up_left:	ds	1		; objects_upload: cells left this VBLANK,
+up_next:	ds	1		; slot to start from next time,
+up_count:	ds	1		; slots left to look at.
+up_piece:	ds	1
+dr_pat:		ds	2		; draw_one: pattern of the next piece.
 
 		.bss
 e_state:	ds	NUM_OBJ
@@ -72,74 +82,79 @@ e_struck:	ds	NUM_OBJ		; Club hit already checked this swing.
 e_kind:		ds	NUM_OBJ
 e_range:	ds	NUM_OBJ		; Attack distance.
 e_alt:		ds	NUM_OBJ		; Blue: next throw is low.
+e_shown:	ds	NUM_OBJ		; Pose whose cells are in the slot's buffer ($FF none).
+ram_tia:	ds	8		; tia src, VDC_DL, 128 / rts (source patched per cell).
 
 		.code
 
 ; ---------------------------------------------------------------------------
 ; enemies_init - load cells and palettes, clear slots.
 
-enemies_init:	jsr	enemies_load
+enemies_init:	ldx	#7			; The RAM copy of "tia cell, VDC_DL, 128".
+!:		lda	.tia, x
+		sta	ram_tia, x
+		dex
+		bpl	!-
+		jsr	enemies_load
 		jmp	enemies_reset
+.tia:		db	$E3			; tia
+		dw	$6000			; (source: the cell, mapped in MPR3)
+		dw	VDC_DL
+		dw	128
+		db	$60			; rts
 
-; enemies_load - cells and palettes only (the debug menu borrows the cells).
-enemies_load:	; Cells -> VRAM $5C00 (enemy_cells spans banks, map 2 at $6000).
-		php				; VDC writes: IRQ held off (see stream_column).
+; enemies_load - the objects' sprite palettes (cells come with each pose).
+enemies_load:	php
 		sei
-		st0	#VDC_MAWR
-		st1	#<EN_VRAM
-		st2	#>EN_VRAM
-		st0	#VDC_VWR
-		lda	#^enemy_cells
-		sta	<etmp
+		lda	#^obj_palettes
 		tam3
-		inc	a
-		tam4
-		lda	#<enemy_cells
+		lda	#<obj_palettes
 		sta	<ep
-		lda	#>enemy_cells
+		lda	#>obj_palettes
 		sta	<ep + 1
-		ldx	#ENEMY_CELLS
-.cell:		cly
-.w:		lda	[ep], y
-		sta	VDC_DL
+		clx
+.pal:		lda	obj_pal_slots, x	; VCE address 256 + slot * 16
+		asl	a
+		asl	a
+		asl	a
+		asl	a
+		sta	VCE_CTA + 0
+		lda	#1
+		adc	#0
+		sta	VCE_CTA + 1
+		cly
+!:		lda	[ep], y
+		sta	VCE_CTW + 0
 		iny
 		lda	[ep], y
-		sta	VDC_DH
+		sta	VCE_CTW + 1
 		iny
-		cpy	#128
-		bne	.w
-		lda	<ep			; ep += 128; past $8000 remap a bank on.
+		cpy	#32
+		bne	!-
+		lda	<ep
 		clc
-		adc	#128
+		adc	#32
 		sta	<ep
 		bcc	!+
 		inc	<ep + 1
-!:		lda	<ep + 1
-		cmp	#$80
-		bcc	!+
-		sbc	#$20
-		sta	<ep + 1
-		inc	<etmp
-		lda	<etmp
-		tam3
-		inc	a
-		tam4
-!:		dex
-		bne	.cell
-
-		; Sprite palettes 1.. (VCE colors 272..).
-		lda	#^enemy_palettes
-		tam3
-		lda	#$10
-		sta	VCE_CTA + 0
-		lda	#1
-		sta	VCE_CTA + 1
-		tia	enemy_palettes, VCE_CTW, ENEMY_PALS * 32
+!:		inx
+		cpx	#OBJ_PAL_COUNT
+		bne	.pal
 		plp
+		; (fall through: the cells in the buffers must be uploaded again)
+
+; obj_invalidate - forget what is in the slot buffers (the debug menu borrows them).
+obj_invalidate:	lda	#$FF
+		ldx	#NUM_OBJ - 1
+!:		sta	e_shown, x
+		dex
+		bpl	!-
 		rts
 
 enemies_reset:	ldx	#NUM_OBJ - 1
 !:		stz	e_state, x
+		lda	#$FF
+		sta	e_shown, x
 		dex
 		bpl	!-
 		lda	#SPAWN_FIRST
@@ -155,11 +170,13 @@ enemies_update:	jsr	try_spawn
 		ldx	#NUM_OBJ - 1
 .loop:		lda	e_state, x
 		beq	.next
+		jsr	map_kind		; Its group's poses and anims at $8000.
 		phx
 		jsr	enemy_think
 		plx
 		lda	e_state, x
 		beq	.next
+		jsr	map_kind		; (think may have changed it)
 		jsr	enemy_anim
 		jsr	despawn_check
 .next:		dex
@@ -273,6 +290,8 @@ try_spawn:	dec	<spawn_timer
 		eor	#1
 		sta	<spawn_kind
 .kind:		sta	e_kind, x
+		lda	#$FF
+		sta	e_shown, x
 		jmp	start_walk
 
 spawn_gaps:	db	49, 81, 65
@@ -361,7 +380,7 @@ enemy_think:	lda	e_kind, x
 
 .club_swing:	; The club is out in pose 6: hit Rastan once per swing if in range.
 		lda	e_pose, x
-		cmp	#6
+		cmp	#POSE_LIZ_CLUB_OUT
 		bne	.armed
 		lda	e_struck, x
 		bne	.wait
@@ -454,6 +473,9 @@ kind_retreat_h:	db	>anim_liz_walk, >anim_blue_walk2, 0
 kind_death_l:	db	<anim_liz_death, <anim_blue_death, 0
 kind_death_h:	db	>anim_liz_death, >anim_blue_death, 0
 kind_range:	db	ATTACK_RANGE, 88, 0
+kind_bank:	db	GRP_SECT1_BANK, GRP_SECT1_BANK, GRP_SECT1_BANK
+kind_ptab_l:	db	<grp_sect1_ptab, <grp_sect1_ptab, <grp_sect1_ptab
+kind_ptab_h:	db	>grp_sect1_ptab, >grp_sect1_ptab, >grp_sect1_ptab
 kind_top:	db	36, 48, 8		; Body box: anchor - top .. anchor + 16,
 kind_half:	db	16, 16, 8		; x +/- half (club: +/- 8 around its centre).
 
@@ -465,7 +487,7 @@ throw_club:	ldy	#NUM_OBJ - 1		; Free projectile slot?
 !:		lda	e_state, y
 		beq	.slot
 		dey
-		cpy	#NUM_EN
+		cpy	#NUM_BIG
 		bcs	!-
 		rts
 .slot:		lda	e_face, x
@@ -506,6 +528,8 @@ throw_club:	ldy	#NUM_OBJ - 1		; Free projectile slot?
 		sta	e_yh, y
 		lda	#EK_CLUB
 		sta	e_kind, y
+		lda	#$FF
+		sta	e_shown, y
 		lda	#0
 		sta	e_sub, y
 		phx
@@ -903,6 +927,10 @@ enemies_draw:	php				; VDC writes: IRQ held off (see stream_column).
 		ldx	#NUM_OBJ - 1
 .slot:		lda	e_state, x
 		beq	.next
+		lda	e_shown, x		; Nothing uploaded yet: not drawn.
+		cmp	#$FF
+		beq	.next
+		jsr	map_kind
 		phx
 		jsr	draw_one
 		plx
@@ -929,13 +957,12 @@ enemies_draw:	php				; VDC writes: IRQ held off (see stream_column).
 
 ; draw_one - X = slot. Pieces were captured facing left (arcade X flip set);
 ; facing right mirrors dx (-dx - 16) and toggles the flip.
-draw_one:	lda	e_pose, x
-		asl	a
-		tay
-		lda	epose_table, y
-		sta	<ep
-		lda	epose_table + 1, y
-		sta	<ep + 1
+draw_one:	lda	slot_pat_l, x		; Pattern of the buffer's first cell.
+		sta	<dr_pat
+		lda	slot_pat_h, x
+		sta	<dr_pat + 1
+		lda	e_shown, x
+		jsr	pose_ptr
 		; Screen anchor: ex = e_x - scroll_x, ey = e_y - scroll_y.
 		lda	e_xl, x
 		sec
@@ -965,6 +992,12 @@ draw_one:	lda	e_pose, x
 		bra	.next
 .skip:		iny				; skip cell, attr
 		iny
+		lda	<dr_pat			; (its cell still has its place)
+		clc
+		adc	#2
+		sta	<dr_pat
+		bcc	.next
+		inc	<dr_pat + 1
 .next:		dec	<etmp
 		bne	.piece
 .done:		rts
@@ -1050,20 +1083,18 @@ emit_piece:	lda	<ctx			; y + 64
 		adc	#0
 		and	#$03
 		sta	VDC_DH
-		lda	[ep], y			; pattern = EN_PATTERN + cell * 2
-		iny
-		asl	a
-		sta	<cx
-		cla
-		rol	a
-		sta	<cx + 1
-		lda	<cx
-		clc
-		adc	#<EN_PATTERN
+		iny				; pattern = buffer + piece * 2
+		lda	<dr_pat
 		sta	VDC_DL
-		lda	<cx + 1
-		adc	#>EN_PATTERN
+		lda	<dr_pat + 1
 		sta	VDC_DH
+		lda	<dr_pat
+		clc
+		adc	#2
+		sta	<dr_pat
+		bcc	!+
+		inc	<dr_pat + 1
+!:
 		lda	[ep], y			; attr: palette | in front
 		and	#$0F
 		ora	#$80
@@ -1085,3 +1116,142 @@ emit_piece:	lda	<ctx			; y + 64
 		sta	VDC_DH
 		inc	<en_satb
 		rts
+
+; ---------------------------------------------------------------------------
+; Object slots' cell buffers and pose uploads.
+
+; map_kind - X = slot: map its kind's group bank at $8000 (MPR4).
+map_kind:	ldy	e_kind, x
+		lda	kind_bank, y
+		tam4
+		rts
+
+; pose_ptr - A = pose of slot X's kind (bank mapped): ep = the pose.
+pose_ptr:	asl	a
+		pha
+		ldy	e_kind, x
+		lda	kind_ptab_l, y
+		sta	<ep
+		lda	kind_ptab_h, y
+		sta	<ep + 1
+		ply
+		lda	[ep], y
+		pha
+		iny
+		lda	[ep], y
+		sta	<ep + 1
+		pla
+		sta	<ep
+		rts
+
+; objects_upload - in VBLANK, before the display starts: upload the cells of
+; poses that changed, up to UPLOAD_BUDGET cells, starting where it stopped last
+; time. An object that does not fit keeps showing its old pose until it does.
+objects_upload:	php
+		sei
+		tma4
+		pha
+		lda	#UPLOAD_BUDGET
+		sta	<up_left
+		lda	#NUM_OBJ
+		sta	<up_count
+		ldx	<up_next
+.loop:		lda	e_state, x
+		beq	.next
+		lda	e_pose, x
+		cmp	e_shown, x
+		beq	.next
+		jsr	upload_one
+.next:		inx
+		cpx	#NUM_OBJ
+		bcc	!+
+		clx
+!:		dec	<up_count
+		bne	.loop
+		inx				; Start after this one next time.
+		cpx	#NUM_OBJ
+		bcc	!+
+		clx
+!:		stx	<up_next
+		pla
+		tam4
+		plp
+		rts
+
+; upload_one - X = slot: its pose's cells into its buffer, if they fit.
+upload_one:	jsr	map_kind
+		lda	e_pose, x
+		jsr	pose_ptr
+		lda	[ep]			; Cells this pose needs.
+		cmp	<up_left
+		beq	!+
+		bcs	.later
+!:		sta	<up_piece
+		lda	<up_left
+		sec
+		sbc	<up_piece
+		sta	<up_left
+		st0	#VDC_MAWR
+		lda	slot_vram_l, x
+		sta	VDC_DL
+		lda	slot_vram_h, x
+		sta	VDC_DH
+		st0	#VDC_VWR
+		ldy	#3			; First piece's cell byte.
+.piece:		lda	[ep], y			; cell bits 0-7
+		sta	<etmp
+		iny
+		lda	[ep], y			; attr: cell bits 8-9 in bits 4-5
+		iny
+		iny
+		iny				; (next piece's cell byte)
+		and	#$30			; bank = OBJ_CELL_BANK + cell >> 6
+		lsr	a
+		lsr	a
+		sta	<etmp + 1
+		lda	<etmp
+		rol	a
+		rol	a
+		rol	a
+		and	#3
+		ora	<etmp + 1
+		clc
+		adc	#OBJ_CELL_BANK
+		tam3
+		lda	<etmp			; address = $6000 + (cell & 63) * 128
+		and	#63
+		lsr	a
+		ora	#$60
+		sta	ram_tia + 2
+		cla
+		ror	a
+		sta	ram_tia + 1
+		jsr	ram_tia
+		dec	<up_piece
+		bne	.piece
+		lda	e_pose, x
+		sta	e_shown, x
+.later:		rts
+
+; Slot buffers: 6 x 15 cells, then 8 x 2 cells. VRAM word addresses and
+; sprite pattern numbers (address / 32).
+slot_vram_l:	db	<(EN_VRAM + 0 * BIG_CELLS * 64), <(EN_VRAM + 1 * BIG_CELLS * 64), <(EN_VRAM + 2 * BIG_CELLS * 64)
+		db	<(EN_VRAM + 3 * BIG_CELLS * 64), <(EN_VRAM + 4 * BIG_CELLS * 64), <(EN_VRAM + 5 * BIG_CELLS * 64)
+		db	<(SMALL_BASE + 0 * 128), <(SMALL_BASE + 1 * 128), <(SMALL_BASE + 2 * 128), <(SMALL_BASE + 3 * 128)
+		db	<(SMALL_BASE + 4 * 128), <(SMALL_BASE + 5 * 128), <(SMALL_BASE + 6 * 128), <(SMALL_BASE + 7 * 128)
+slot_vram_h:	db	>(EN_VRAM + 0 * BIG_CELLS * 64), >(EN_VRAM + 1 * BIG_CELLS * 64), >(EN_VRAM + 2 * BIG_CELLS * 64)
+		db	>(EN_VRAM + 3 * BIG_CELLS * 64), >(EN_VRAM + 4 * BIG_CELLS * 64), >(EN_VRAM + 5 * BIG_CELLS * 64)
+		db	>(SMALL_BASE + 0 * 128), >(SMALL_BASE + 1 * 128), >(SMALL_BASE + 2 * 128), >(SMALL_BASE + 3 * 128)
+		db	>(SMALL_BASE + 4 * 128), >(SMALL_BASE + 5 * 128), >(SMALL_BASE + 6 * 128), >(SMALL_BASE + 7 * 128)
+slot_pat_l:	db	<((EN_VRAM + 0 * BIG_CELLS * 64) >> 5), <((EN_VRAM + 1 * BIG_CELLS * 64) >> 5)
+		db	<((EN_VRAM + 2 * BIG_CELLS * 64) >> 5), <((EN_VRAM + 3 * BIG_CELLS * 64) >> 5)
+		db	<((EN_VRAM + 4 * BIG_CELLS * 64) >> 5), <((EN_VRAM + 5 * BIG_CELLS * 64) >> 5)
+		db	<((SMALL_BASE + 0 * 128) >> 5), <((SMALL_BASE + 1 * 128) >> 5), <((SMALL_BASE + 2 * 128) >> 5)
+		db	<((SMALL_BASE + 3 * 128) >> 5), <((SMALL_BASE + 4 * 128) >> 5), <((SMALL_BASE + 5 * 128) >> 5)
+		db	<((SMALL_BASE + 6 * 128) >> 5), <((SMALL_BASE + 7 * 128) >> 5)
+slot_pat_h:	db	>((EN_VRAM + 0 * BIG_CELLS * 64) >> 5), >((EN_VRAM + 1 * BIG_CELLS * 64) >> 5)
+		db	>((EN_VRAM + 2 * BIG_CELLS * 64) >> 5), >((EN_VRAM + 3 * BIG_CELLS * 64) >> 5)
+		db	>((EN_VRAM + 4 * BIG_CELLS * 64) >> 5), >((EN_VRAM + 5 * BIG_CELLS * 64) >> 5)
+		db	>((SMALL_BASE + 0 * 128) >> 5), >((SMALL_BASE + 1 * 128) >> 5), >((SMALL_BASE + 2 * 128) >> 5)
+		db	>((SMALL_BASE + 3 * 128) >> 5), >((SMALL_BASE + 4 * 128) >> 5), >((SMALL_BASE + 5 * 128) >> 5)
+		db	>((SMALL_BASE + 6 * 128) >> 5), >((SMALL_BASE + 7 * 128) >> 5)

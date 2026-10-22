@@ -29,7 +29,13 @@ for ln in open(LST):
     if m:
         sym[m.group(2)] = int(m.group(1), 16) - 0x2000
 LO = 0
-NE, NO = 4, 8
+# Slot counts from src/enemies.asm (walkers, all objects).
+_c = {}
+for _ln in open(os.path.join(HERE, '..', 'src', 'enemies.asm')):
+    _m = re.match(r'(NUM_EN|NUM_BIG|NUM_OBJ)\s*=\s*([^;]+)', _ln)
+    if _m:
+        _c[_m.group(1)] = eval(_m.group(2), {}, dict(_c))
+NE, NO = _c['NUM_EN'], _c['NUM_OBJ']
 HI = max(sym['e_kind'] + NO, sym['e_yh'] + NO, sym['p_y'] + 2, sym['e_state'] + NE, sym['loop_cnt'] + 2, sym['lives'] + 1, sym['hud_disp'] + 1)
 
 

@@ -87,6 +87,7 @@ core_main:	lda	#GAME_BANK		; (the boot mapping already has it there)
 		jsr	set_scroll_regs		; Show this frame's position.
 	.if	!CAMERA_TEST
 		jsr	dyn_update		; Waterfall cycle, sky change (VBLANK).
+		jsr	objects_upload		; Changed object poses' cells (VBLANK).
 		jsr	debug_check		; SELECT: debug menu.
 		lda	<loop_cnt		; Debug slow motion: skip logic frames.
 		and	<dbg_slow
@@ -478,7 +479,7 @@ DEBUG_BANK	=	$05
 		.page	3
 palette_data:	incbin	"palette.bin"
 sprite_palette:	incbin	"sprpal.bin"
-enemy_palettes:	incbin	"enepal.bin"
+obj_palettes:	incbin	"objpal.bin"
 hud_palette:	incbin	"hudpal.bin"
 prop_palette:	incbin	"proppal.bin"
 debug_font:	incbin	"font.bin"		; HuC's 8x8 bold font, $20-$5F (build/debug).
@@ -495,9 +496,7 @@ player_data:	incbin	"player.bin"
 		.page	5
 collision_data:	incbin	"collision.bin"
 
-		.bank	$58
-		.page	3
-enemy_cells:	incbin	"enemies.bin"
+		include	"objects_data.inc"	; Object cells ($60..) and pose banks.
 
 		.bank	$5A
 		.page	3

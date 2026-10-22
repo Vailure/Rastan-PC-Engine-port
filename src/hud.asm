@@ -18,7 +18,7 @@
 HUD_VRAM	=	$7700		; After the enemy cells (up to $76FF), 32 cells.
 HUD_PAT		=	HUD_VRAM >> 5		; Pattern index of slot 0 (even).
 
-	.if	EN_VRAM + ENEMY_CELLS * 64 > HUD_VRAM
+	.if	EN_VRAM_END > HUD_VRAM
 	.fail	Enemy cells overrun the HUD cells
 	.endif
 HUD_ENTRIES	=	7

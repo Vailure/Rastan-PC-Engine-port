@@ -47,6 +47,8 @@ static uint32_t watch_lo, watch_hi;   /* watch <addr> <len>: log writes in [lo,h
 static FILE *watch_f;
 static uint32_t wtrace_lo = 1, wtrace_hi = 0;   /* wtrace <lo> <hi>: log writer PCs for an address range */
 static uint32_t cur_pc_hist[0x60000 / 2];
+static uint8_t spr_owner[256];          /* object slot (0-62) that wrote each sprite entry this frame, $FF other, $FE none */
+static gzFile owner_f;                   /* <out>.own: 256 bytes per snapshot */
 static uint64_t unmapped_reads, unmapped_writes; static uint32_t last_unmapped_w;
 
 /* pcprof <from> <to> <file> : count executed instructions per PC within a frame range */
@@ -119,7 +121,7 @@ static void write8(uint32_t a, uint8_t v)
 {
     a &= 0xffffff;
     if (watch_f && a >= watch_lo && a < watch_hi)
-        fprintf(watch_f, "W %d %06x %06x %02x\n", frame, m68k_get_reg(NULL, M68K_REG_PPC), a, v);
+        fprintf(watch_f, "W %d %06x %06x %02x a4=%06x\n", frame, m68k_get_reg(NULL, M68K_REG_PPC), a, v, m68k_get_reg(NULL, M68K_REG_A4));
     if (a >= wtrace_lo && a < wtrace_hi) { uint32_t pc = m68k_get_reg(NULL, M68K_REG_PPC); if (pc < 0x60000) cur_pc_hist[pc >> 1]++; }
     if (a >= 0x10c000 && a < 0x110000) {
         if (profile_on && frame >= profile_from && (!focus_entry || in_focus)) ram_touch[a - 0x10c000] |= 2;
@@ -131,7 +133,16 @@ static void write8(uint32_t a, uint8_t v)
         if (trace_on) { uint32_t pc = m68k_get_reg(NULL, M68K_REG_PPC); if (pc < 0x60000) cur_pc_hist[pc >> 1]++; }
         return;
     }
-    if (a >= 0xd00000 && a < 0xd04000) { spr[a - 0xd00000] = v; return; }
+    if (a >= 0xd00000 && a < 0xd04000) {
+        if (a < 0xd00800) {
+            /* Objects are drawn by the shared emitter at $03C9A6-$03CA24, with A4 = slot + 8. */
+            uint32_t pc = m68k_get_reg(NULL, M68K_REG_PPC);
+            uint32_t a4 = m68k_get_reg(NULL, M68K_REG_A4) - 8;
+            spr_owner[(a - 0xd00000) >> 3] = (pc >= 0x3c900 && pc < 0x3ca40 && a4 >= 0x10c2c0 && a4 < 0x10c2c0 + 63 * 64
+                                              && !((a4 - 0x10c2c0) & 63)) ? (a4 - 0x10c2c0) >> 6 : 0xff;
+        }
+        spr[a - 0xd00000] = v; return;
+    }
     if (a >= 0xc20000 && a < 0xc20004) { uint16_t *r = &scry[(a >> 1) & 1]; if (a & 1) *r = (*r & 0xff00) | v; else *r = (*r & 0xff) | (v << 8); return; }
     if (a >= 0xc40000 && a < 0xc40004) { uint16_t *r = &scrx[(a >> 1) & 1]; if (a & 1) *r = (*r & 0xff00) | v; else *r = (*r & 0xff) | (v << 8); return; }
     if (a >= 0xc50000 && a < 0xc50004) { uint16_t *r = &vctrl[(a >> 1) & 1]; if (a & 1) *r = (*r & 0xff00) | v; else *r = (*r & 0xff) | (v << 8); return; }
@@ -194,6 +205,7 @@ static void write_snapshot(gzFile g)
     gzwrite(g, pal, sizeof pal);
     gzwrite(g, spr, 0x800);
     gzwrite(g, wram, sizeof wram);
+    if (owner_f) gzwrite(owner_f, spr_owner, sizeof spr_owner);
 }
 
 int main(int argc, char **argv)
@@ -206,6 +218,11 @@ int main(int argc, char **argv)
     load_script(argv[2]);
     int every = argc > 4 ? atoi(argv[4]) : 1;
     gzFile g = gzopen(argv[3], "wb1");
+    if (strcmp(argv[3], "/dev/null")) {
+        char on[1024];
+        snprintf(on, sizeof on, "%s.own", argv[3]);
+        owner_f = gzopen(on, "wb1");
+    }
 
     in_sys = 0x1f;   /* coin bits active high -> idle 0 */
     m68k_init();
@@ -225,6 +242,7 @@ int main(int argc, char **argv)
         }
         if (frame == calltrace_frame) { calltrace_out = fopen(ct_file, "w"); ct_sp0 = m68k_get_reg(NULL, M68K_REG_SP); }
         if (frame == prof_from) prof_hits = calloc(0x30000, sizeof *prof_hits);
+        memset(spr_owner, 0xfe, sizeof spr_owner);
         m68k_execute(cycles_per_frame);
         if (calltrace_out && frame == calltrace_frame) { fclose(calltrace_out); calltrace_out = NULL; }
         if (frame == prof_to && prof_hits) {
@@ -238,6 +256,7 @@ int main(int argc, char **argv)
         m68k_set_irq(5);
     }
     gzclose(g);
+    if (owner_f) gzclose(owner_f);
     if (callsnap_f) gzclose(callsnap_f);
     fprintf(stderr, "frames=%d pc=%06x unmapped r=%llu w=%llu last_w=%06x\n", frame, (unsigned)m68k_get_reg(NULL, M68K_REG_PC),
             (unsigned long long)unmapped_reads, (unsigned long long)unmapped_writes, last_unmapped_w);
