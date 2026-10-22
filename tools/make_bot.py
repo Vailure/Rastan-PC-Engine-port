@@ -1,10 +1,11 @@
-"""make_bot.py out.txt : simulator input script - coin, start, invincible-ish run right
+"""make_bot.py out.txt [end] : simulator input script - coin, start, invincible-ish run right
 with periodic attack/jump. Used to capture round 1 palettes from the arcade program."""
 import sys
+END = int(sys.argv[2]) if len(sys.argv) > 2 else 20000
 L = ["in 100 ff 3f", "in 106 ff 1f", "in 200 ff 17", "in 206 ff 1f",
      "poke 300 30000 10c13a w 3000",   # health ($13A,A5) held at max: no hit can kill in one frame
-     "end 20000"]
-for f in range(400, 20000, 2):
+     f"end {END}"]
+for f in range(400, END, 2):
     p = 0xff & ~0x08              # right
     if f % 40 < 6: p &= ~0x10     # attack
     if f % 90 < 14: p &= ~0x20    # jump

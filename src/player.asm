@@ -30,9 +30,11 @@ ST_ATTACK	=	4
 ST_CATK		=	5
 ST_CLIMB	=	6
 ST_HURT		=	7
+ST_DEAD		=	8
 
-PLAYER_HP	=	12		; Arcade: 12288 health, 3072 per lizardman hit.
-HIT_DAMAGE	=	3
+PLAYER_HP	=	48		; Health bar units: arcade 12288 / 256.
+HIT_DAMAGE	=	12		; A lizardman hit: arcade 3072.
+WATER_DRAIN	=	7		; Water (code 6): a unit every 8 frames (arcade 32/frame).
 INVULN_FRAMES	=	90
 
 START_X		=	48		; Arcade x 32 + 16 (stage 1 start).
@@ -125,7 +127,13 @@ player_update:	lda	#COLL_BANK		; Collision data at $A000.
 		sta	<pad
 		lda	joytrg
 		sta	<padtrg
-
+		lda	<p_state
+		cmp	#ST_DEAD
+		beq	!+
+		jsr	hazards
+		bcc	!+
+		rts				; Just died.
+!:
 		lda	<p_state
 		asl	a
 		tax
@@ -139,6 +147,7 @@ player_update:	lda	#COLL_BANK		; Collision data at $A000.
 		dw	st_catk
 		dw	st_climb
 		dw	st_hurt
+		dw	st_dead
 
 ; --- Standing / walking.
 st_ground:	bbr0	<padtrg, .no_jump	; JOY_B1: jump.
@@ -327,9 +336,70 @@ st_hurt:	lda	<p_kdir
 		beq	.done
 		lda	<p_hp
 		bne	!+
-		jmp	player_died		; Out of health: restart the stage.
+		jmp	enter_dead		; Out of health.
 !:		jmp	enter_stand
 .done:		rts
+
+; --- Dying: the arcade's death animation, then lose a life.
+st_dead:	lda	<p_animend
+		beq	!+
+		jmp	player_died
+!:		rts
+
+enter_dead:	lda	#ST_DEAD
+		sta	<p_state
+		stz	<p_jatk
+		stz	<p_invuln
+		lda	#<anim_death
+		ldx	#>anim_death
+		jmp	set_anim
+
+; hazards - collision codes that hurt: 7 and 8 kill (arcade state 8), 6 is
+; water that drains health (arcade: 32 of 12288 a frame). Probes the feet
+; (p_y + 25) and the body (p_y + 8) at p_x. Carry set if Rastan just died.
+hazards:	lda	#25
+		jsr	hazard_probe
+		bcs	.die
+		lda	#8
+		jsr	hazard_probe
+		bcs	.die
+		cmp	#6
+		bne	.ok
+		lda	<p_frame		; In the water: drain.
+		and	#WATER_DRAIN
+		bne	.ok
+		lda	<p_hp
+		beq	.ok
+		dec	a
+		sta	<p_hp
+		bne	.ok
+.die:		jsr	enter_dead
+		sec
+		rts
+.ok:		clc
+		rts
+
+; hazard_probe - code at (p_x, p_y + A) in A; carry set if it kills (7, 8).
+hazard_probe:	clc
+		adc	<p_y
+		sta	<cy
+		lda	<p_y + 1
+		adc	#0
+		sta	<cy + 1
+		lda	<p_x
+		sta	<cx
+		lda	<p_x + 1
+		sta	<cx + 1
+		jsr	coll_at
+		and	#$7F
+		cmp	#7
+		beq	.kill
+		cmp	#8
+		beq	.kill
+		clc
+		rts
+.kill:		sec
+		rts
 
 ; player_hit - an enemy hits Rastan. A = knockback direction (1 right, $FF left).
 ; Ignored while invulnerable or already hurt.
@@ -337,6 +407,8 @@ player_hit:	ldx	<p_invuln
 		bne	.no
 		ldx	<p_state
 		cpx	#ST_HURT
+		beq	.no
+		cpx	#ST_DEAD
 		beq	.no
 		sta	<p_kdir
 		lda	<p_hp

@@ -1,6 +1,6 @@
 """Build PC Engine stage data: one composited BG layer with streamed tile patterns.
 
-usage: pce_stage.py maincpu.bin snapfile palframe seg_first seg_last outdir
+usage: pce_stage.py maincpu.bin snapfile palframe seg_first seg_last outdir [dynsnap]
 
 The arcade FG layer is composited over the BG layer locked at 1:1 scroll
 (the round's BG strips repeat to cover the FG width). Colors are quantized to
@@ -17,6 +17,10 @@ Outputs (outdir):
   stage.inc   equates (columns, window, first slot)
   palette.bin 256 words (16 palettes) in VCE format
   preview.png converted stage as the PCE would show it
+  dyncolor.inc VCE update lists for colors the arcade changes at run time
+              (from dynsnap, a run that reaches the waterfall): the waterfall
+              cycle (4 states, 8 frames each) and the sky colors that change
+              when segment 3 begins. Those colors get palette slots of their own.
 """
 import os
 import sys
@@ -67,8 +71,55 @@ def to_pce_rgb(palwords):
     return np.stack([q(r), q(g), q(b)], 1)
 
 
+# Dynamic colors: codes >= 512 are virtual colors (512 + id). DYN_REP maps an
+# id to the 9-bit color it shows first (used for packing and previews).
+DYN_REP = {}
+
+
 def unpack(k):
+    if k >= 512:
+        k = DYN_REP[k - 512]
     return ((k >> 6) & 7, (k >> 3) & 7, k & 7)
+
+
+def word9(k):
+    """9-bit packed (r<<6|g<<3|b) -> VCE word (g<<6|r<<3|b)."""
+    r, g, b = unpack(k)
+    return (g << 6) | (r << 3) | b
+
+
+def find_dynamic(snapf, used_lines):
+    """Arcade palette entries that change during play, from a run that reaches
+    the waterfall. Returns (cycle, sky, sky_col): cycle maps arcade index ->
+    4 colors (8 frames each); sky maps index -> (before, after) for a one-time
+    change, made by the arcade while it streams tile column sky_col (counted
+    from segment 0; the arcade changes the sky two columns before segment 3)."""
+    snaps = [sn for sn in read_snaps(snapf) if sn.w(0x10c002) == 3]
+    pals = np.array([np.array(sn.pal) for sn in snaps])
+    used = np.zeros(2048, bool)
+    for ln in used_lines:
+        used[ln * 16:ln * 16 + 16] = True
+    # Cycling: entries that keep changing at the end of the run.
+    late = pals[-240:]
+    ch = [int(x) for x in np.where((late != late[0]).any(0) & used)[0]]
+    cycle = {}
+    if ch:
+        t0 = next(t for t in range(1, len(late)) if (late[t, ch] != late[t - 1, ch]).any())
+        for x in ch:
+            seq = [int(late[t0 + 8 * k, x]) for k in range(4)]
+            assert all(late[t0 + 32 + 8 * k, x] == seq[k] for k in range(4)), 'cycle is not 4 x 8 frames'
+            cycle[x] = seq
+    # One-time changes to colors already in use (not the initial load from 0).
+    sky, sky_col = {}, None
+    for i in range(1, len(pals)):
+        d = [int(x) for x in np.where((pals[i] != pals[i - 1]) & used)[0]
+             if x not in cycle and pals[i - 1][x] != 0 and (pals[i:, x] == pals[i][x]).all()]
+        if d:
+            sky = {x: (int(pals[i - 1][x]), int(pals[i][x])) for x in d}
+            sn = snaps[i]
+            sky_col = sn.w(0x10c13e) * 64 + sn.w(0x10d0cc) * 4 + sn.w(0x10d0ca)
+            break
+    return cycle, sky, sky_col
 
 
 def ccost(a, b):
@@ -129,11 +180,30 @@ def main():
     tiles = decode_packed(load_region(ROMDIR, 'pc080sn'), 8, 8)
     pal = next(s.pal for s in read_snaps(snapf) if s.frame == palframe)
     rgb = to_pce_rgb(np.array(pal))                      # [2048, 3]
+    as9 = lambda w: int((lambda c: (c[0] << 6) | (c[1] << 3) | c[2])(to_pce_rgb(np.array([w]))[0]))
 
     idx = arcade_pixels(rom, tiles, seg0, seg1)           # [64, W, 8, 8]
     W = idx.shape[1]
     px = rgb[idx]                                         # [64, W, 8, 8, 3]
     code = (px[..., 0] << 6) | (px[..., 1] << 3) | px[..., 2]   # r<<6|g<<3|b packed key
+
+    # Dynamic colors become virtual colors with slots of their own.
+    cycle, sky, sky_col = ({}, {}, None)
+    if len(sys.argv) > 7:
+        cycle, sky, sky_col = find_dynamic(sys.argv[7], sorted(set((np.unique(idx) // 16).tolist())))
+    dyn_ids = {}                  # arcade index -> id ; id -> states (9-bit)
+    dyn_states = []
+    for x, seq in list(cycle.items()) + list(sky.items()):
+        st = tuple(as9(w) for w in seq)
+        if st not in dyn_states:
+            dyn_states.append(st)
+        dyn_ids[x] = dyn_states.index(st)
+    for i, st in enumerate(dyn_states):
+        DYN_REP[i] = st[0] if len(st) == 2 else st[0]
+    for x, i in dyn_ids.items():
+        code[idx == x] = 512 + i
+    print(f'dynamic colors: {len(cycle)} cycling entries, {len(sky)} sky entries (at column {sky_col}), '
+          f'{len(dyn_states)} virtual colors')
     # shared color 0 = most frequent color
     vals, counts = np.unique(code, return_counts=True)
     color0 = int(vals[np.argmax(counts)])
@@ -163,10 +233,16 @@ def main():
     pat_of = []
     for t, pi in zip(uniq, assign):
         cols = pal_rgb[pi]
+        keys = [color0] + list(pals[pi])
         c = np.array([unpack(int(v)) for v in t])
         d = cdist(c, cols)
+        virt = np.array([k >= 512 for k in keys])
+        d[:, virt] = 1e9                       # nothing maps onto a dynamic slot...
+        for j, v in enumerate(t):
+            if int(v) in keys:                 # ...except that exact color
+                d[j] = 1e9
+                d[j, keys.index(int(v))] = 0
         pix = d.argmin(1)
-        pix[t == color0] = 0
         pat_of.append((pi, pix.astype(np.uint8).tobytes()))
     patterns = {}
     tile_pat = np.zeros(len(uniq), np.int32)
@@ -257,6 +333,30 @@ def main():
         for r, g, b in cols:
             vce += ((g << 6) | (r << 3) | b).to_bytes(2, 'little')
     open(f'{out}/palette.bin', 'wb').write(vce)
+
+    # VCE update lists: entries (address, color) for every slot holding a virtual color.
+    slots = {}
+    for pi in range(len(pals)):
+        for si, k in enumerate([color0] + list(pals[pi])):
+            if k >= 512 and (si > 0 or pi == 0):
+                slots.setdefault(k - 512, []).append(pi * 16 + si)
+
+    def vce_list(label, pairs):
+        lines = [f'{label}:\t\tdb\t{len(pairs)}']
+        for a, c in pairs:
+            lines.append(f'\t\tdw\t${a:03X}, ${c:03X}')
+        return '\n'.join(lines) + '\n'
+    with open(f'{out}/dyncolor.inc', 'w') as f:
+        f.write('; Generated by tools/pce_stage.py: run-time BG color changes.\n')
+        col = sky_col - seg0 * 64 if sky_col is not None and 0 <= sky_col - seg0 * 64 < W else 0xFFFF
+        f.write(f'DYN_SKY_COLUMN\t= ${col:04X}\t; streaming this column switches the sky\n')
+        for s_ in range(4):
+            pairs = [(a, word9(dyn_states[i][s_])) for i in slots if len(dyn_states[i]) == 4 for a in slots[i]]
+            f.write(vce_list(f'dyn_cycle{s_}', pairs))
+        for s_, name in ((0, 'dyn_sky_a'), (1, 'dyn_sky_b')):
+            pairs = [(a, word9(dyn_states[i][s_])) for i in slots if len(dyn_states[i]) == 2 for a in slots[i]]
+            f.write(vce_list(name, pairs))
+    print(f'dynamic slots: ' + ', '.join(f'{i}:{len(v)}' for i, v in sorted(slots.items())))
     with open(f'{out}/stage.inc', 'w') as f:
         f.write(f'STAGE_COLUMNS = {W}\nSTAGE_WINDOW = {WINDOW}\nSTAGE_BANKS = {(len(blob) + 8191) // 8192}\n')
 

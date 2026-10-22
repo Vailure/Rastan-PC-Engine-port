@@ -71,6 +71,9 @@ core_main:	call	init_screen
 		inc	<loop_cnt + 1
 !:
 		jsr	set_scroll_regs		; Show this frame's position.
+	.if	!CAMERA_TEST
+		jsr	dyn_update		; Waterfall cycle, sky change (VBLANK).
+	.endif
 	.if	CAMERA_TEST
 		jsr	read_input		; Test build: the pad moves the camera.
 		jsr	stream_ahead
@@ -109,6 +112,7 @@ stage_start:	call	set_dspoff
 	.else
 		jsr	player_init_pos
 		jsr	enemies_reset
+		jsr	dyn_reset
 		jsr	camera_update
 		jsr	set_scroll_regs
 		jsr	player_draw
@@ -419,6 +423,7 @@ init_screen	.proc
 		include	"player.asm"
 		include	"enemies.asm"
 		include	"hud.asm"
+		include	"dyncolor.asm"
 
 ; ---------------------------------------------------------------------------
 ; Data.

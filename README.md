@@ -30,6 +30,8 @@ from the ROMs (`*.bin`, snapshots, renders, disassembly) is git-ignored.
 | `src/player.asm` | Rastan: states, movement, collision, ropes, damage, camera, sprite streaming |
 | `src/enemies.asm` | Stage 1 lizardmen |
 | `src/hud.asm`, `tools/pce_hud.py` | HUD from the arcade's HUD sprites |
+| `src/dyncolor.asm` | Waterfall color cycle and the sky change (VCE lists from `pce_stage.py`) |
+| `tools/test_effects.py` | Checks the waterfall cycle, sky switch, hazards and death |
 | `tools/pce_enemies.py`, `tools/enemy_capture.py` | Enemy poses from the arcade's object slots → PCE sprites |
 | `tools/test_enemies.py` | Headless checks for hits, kills and frame budget |
 | `sim/` | Headless Rastan main-CPU simulator (Musashi 68000) and a linear disassembler |
@@ -129,6 +131,18 @@ hit costs 12. It drains a unit every 2 frames, as in the arcade, and the icon fl
 It takes SATB entries 0-6, so it draws in front of everything, as 7 sprites (four of them 32x16). The lives digit shows
 spares, as in the arcade (3 lives shows "2").
 
+**Waterfall and run-time colors** (`src/dyncolor.asm`; `tools/pce_stage.py` with `build/waterfall.snp`):
+the arcade cycles entries 14/15 of FG palettes 26-29 through three teal shades, 8 frames a step,
+with 4 phase patterns, so the water flows. It also changes 5 sky colors once, while streaming the column before
+segment 3 (the dusk sky). The converter finds both automatically from a bot run that reaches the waterfall. The
+changing colors get palette slots of their own: 6 slots for the cycle, 35 for the sky. It emits VCE update lists,
+and the engine applies them in vblank.
+
+**Hazards** (arcade `$054D84`): collision code 7 and 8 tiles kill Rastan (the waterfall's lip and its pool), and
+code 6 (water) drains 32/12288 health a frame. Health is now kept in bar units, 48 for 12288, so a lizardman hit is
+12 units and water drains one unit every 8 frames. Deaths play the arcade's death animation (9 poses, 57 frames,
+captured from the bot's death on the waterfall), then cost a life.
+
 All VDC register sequences now run with interrupts held off. The core library's vblank handler
 restores the VDC register select from its `vdc_reg` shadow, which direct `st0` selects don't update.
 An interrupt in the middle of an upload sent the rest of it to the wrong register.
@@ -179,7 +193,8 @@ The headless runner is built with `tools/tgrun/build.sh`, after running `make` i
 - [x] Stage 1 scrolling ROM, verified pixel-exact against the converter in the headless emulator
 - [ ] Per-round palettes for rounds 2-6. Needs a full playthrough; the bot still dies in pits, and
       `$10D2A6` is only a *candidate* health counter.
-- [ ] Palette cycling (arcade BG palette 2 animates)
+- [x] Run-time colors: waterfall cycle and the segment 3 sky change
+- [x] Hazards: waterfall lip / deadly tiles (codes 7, 8), water drain (code 6), death animation
 - [ ] Data compression (metatiles, LZ)
 - [x] Rastan (approximate): walk, crouch, attacks, jumps, ropes, collision, camera
 - [ ] Rastan (exact): translate the arcade player code (interpreter done and verified)

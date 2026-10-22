@@ -49,21 +49,21 @@ def run(frames, args):
 r = run(900, [])
 hps = [x['hp'] for x in r[10:]]
 drops = [a - b for a, b in zip(hps, hps[1:]) if b < a]
-check('passive Rastan is hit for 3 health each time', len(drops) >= 3 and set(drops) == {3}, f'drops {drops[:6]}')
-restart = next((i for i in range(11, len(hps)) if hps[i] == 12 and min(hps[10:i]) == 0), None)
+check('passive Rastan is hit for 12 units (arcade 3072) each time', len(drops) >= 3 and set(drops) == {12}, f'drops {drops[:6]}')
+restart = next((i for i in range(11, len(hps)) if hps[i] == 48 and min(hps[10:i]) == 0), None)
 check('fourth hit kills him and the stage restarts', restart is not None, f'restart at frame {restart}')
 
 # HUD: the bar drains a unit every 2 frames to 4 units per health point (arcade:
 # 48 units for 12288); a death costs a life and refills the bar.
 hp_all = [x['hp'] for x in r]
-first = next(i for i in range(11, len(r)) if hp_all[i] < 12)
+first = next(i for i in range(11, len(r)) if hp_all[i] < 48)
 bars = [x['bar'] for x in r[first:first + 40]]
 steps = [a - b for a, b in zip(bars, bars[1:])]
-settle = bars.index(hp_all[first] * 4)
+settle = bars.index(hp_all[first])
 check('health bar drains 1 unit / 2 frames to the new value', set(steps) <= {0, 1} and abs(settle - 24) <= 1,
       f'{bars[0]} -> {bars[settle]} in {settle} frames')
 dead = next(i for i in range(first, len(r)) if hp_all[i] == 0)
-back = next(i for i in range(dead, len(r)) if hp_all[i] == 12)
+back = next(i for i in range(dead, len(r)) if hp_all[i] == 48)
 check('a death costs a life and refills the bar', r[back]['lives'] == r[first]['lives'] - 1 and r[back]['bar'] == 48,
       f"lives {r[first]['lives']} -> {r[back]['lives']}, bar {r[back]['bar']}")
 
@@ -74,7 +74,7 @@ for f in range(100, 1500, 30):
 r = run(1500, args)
 kills = sum(1 for a, b in zip(r, r[1:]) for i in range(3) if a['es'][i] != 4 and b['es'][i] == 4)
 check('swinging kills lizardmen', kills >= 10, f'{kills} kills')
-check('swinging keeps him unhurt', min(x['hp'] for x in r[20:]) == 12, f"min hp {min(x['hp'] for x in r[20:])}")
+check('swinging keeps him unhurt', min(x['hp'] for x in r[20:]) == 48, f"min hp {min(x['hp'] for x in r[20:])}")
 
 # 3. Frame budget with enemies on screen while walking and fighting.
 args = [60, 1500, '04']

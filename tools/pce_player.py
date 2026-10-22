@@ -1,6 +1,6 @@
 """Build Rastan's PC Engine sprite data and stage collision from the arcade program.
 
-usage: pce_player.py maincpu.bin actions.snp attract.snp thrusts.snp lizard.snp outdir
+usage: pce_player.py maincpu.bin actions.snp attract.snp thrusts.snp lizard.snp waterfall.snp outdir
 
 Poses are captured from the arcade's own player sprite list ($10D1B2, 8-byte entries
 [attr, y, code, x]) at known frames of sim/scripts/actions.txt, relative to the
@@ -43,6 +43,9 @@ POSES_ATTRACT = {'climb1': 4455, 'climb2': 4459, 'climb3': 4463, 'climb4': 4493}
 POSES_THRUSTS = {'dthr1': 532, 'dthr2': 536, 'dthr3': 540, 'uthr': 731}
 # Being hit by a lizardman (sim/scripts/lizard.txt, passive Rastan): 3 poses, 23 frames.
 POSES_HURT = {'hurt1': 667, 'hurt2': 674, 'hurt3': 682}
+# Dying (arcade state 8), from the bot's death on the first waterfall's lip: 9 poses, 57 frames.
+POSES_DEATH = {'die1': 1658, 'die2': 1662, 'die3': 1666, 'die4': 1674, 'die5': 1682,
+               'die6': 1690, 'die7': 1698, 'die8': 1706, 'die9': 1714}
 
 # Animations: (pose, frames) lists measured from the arcade (see README).
 # A duration of 0 holds the pose forever.
@@ -60,6 +63,8 @@ ANIMS = {
     'dthrust': [('dthr1', 4), ('dthr2', 4), ('dthr3', 0)],
     'uthrust': [('uthr', 8)],
     'hurt': [('hurt1', 7), ('hurt2', 8), ('hurt3', 8)],
+    'death': [('die1', 4), ('die2', 4), ('die3', 8), ('die4', 8), ('die5', 8), ('die6', 8),
+              ('die7', 8), ('die8', 8), ('die9', 1)],
     'jatk': [('jatk1', 1), ('jatk2', 1), ('jatk3', 1), ('jatk4', 2), ('jatk5', 10),
              ('jatk4', 2), ('jatk3', 2), ('jatk2', 2), ('jatk1', 2)],
 }
@@ -90,7 +95,7 @@ def to9(rgb):
 
 def main():
     rom = open(sys.argv[1], 'rb').read()
-    snapf, attractf, thrustf, lizardf, out = sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6]
+    snapf, attractf, thrustf, lizardf, waterf, out = sys.argv[2:8]
     os.makedirs(out, exist_ok=True)
     spr = decode_packed(load_region(ROMDIR, 'pc090oj'), 16, 16).astype(int)
     act = capture(snapf, POSES)
@@ -101,10 +106,12 @@ def main():
     caps.update({n: thr[f] for n, f in POSES_THRUSTS.items()})
     hurt = capture(lizardf, POSES_HURT)
     caps.update({n: hurt[f] for n, f in POSES_HURT.items()})
-    all_poses = list(POSES) + list(POSES_ATTRACT) + list(POSES_THRUSTS) + list(POSES_HURT)
+    die = capture(waterf, POSES_DEATH)
+    caps.update({n: die[f] for n, f in POSES_DEATH.items()})
+    all_poses = list(POSES) + list(POSES_ATTRACT) + list(POSES_THRUSTS) + list(POSES_HURT) + list(POSES_DEATH)
 
     # Compose each pose into an RGB image around the anchor (anchor at (64, 96)).
-    AX, AY, W, H = 64, 96, 128, 128
+    AX, AY, W, H = 96, 112, 192, 176    # canvas around the anchor (death sparkles spread wide)
     imgs = {}
     for name in all_poses:
         pieces, pal, colbank = caps[name]
@@ -166,7 +173,7 @@ def main():
         blob_records.append(rec)
         pv = np.array([[0, 0, 0]] + [list(c) for c in pal9], int)[idx] * 255 // 7
         pv[~m] = (40, 40, 60)
-        preview.append(pv[32:128, 24:120])
+        preview.append(pv[48:144, 56:152])
     table_size = 3 * len(blob_records)
     blob, offs = bytearray(), []
     for r in blob_records:

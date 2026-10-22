@@ -96,7 +96,7 @@ hud_reset:	lda	#$FF			; Force a full redraw.
 		sta	<hud_drawn
 		sta	<hud_icon
 		sta	<hud_lives_dr
-		lda	#PLAYER_HP * 4
+		lda	#PLAYER_HP
 		sta	<hud_disp
 		rts
 
@@ -161,10 +161,8 @@ hud_copy:	phx
 
 hud_update:	php
 		sei
-		; Bar: drain toward p_hp * 4 a unit every 2 frames, refill at once.
+		; Bar: drain toward p_hp a unit every 2 frames, refill at once.
 		lda	<p_hp
-		asl	a
-		asl	a
 		cmp	<hud_disp
 		bcs	.set			; target >= shown: show it now
 		inc	<hud_tick

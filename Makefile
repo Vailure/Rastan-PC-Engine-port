@@ -31,8 +31,8 @@ $(BUILD)/bot1.txt: tools/make_bot.py
 $(BUILD)/bot1.snp: sim/sim sim/maincpu.bin $(BUILD)/bot1.txt
 	sim/sim sim/maincpu.bin $(BUILD)/bot1.txt $@ 20
 
-$(STAGE)/stage.bin: tools/pce_stage.py tools/fgmap.py tools/bgmap.py sim/maincpu.bin $(BUILD)/bot1.snp
-	cd tools && python3 pce_stage.py ../sim/maincpu.bin ../$(BUILD)/bot1.snp $(PALFRAME) 0 0x16 ../$(STAGE)
+$(STAGE)/stage.bin: tools/pce_stage.py tools/fgmap.py tools/bgmap.py sim/maincpu.bin $(BUILD)/bot1.snp $(BUILD)/waterfall.snp
+	cd tools && python3 pce_stage.py ../sim/maincpu.bin ../$(BUILD)/bot1.snp $(PALFRAME) 0 0x16 ../$(STAGE) ../$(BUILD)/waterfall.snp
 
 # Rastan's poses are captured from the arcade program running a scripted
 # sequence of actions (walk, crouch, attacks, jumps).
@@ -55,8 +55,17 @@ $(BUILD)/lizard.snp: sim/sim sim/maincpu.bin sim/scripts/lizard.txt
 	@mkdir -p $(BUILD)
 	sim/sim sim/maincpu.bin sim/scripts/lizard.txt $@ 1
 
-$(PLAYER)/player.bin: tools/pce_player.py tools/fgmap.py sim/maincpu.bin $(BUILD)/actions.snp $(BUILD)/attract.snp $(BUILD)/thrusts.snp $(BUILD)/lizard.snp
-	cd tools && python3 pce_player.py ../sim/maincpu.bin ../$(BUILD)/actions.snp ../$(BUILD)/attract.snp ../$(BUILD)/thrusts.snp ../$(BUILD)/lizard.snp ../$(PLAYER)
+# The bot (health held) runs to the first waterfall and dies on its lip: the
+# death animation, waterfall palette cycle and the segment 3 sky come from here.
+$(BUILD)/waterfall.txt: tools/make_bot.py
+	@mkdir -p $(BUILD)
+	python3 tools/make_bot.py $@ 1720
+
+$(BUILD)/waterfall.snp: sim/sim sim/maincpu.bin $(BUILD)/waterfall.txt
+	sim/sim sim/maincpu.bin $(BUILD)/waterfall.txt $@ 1
+
+$(PLAYER)/player.bin: tools/pce_player.py tools/fgmap.py sim/maincpu.bin $(BUILD)/actions.snp $(BUILD)/attract.snp $(BUILD)/thrusts.snp $(BUILD)/lizard.snp $(BUILD)/waterfall.snp
+	cd tools && python3 pce_player.py ../sim/maincpu.bin ../$(BUILD)/actions.snp ../$(BUILD)/attract.snp ../$(BUILD)/thrusts.snp ../$(BUILD)/lizard.snp ../$(BUILD)/waterfall.snp ../$(PLAYER)
 
 ENEMIES    := $(BUILD)/enemies
 $(ENEMIES)/enemies.bin: tools/pce_enemies.py tools/enemy_capture.py $(BUILD)/lizard.snp
@@ -66,7 +75,7 @@ $(ENEMIES)/enemies.bin: tools/pce_enemies.py tools/enemy_capture.py $(BUILD)/liz
 $(BUILD)/hud/hud.bin: tools/pce_hud.py $(BUILD)/actions.snp
 	cd tools && python3 pce_hud.py ../$(BUILD)/actions.snp ../$(BUILD)/hud
 
-GAME_DEPS  := src/main.asm src/player.asm src/enemies.asm src/hud.asm $(STAGE)/stage.bin $(PLAYER)/player.bin $(BUILD)/enemies/enemies.bin $(BUILD)/hud/hud.bin
+GAME_DEPS  := src/main.asm src/player.asm src/enemies.asm src/hud.asm src/dyncolor.asm $(STAGE)/stage.bin $(PLAYER)/player.bin $(BUILD)/enemies/enemies.bin $(BUILD)/hud/hud.bin
 
 $(BUILD)/rastan.pce: $(GAME_DEPS)
 	@mkdir -p $(BUILD)/opt
@@ -91,6 +100,7 @@ test: $(BUILD)/camtest.pce $(BUILD)/noenemy.pce $(BUILD)/rastan.pce tools/tgrun/
 	PAD=46 python3 tools/test_scroll.py $(BUILD)/camtest.pce $(STAGE)/preview.png $(BUILD)/test_down 80 120 160 300
 	python3 tools/test_player.py $(BUILD)/noenemy.pce
 	python3 tools/test_enemies.py $(BUILD)/rastan.pce
+	python3 tools/test_effects.py $(BUILD)/noenemy.pce $(STAGE)/dyncolor.inc
 
 tools/tgrun/tgrun: tools/tgrun/tgrun.c
 	HUC=$(abspath $(HUC)) tools/tgrun/build.sh
