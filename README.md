@@ -182,8 +182,12 @@ Not done yet: slopes, waterfall currents, the other collision codes, rope attack
 **HUD** (`src/hud.asm`, `tools/pce_hud.py`): the arcade draws it with sprites, and so does the port, using
 the arcade's own cells. The bar is 6 cells x 8 levels (code 981 - level), 48 units for 12288 health, so a lizardman
 hit costs 12. It drains a unit every 2 frames, as in the arcade, and the icon flashes while Rastan is invulnerable.
-It takes SATB entries 0-6, so it draws in front of everything, as 7 sprites (four of them 32x16). The lives digit shows
-spares, as in the arcade (3 lives shows "2").
+The lives digit shows spares, as in the arcade (3 lives shows "2").
+The top line is the arcade's too: "1UP" and "HIGH SCORE" with the numbers below (score `$10C11C`, high score
+`$10C140`: 3 BCD bytes in hundreds, low byte first; the high score starts at 273,100). The labels are static cells;
+when a number changes, only the digit rows of those cells are rewritten from an 8x8 font taken from the arcade's digit
+cells. Lizardmen are worth 300, blue throwers and bats 200 (measured from score changes in the bot runs). The HUD
+takes SATB entries 0-11, so it draws in front of everything (12 sprites, most of them 32x16).
 
 **Waterfall and run-time colors** (`src/dyncolor.asm`; `tools/pce_stage.py` with `build/waterfall.snp`):
 the arcade cycles entries 14/15 of FG palettes 26-29 through three teal shades, 8 frames a step,
@@ -263,7 +267,7 @@ The headless runner is built with `tools/tgrun/build.sh`, after running `make` i
 - [ ] Rastan (exact): translate the arcade player code (interpreter done and verified)
 - [x] Down thrust and up thrust (DOWN+II / UP+II in a jump)
 - [x] Stage 1 lizardmen (approximate): walk in, club attacks, knockback, death bursts; health and stage restart
-- [x] HUD: lives, icon, health bar (drains like the arcade's), ROUND 1
+- [x] HUD: lives, icon, health bar (drains like the arcade's), ROUND 1, score and high score
 - [x] Enemy spawns on the arcade's lanes, with its timing; blue club throwers
 - [x] The cave block (solid, broken by a down thrust)
 - [x] Weapons (axe, morning star, fire sword) and round 1's weapon items, with their bats

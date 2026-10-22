@@ -17,7 +17,7 @@
 
 PROP_VRAM	=	$4C00		; 16 cells after the BG tile pool ($1000-$4BFF).
 PROP_PATTERN	=	PROP_VRAM >> 5
-PROP_SATB	=	7 + 24		; 4 SATB entries after the HUD's and Rastan's.
+PROP_SATB	=	HUD_ENTRIES + 24	; 4 SATB entries after the HUD's and Rastan's.
 PROP_PAL	=	8		; Sprite palette 8 (VCE 384).
 PROP_MARGIN	=	48
 

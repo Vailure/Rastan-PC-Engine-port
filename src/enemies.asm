@@ -24,7 +24,7 @@
 NUM_EN		=	4		; The arcade keeps at most 4 walkers alive.
 NUM_BIG		=	6		; Slots 0-5: enemies (15-cell buffers),
 NUM_OBJ		=	NUM_BIG + 8	; 6-13: projectiles (2-cell buffers).
-EN_SATB_FIRST	=	7 + 24 + 4	; SATB entries after the HUD's 7, Rastan's 24, the props' 4.
+EN_SATB_FIRST	=	HUD_ENTRIES + 24 + 4	; SATB entries after the HUD's, Rastan's 24, the props' 4.
 EN_VRAM		=	$5C00		; Object cell buffers, $5C00-$767F.
 BIG_CELLS	=	15
 SMALL_CELLS	=	2
@@ -331,6 +331,9 @@ enemy_think:	lda	e_kind, x
 		lda	#ES_DYING
 		sta	e_state, x
 		ldy	e_kind, x
+		lda	kind_score, y		; Points (hundreds, BCD).
+		jsr	score_add
+		ldy	e_kind, x
 		lda	kind_death_l, y
 		pha
 		lda	kind_death_h, y
@@ -489,6 +492,7 @@ kind_retreat_h:	db	>anim_liz_walk, >anim_blue_walk2, 0
 kind_death_l:	db	<anim_liz_death, <anim_blue_death, 0
 kind_death_h:	db	>anim_liz_death, >anim_blue_death, 0
 kind_range:	db	ATTACK_RANGE, 88, 0, 0, 0
+kind_score:	db	$03, $02, 0, 0, $02	; Arcade: lizardman 300, blue thrower 200, bat 200.
 kind_bank:	db	GRP_SECT1_BANK, GRP_SECT1_BANK, GRP_SECT1_BANK, GRP_ITEMS_BANK, GRP_ITEMS_BANK
 kind_ptab_l:	db	<grp_sect1_ptab, <grp_sect1_ptab, <grp_sect1_ptab, <grp_items_ptab, <grp_items_ptab
 kind_ptab_h:	db	>grp_sect1_ptab, >grp_sect1_ptab, >grp_sect1_ptab, >grp_items_ptab, >grp_items_ptab

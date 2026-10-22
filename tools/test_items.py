@@ -1,4 +1,4 @@
-"""test_items.py rastan.pce god.pce noenemy.pce : weapons, weapon items and bats, headless.
+"""test_items.py rastan.pce god.pce noenemy.pce : weapons, weapon items, bats and the score, headless.
 
 Arcade values (sim/scripts/item*.txt, see README): the cave's axe appears when
 Rastan reaches x 840 (164 px left of it), its bat 20 px below it. Touching the
@@ -37,7 +37,7 @@ ITEM, BAT = 4, 5
 CAVE = [60, 448, '04', 450, 453, '40', 460, 463, '82', 463, 540, '02', 560, 655, '04']
 # Debug menu: ENEMIES OFF (walkers only; items still come), then the cave route.
 MENU_OFF = [50, 50, '10', 56, 56, '02', 62, 62, '02', 68, 68, '40', 76, 76, '10']
-VARS = {'p_weapon': 1, 'p_wtime': 2, 'p_hp': 1, 'p_x': 2, 'p_y': 2, 'items_done': 1}
+VARS = {'p_weapon': 1, 'p_wtime': 2, 'p_hp': 1, 'p_x': 2, 'p_y': 2, 'items_done': 1, 'score': 3, 'hiscore': 3}
 OBJ = {'e_state': 14, 'e_range': 14, 'e_xl': 14, 'e_xh': 14, 'e_yl': 14, 'e_yh': 14}
 
 
@@ -88,6 +88,21 @@ for f in range(1100, 1300, 25):
 r = run(rom, 1300, keys)
 gone = next((i for i in range(1100, 1300) if not r[i]['e_state'][BAT]), None)
 check('a swing kills the bat', gone is not None, f'frame {gone}')
+check('a bat is worth 200', gone and r[gone]['score'][0] - r[gone - 1]['score'][0] == 2,
+      f"score {r[gone - 1]['score']} -> {r[gone]['score'] if gone else None} (hundreds, BCD)")
+
+# Score: lizardmen are worth 300 (walking right, swinging every 20 frames).
+keys = [60, 1000, '04'] + sum([[f, f + 1, '80'] for f in range(80, 1000, 20)], [])
+r = run(rom, 1000, keys)
+def bcd(v):
+    return int(''.join(f'{b:02x}' for b in reversed(v))) * 100
+
+
+deaths = sum(1 for i in range(1, len(r)) for k in range(4)
+             if r[i]['e_state'][k] == 4 and r[i - 1]['e_state'][k] != 4)
+check('each lizardman killed adds 300', deaths >= 5 and bcd(r[-1]['score']) == 300 * deaths,
+      f"{deaths} kills, score {bcd(r[-1]['score'])}")
+check('the high score starts at 273100', bcd(r[-1]['hiscore']) == 273100, f"{bcd(r[-1]['hiscore'])}")
 
 # 4. A death brings the items back.
 r = run(rom, 1600, MENU_OFF + shift(CAVE, 100))

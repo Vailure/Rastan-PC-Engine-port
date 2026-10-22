@@ -157,10 +157,11 @@ item_think:	jsr	body_vs_enemy
 ; ---------------------------------------------------------------------------
 ; bat_think - X = bat.
 
-bat_think:	jsr	sword_vs_enemy		; One hit kills it.
+bat_think:	jsr	sword_vs_enemy		; One hit kills it: 200 points.
 		bcc	!+
 		stz	e_state, x
-		rts
+		lda	#$02
+		jmp	score_add
 !:		lda	e_struck, x		; Bite cooldown.
 		beq	!+
 		dec	e_struck, x
