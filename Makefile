@@ -12,7 +12,7 @@ BUILD      := build
 STAGE      := $(BUILD)/stage1
 PLAYER     := $(BUILD)/player
 
-export PCE_INCLUDE := $(abspath $(STAGE)):$(abspath $(PLAYER)):$(abspath $(BUILD)/enemies):$(abspath src):$(abspath $(HUC))/include/hucc
+export PCE_INCLUDE := $(abspath $(STAGE)):$(abspath $(PLAYER)):$(abspath $(BUILD)/enemies):$(abspath $(BUILD)/hud):$(abspath src):$(abspath $(HUC))/include/hucc
 export RASTAN_ROMS := $(abspath $(ROMS))
 
 all: $(BUILD)/rastan.pce
@@ -62,20 +62,26 @@ ENEMIES    := $(BUILD)/enemies
 $(ENEMIES)/enemies.bin: tools/pce_enemies.py tools/enemy_capture.py $(BUILD)/lizard.snp
 	cd tools && python3 pce_enemies.py ../$(BUILD)/lizard.snp ../$(ENEMIES)
 
-$(BUILD)/rastan.pce: src/main.asm src/player.asm src/enemies.asm $(STAGE)/stage.bin $(PLAYER)/player.bin $(BUILD)/enemies/enemies.bin
+# HUD cells (lives, icon, health bar, ROUND) from the arcade's HUD sprites.
+$(BUILD)/hud/hud.bin: tools/pce_hud.py $(BUILD)/actions.snp
+	cd tools && python3 pce_hud.py ../$(BUILD)/actions.snp ../$(BUILD)/hud
+
+GAME_DEPS  := src/main.asm src/player.asm src/enemies.asm src/hud.asm $(STAGE)/stage.bin $(PLAYER)/player.bin $(BUILD)/enemies/enemies.bin $(BUILD)/hud/hud.bin
+
+$(BUILD)/rastan.pce: $(GAME_DEPS)
 	@mkdir -p $(BUILD)/opt
 	printf "CAMERA_TEST = 0\nNO_ENEMIES = 0\n" > $(BUILD)/opt/options.inc
 	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt):$$PCE_INCLUDE $(PCEAS) --newproc --strip -m -l 2 -S -gA --raw ../src/main.asm -o rastan.pce
 
 # Test build: the pad drives the camera directly and Rastan is not drawn.
-$(BUILD)/camtest.pce: src/main.asm src/player.asm src/enemies.asm $(STAGE)/stage.bin $(PLAYER)/player.bin $(BUILD)/enemies/enemies.bin
+$(BUILD)/camtest.pce: $(GAME_DEPS)
 	@mkdir -p $(BUILD)/opt_test
 	printf "CAMERA_TEST = 1\nNO_ENEMIES = 1\n" > $(BUILD)/opt_test/options.inc
 	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_test):$$PCE_INCLUDE $(PCEAS) --newproc --strip -l 0 --raw ../src/main.asm -o camtest.pce
 
 # Scroll the ROM through the whole stage and compare with the converter preview.
 # Test build: no enemies, for the movement checks.
-$(BUILD)/noenemy.pce: src/main.asm src/player.asm src/enemies.asm $(STAGE)/stage.bin $(PLAYER)/player.bin $(BUILD)/enemies/enemies.bin
+$(BUILD)/noenemy.pce: $(GAME_DEPS)
 	@mkdir -p $(BUILD)/opt_noen
 	printf "CAMERA_TEST = 0\nNO_ENEMIES = 1\n" > $(BUILD)/opt_noen/options.inc
 	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_noen):$$PCE_INCLUDE $(PCEAS) --newproc --strip -l 0 --raw ../src/main.asm -o noenemy.pce

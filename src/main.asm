@@ -58,6 +58,9 @@ core_main:	call	init_screen
 		tia	palette_data, VCE_CTW, 512
 
 		jsr	player_init
+	.if	!CAMERA_TEST
+		jsr	hud_init		; (the camera test compares pure BG)
+	.endif
 		jsr	enemies_init
 		jsr	stage_start
 
@@ -80,6 +83,7 @@ core_main:	call	init_screen
 		jsr	stream_ahead		; Make its columns resident.
 		jsr	player_draw		; SATB for the next frame.
 		jsr	enemies_draw
+		jsr	hud_update
 	.endif
 		bra	.frame
 
@@ -414,6 +418,7 @@ init_screen	.proc
 
 		include	"player.asm"
 		include	"enemies.asm"
+		include	"hud.asm"
 
 ; ---------------------------------------------------------------------------
 ; Data.
@@ -424,6 +429,7 @@ init_screen	.proc
 palette_data:	incbin	"palette.bin"
 sprite_palette:	incbin	"sprpal.bin"
 enemy_palettes:	incbin	"enepal.bin"
+hud_palette:	incbin	"hudpal.bin"
 
 		.bank	$10
 		.page	3
@@ -440,3 +446,7 @@ collision_data:	incbin	"collision.bin"
 		.bank	$58
 		.page	3
 enemy_cells:	incbin	"enemies.bin"
+
+		.bank	$5A
+		.page	3
+hud_cells:	incbin	"hud.bin"

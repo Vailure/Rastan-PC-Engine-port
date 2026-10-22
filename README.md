@@ -29,6 +29,7 @@ from the ROMs (`*.bin`, snapshots, renders, disassembly) is git-ignored.
 | `tools/callgraph.py` | Code reachable from a routine |
 | `src/player.asm` | Rastan: states, movement, collision, ropes, damage, camera, sprite streaming |
 | `src/enemies.asm` | Stage 1 lizardmen |
+| `src/hud.asm`, `tools/pce_hud.py` | HUD from the arcade's HUD sprites |
 | `tools/pce_enemies.py`, `tools/enemy_capture.py` | Enemy poses from the arcade's object slots → PCE sprites |
 | `tools/test_enemies.py` | Headless checks for hits, kills and frame budget |
 | `sim/` | Headless Rastan main-CPU simulator (Musashi 68000) and a linear disassembler |
@@ -122,6 +123,12 @@ weapon pickups, and leftward scrolling.
   arcade's object slots). `tools/test_enemies.py` checks hits, deaths and the frame budget.
 - `tools/player_frames.py` decodes Rastan's metasprite tables statically from the ROM, for later.
 
+**HUD** (`src/hud.asm`, `tools/pce_hud.py`): the arcade draws it with sprites, and so does the port, using
+the arcade's own cells. The bar is 6 cells x 8 levels (code 981 - level), 48 units for 12288 health, so a lizardman
+hit costs 12. It drains a unit every 2 frames, as in the arcade, and the icon flashes while Rastan is invulnerable.
+It takes SATB entries 0-6, so it draws in front of everything, as 7 sprites (four of them 32x16). The lives digit shows
+spares, as in the arcade (3 lives shows "2").
+
 All VDC register sequences now run with interrupts held off. The core library's vblank handler
 restores the VDC register select from its `vdc_reg` shadow, which direct `st0` selects don't update.
 An interrupt in the middle of an upload sent the rest of it to the wrong register.
@@ -178,7 +185,7 @@ The headless runner is built with `tools/tgrun/build.sh`, after running `make` i
 - [ ] Rastan (exact): translate the arcade player code (interpreter done and verified)
 - [x] Down thrust and up thrust (DOWN+II / UP+II in a jump)
 - [x] Stage 1 lizardmen (approximate): walk in, club attacks, knockback, death bursts; health and stage restart
-- [ ] Health bar / HUD
+- [x] HUD: lives, icon, health bar (drains like the arcade's), ROUND 1
 - [ ] The rest of stage 1's enemies, items, and the boss
 
 ## Licenses

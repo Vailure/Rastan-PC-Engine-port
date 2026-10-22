@@ -311,7 +311,7 @@ st_air:		bbr1	<padtrg, .no_atk	; Air attack (once per jump):
 		lda	<p_y + 1
 		cmp	#2
 		bcc	!+
-		jmp	stage_start
+		jmp	player_died
 !:		rts
 
 ; --- Hit: knocked back 1px/frame for the hurt animation, then stand (or die).
@@ -327,7 +327,7 @@ st_hurt:	lda	<p_kdir
 		beq	.done
 		lda	<p_hp
 		bne	!+
-		jmp	stage_start		; Out of health: restart the stage.
+		jmp	player_died		; Out of health: restart the stage.
 !:		jmp	enter_stand
 .done:		rts
 
@@ -1141,9 +1141,9 @@ player_draw:	php				; VDC writes: IRQ held off (see stream_column).
 		stz	<p_ncells
 !:		; SATB entries 0..ncells-1, then clear what the last pose used.
 		st0	#VDC_MAWR
-		lda	#<SATB_ADDR
+		lda	#<(SATB_ADDR + HUD_ENTRIES * 4)	; After the HUD's entries.
 		sta	VDC_DL
-		lda	#>SATB_ADDR
+		lda	#>(SATB_ADDR + HUD_ENTRIES * 4)
 		sta	VDC_DH
 		st0	#VDC_VWR
 		; base pattern = buffer >> 5

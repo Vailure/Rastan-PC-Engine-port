@@ -28,7 +28,7 @@ for ln in open(LST):
     if m:
         sym[m.group(2)] = int(m.group(1), 16) - 0x2000
 LO = 0
-HI = max(sym['e_state'] + 3, sym['loop_cnt'] + 2)
+HI = max(sym['e_state'] + 3, sym['loop_cnt'] + 2, sym['lives'] + 1, sym['hud_disp'] + 1)
 
 
 def run(frames, args):
@@ -40,7 +40,8 @@ def run(frames, args):
         b = [int(v, 16) for v in r.split()]
         rows.append(dict(frame=int(f), hp=b[sym['p_hp']], x=b[sym['p_x']] | b[sym['p_x'] + 1] << 8,
                          es=b[sym['e_state']:sym['e_state'] + 3],
-                         loop=b[sym['loop_cnt']] | b[sym['loop_cnt'] + 1] << 8))
+                         loop=b[sym['loop_cnt']] | b[sym['loop_cnt'] + 1] << 8,
+                         lives=b[sym['lives']], bar=b[sym['hud_disp']]))
     return rows
 
 
@@ -51,6 +52,20 @@ drops = [a - b for a, b in zip(hps, hps[1:]) if b < a]
 check('passive Rastan is hit for 3 health each time', len(drops) >= 3 and set(drops) == {3}, f'drops {drops[:6]}')
 restart = next((i for i in range(11, len(hps)) if hps[i] == 12 and min(hps[10:i]) == 0), None)
 check('fourth hit kills him and the stage restarts', restart is not None, f'restart at frame {restart}')
+
+# HUD: the bar drains a unit every 2 frames to 4 units per health point (arcade:
+# 48 units for 12288); a death costs a life and refills the bar.
+hp_all = [x['hp'] for x in r]
+first = next(i for i in range(11, len(r)) if hp_all[i] < 12)
+bars = [x['bar'] for x in r[first:first + 40]]
+steps = [a - b for a, b in zip(bars, bars[1:])]
+settle = bars.index(hp_all[first] * 4)
+check('health bar drains 1 unit / 2 frames to the new value', set(steps) <= {0, 1} and abs(settle - 24) <= 1,
+      f'{bars[0]} -> {bars[settle]} in {settle} frames')
+dead = next(i for i in range(first, len(r)) if hp_all[i] == 0)
+back = next(i for i in range(dead, len(r)) if hp_all[i] == 12)
+check('a death costs a life and refills the bar', r[back]['lives'] == r[first]['lives'] - 1 and r[back]['bar'] == 48,
+      f"lives {r[first]['lives']} -> {r[back]['lives']}, bar {r[back]['bar']}")
 
 # 2. Swinging every 30 frames: lizardmen die in one hit, Rastan stays healthy.
 args = []

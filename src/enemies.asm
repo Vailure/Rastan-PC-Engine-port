@@ -14,7 +14,7 @@
 		include	"enemies.inc"
 
 NUM_EN		=	3
-EN_SATB_FIRST	=	24		; SATB entries after Rastan's 24.
+EN_SATB_FIRST	=	7 + 24		; SATB entries after the HUD's 7 and Rastan's 24.
 EN_VRAM		=	$5C00		; Resident enemy cells.
 EN_PATTERN	=	EN_VRAM >> 5
 
