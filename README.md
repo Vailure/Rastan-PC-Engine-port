@@ -30,6 +30,8 @@ from the ROMs (`*.bin`, snapshots, renders, disassembly) is git-ignored.
 | `src/player.asm` | Rastan: states, movement, collision, ropes, damage, camera, sprite streaming |
 | `src/enemies.asm` | Stage 1 lizardmen |
 | `src/hud.asm`, `tools/pce_hud.py` | HUD from the arcade's HUD sprites |
+| `src/debug.asm` | Checkpoints (death restarts, warps) and the debug menu |
+| `tools/test_debug.py` | Checks the menu, warps, invincibility and checkpoint restarts |
 | `src/dyncolor.asm` | Waterfall color cycle and the sky change (VCE lists from `pce_stage.py`) |
 | `tools/test_effects.py` | Checks the waterfall cycle, sky switch, hazards and death |
 | `tools/pce_enemies.py`, `tools/enemy_capture.py` | Enemy poses from the arcade's object slots → PCE sprites |
@@ -61,7 +63,22 @@ The build:
 - II: attack, standing or crouched; in a jump, DOWN+II is the down thrust and UP+II the up thrust
 - UP: grab a rope; UP and DOWN climb it, and I jumps off
 
-The camera only scrolls forward. Falling off the bottom of the map restarts the stage.
+The camera only scrolls forward. A death restarts at the last checkpoint reached, as in the arcade.
+
+**Debug menu:** SELECT opens it and freezes the game (RUN held + SELECT is still the core's soft reset).
+UP/DOWN pick a line, LEFT/RIGHT change a value, I applies, SELECT or II closes.
+
+| Line | What it does |
+|---|---|
+| Warp to checkpoint 0-5 | Restart at one of the arcade's round 1 checkpoints (segments 0, 4, 8, 12, 16, 19) |
+| Invincible | Enemies, water and deadly tiles do no harm (falling off the map still kills) |
+| Enemies | On/off |
+| Refill health | Full health bar |
+| Lives | 1-9 |
+| Slow motion | Game logic at 1/2, 1/4 or 1/8 speed |
+| Resume | Close the menu |
+
+The header shows Rastan's world position and the current checkpoint.
 
 ## Simulator quick start
 
@@ -163,6 +180,15 @@ code 6 (water) drains 32/12288 health a frame. Health is now kept in bar units, 
 12 units and water drains one unit every 8 frames. Deaths play the arcade's death animation (9 poses, 57 frames,
 captured from the bot's death on the waterfall), then cost a life.
 
+**Checkpoints and the debug menu** (`src/debug.asm`, bank 5 mapped in MPR2): the arcade's continue table
+(`$5073A`) restarts round 1 at segments 0, 4, 8, 12, 16 and 19. The arcade's camera and Rastan's position at each
+were measured by starting the arcade there. A restart fast-forwards the column stream from column 0 with the display
+off (about 1.6 s for the last checkpoint), so the VRAM tile cache ends up exactly as if the stage had been played that
+far, with no extra data. The menu draws into the tile map under the screen, with a font in the enemy sprite cells.
+Closing it re-streams the 35 resident columns: every pattern a resident column uses is still in VRAM, so this rewrites
+the tile map exactly. `tools/test_debug.py` checks that the screen comes back pixel for pixel, the warps, invincibility,
+and that a death at the second waterfall restarts at checkpoint 2.
+
 All VDC register sequences now run with interrupts held off. The core library's vblank handler
 restores the VDC register select from its `vdc_reg` shadow, which direct `st0` selects don't update.
 An interrupt in the middle of an upload sent the rest of it to the wrong register.
@@ -224,7 +250,8 @@ The headless runner is built with `tools/tgrun/build.sh`, after running `make` i
 - [x] Enemy spawns on the arcade's lanes, with its timing; blue club throwers
 - [x] The cave block (solid, broken by a down thrust)
 - [ ] The rest of stage 1's enemies, items, and the boss
-- [ ] Restart at the arcade's checkpoints after a death (needs per-checkpoint tile preloads)
+- [x] Restart at the arcade's checkpoints after a death (stream fast-forward, no preload data)
+- [x] Debug menu (SELECT): checkpoint warp, invincible, enemies on/off, health, lives, slow motion
 
 ## Licenses
 

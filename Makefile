@@ -12,7 +12,7 @@ BUILD      := build
 STAGE      := $(BUILD)/stage1
 PLAYER     := $(BUILD)/player
 
-export PCE_INCLUDE := $(abspath $(STAGE)):$(abspath $(PLAYER)):$(abspath $(BUILD)/enemies):$(abspath $(BUILD)/hud):$(abspath $(BUILD)/props):$(abspath src):$(abspath $(HUC))/include/hucc
+export PCE_INCLUDE := $(abspath $(STAGE)):$(abspath $(PLAYER)):$(abspath $(BUILD)/enemies):$(abspath $(BUILD)/hud):$(abspath $(BUILD)/props):$(abspath $(BUILD)/debug):$(abspath src):$(abspath $(HUC))/include/hucc
 export RASTAN_ROMS := $(abspath $(ROMS))
 
 all: $(BUILD)/rastan.pce
@@ -89,7 +89,12 @@ $(BUILD)/block.snp: sim/sim sim/maincpu.bin sim/scripts/block.txt
 $(BUILD)/props/props.bin: tools/pce_props.py tools/enemy_capture.py $(BUILD)/block.snp
 	cd tools && python3 pce_props.py ../$(BUILD)/block.snp ../$(BUILD)/props
 
-GAME_DEPS  := src/main.asm src/player.asm src/enemies.asm src/props.asm src/hud.asm src/dyncolor.asm $(STAGE)/stage.bin $(PLAYER)/player.bin $(BUILD)/enemies/enemies.bin $(BUILD)/hud/hud.bin $(BUILD)/props/props.bin
+# Debug menu font: characters $20-$5F of HuC's 8x8 bold font (it starts at $10).
+$(BUILD)/debug/font.bin: $(HUC)/examples/asm/elmer/font/font8x8-ascii-bold-short.dat
+	@mkdir -p $(BUILD)/debug
+	dd if=$< of=$@ bs=8 skip=16 count=64 status=none
+
+GAME_DEPS  := src/main.asm src/player.asm src/enemies.asm src/props.asm src/hud.asm src/dyncolor.asm src/debug.asm $(BUILD)/debug/font.bin $(STAGE)/stage.bin $(PLAYER)/player.bin $(BUILD)/enemies/enemies.bin $(BUILD)/hud/hud.bin $(BUILD)/props/props.bin
 
 $(BUILD)/rastan.pce: $(GAME_DEPS)
 	@mkdir -p $(BUILD)/opt
@@ -121,6 +126,7 @@ test: $(BUILD)/camtest.pce $(BUILD)/noenemy.pce $(BUILD)/rastan.pce $(BUILD)/god
 	python3 tools/test_player.py $(BUILD)/noenemy.pce
 	python3 tools/test_enemies.py $(BUILD)/rastan.pce $(BUILD)/god.pce
 	python3 tools/test_effects.py $(BUILD)/noenemy.pce $(STAGE)/dyncolor.inc
+	python3 tools/test_debug.py $(BUILD)/rastan.pce $(BUILD)/noenemy.pce
 
 tools/tgrun/tgrun: tools/tgrun/tgrun.c
 	HUC=$(abspath $(HUC)) tools/tgrun/build.sh

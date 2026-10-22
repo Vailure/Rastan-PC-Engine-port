@@ -53,6 +53,12 @@ mawr_hi:	ds	1		; Scratch for stream_column (tmp belongs to stream_ahead).
 
 core_main:	lda	#GAME_BANK		; (the boot mapping already has it there)
 		tam6
+		lda	#DEBUG_BANK		; Checkpoints and the debug menu, in MPR2.
+		tam2
+		stz	<cur_cp
+		stz	<dbg_god
+		stz	<dbg_noenemy
+		stz	<dbg_slow
 		call	init_screen
 
 		; Load all 16 BG palettes.
@@ -81,6 +87,10 @@ core_main:	lda	#GAME_BANK		; (the boot mapping already has it there)
 		jsr	set_scroll_regs		; Show this frame's position.
 	.if	!CAMERA_TEST
 		jsr	dyn_update		; Waterfall cycle, sky change (VBLANK).
+		jsr	debug_check		; SELECT: debug menu.
+		lda	<loop_cnt		; Debug slow motion: skip logic frames.
+		and	<dbg_slow
+		bne	.frame
 	.endif
 	.if	CAMERA_TEST
 		jsr	read_input		; Test build: the pad moves the camera.
@@ -89,7 +99,10 @@ core_main:	lda	#GAME_BANK		; (the boot mapping already has it there)
 		jsr	player_update		; Compute the next frame.
 		jsr	props_update		; (the cave block: solid, breakable)
 	.if	!NO_ENEMIES
+		lda	<dbg_noenemy
+		bne	!+
 		jsr	enemies_update
+!:
 	.endif
 		jsr	camera_update
 		jsr	stream_ahead		; Make its columns resident.
@@ -97,14 +110,19 @@ core_main:	lda	#GAME_BANK		; (the boot mapping already has it there)
 		jsr	props_draw
 		jsr	enemies_draw
 		jsr	hud_update
+		jsr	checkpoint_track
 	.endif
-		bra	.frame
+		jmp	.frame
 
 ; ---------------------------------------------------------------------------
 ; stage_start - (re)start the stage: with the display off, stream the first
 ; window of columns, put Rastan at the start and the camera on him.
 
-stage_start:	call	set_dspoff
+stage_start:
+	.if	!CAMERA_TEST
+		jmp	checkpoint_start	; Games restart at the current checkpoint.
+	.endif
+		call	set_dspoff
 		stz	<next_col + 0
 		stz	<next_col + 1
 .preload:	jsr	stream_column
@@ -445,6 +463,13 @@ GAME_BANK	=	$04
 		include	"enemies.asm"
 		include	"props.asm"
 
+; Checkpoints and the debug menu: bank DEBUG_BANK, in MPR2 ($4000) all the time.
+DEBUG_BANK	=	$05
+		.code
+		.bank	DEBUG_BANK
+		.page	2
+		include	"debug.asm"
+
 ; ---------------------------------------------------------------------------
 ; Data.
 
@@ -456,6 +481,7 @@ sprite_palette:	incbin	"sprpal.bin"
 enemy_palettes:	incbin	"enepal.bin"
 hud_palette:	incbin	"hudpal.bin"
 prop_palette:	incbin	"proppal.bin"
+debug_font:	incbin	"font.bin"		; HuC's 8x8 bold font, $20-$5F (build/debug).
 
 		.bank	$10
 		.page	3

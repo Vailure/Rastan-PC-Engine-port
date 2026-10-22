@@ -359,7 +359,11 @@ enter_dead:	lda	#ST_DEAD
 ; hazards - collision codes that hurt: 7 and 8 kill (arcade state 8), 6 is
 ; water that drains health (arcade: 32 of 12288 a frame). Probes the feet
 ; (p_y + 25) and the body (p_y + 8) at p_x. Carry set if Rastan just died.
-hazards:	lda	#25
+hazards:	lda	<dbg_god		; Debug menu: invincible.
+		beq	!+
+		clc
+		rts
+!:		lda	#25
 		jsr	hazard_probe
 		bcs	.die
 		lda	#8
@@ -409,6 +413,8 @@ player_hit:
 	.if	GOD_MODE			; Test builds: enemies can't hurt him.
 		rts
 	.endif
+		ldx	<dbg_god		; Debug menu: invincible.
+		bne	.no
 		ldx	<p_invuln
 		bne	.no
 		ldx	<p_state

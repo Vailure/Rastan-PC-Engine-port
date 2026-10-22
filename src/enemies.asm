@@ -78,7 +78,11 @@ e_alt:		ds	NUM_OBJ		; Blue: next throw is low.
 ; ---------------------------------------------------------------------------
 ; enemies_init - load cells and palettes, clear slots.
 
-enemies_init:	; Cells -> VRAM $5C00 (enemy_cells spans banks, map 2 at $6000).
+enemies_init:	jsr	enemies_load
+		jmp	enemies_reset
+
+; enemies_load - cells and palettes only (the debug menu borrows the cells).
+enemies_load:	; Cells -> VRAM $5C00 (enemy_cells spans banks, map 2 at $6000).
 		php				; VDC writes: IRQ held off (see stream_column).
 		sei
 		st0	#VDC_MAWR
@@ -132,6 +136,7 @@ enemies_init:	; Cells -> VRAM $5C00 (enemy_cells spans banks, map 2 at $6000).
 		sta	VCE_CTA + 1
 		tia	enemy_palettes, VCE_CTW, ENEMY_PALS * 32
 		plp
+		rts
 
 enemies_reset:	ldx	#NUM_OBJ - 1
 !:		stz	e_state, x
