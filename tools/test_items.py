@@ -38,7 +38,7 @@ CAVE = [60, 448, '04', 450, 453, '40', 460, 463, '82', 463, 540, '02', 560, 655,
 # Debug menu: ENEMIES OFF (walkers only; items still come), then the cave route.
 MENU_OFF = [50, 50, '10', 56, 56, '02', 62, 62, '02', 68, 68, '40', 76, 76, '10']
 VARS = {'p_weapon': 1, 'p_wtime': 2, 'p_hp': 1, 'p_x': 2, 'p_y': 2, 'items_done': 1, 'score': 3, 'hiscore': 3}
-OBJ = {'e_state': 14, 'e_range': 14, 'e_xl': 14, 'e_xh': 14, 'e_yl': 14, 'e_yh': 14}
+OBJ = {'e_state': 17, 'e_range': 17, 'e_xl': 17, 'e_xh': 17, 'e_yl': 17, 'e_yh': 17}
 
 
 def run(r, frames, keys):

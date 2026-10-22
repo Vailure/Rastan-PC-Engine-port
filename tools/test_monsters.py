@@ -5,6 +5,8 @@ Arcade values (round 1 census, sim/scripts/chimera.txt; see README):
 - A chimera walks left at 1/2 px/frame, stops once to breathe two fireballs
   (24 px ahead of it, 33 and 81 frames into the breath), then walks on.
 - Fireballs fly left at 1.75 px/frame. A chimera is worth 300.
+- Boulders appear when Rastan is 169 px left of their spot; the one at 4601
+  lands on the ledge at y 311, rolls left at 7/6 px/frame and drops to y 343.
 """
 import sys
 from peek import peek
@@ -19,9 +21,9 @@ def check(name, ok, detail=''):
         fails.append(name)
 
 
-EK_LIZARD, EK_BLUE, EK_CHIM, EK_FIRE = 0, 1, 5, 6
+EK_LIZARD, EK_BLUE, EK_CHIM, EK_FIRE, EK_ROCK = 0, 1, 5, 6, 7
 ES_WALK, ES_ATTACK, ES_DYING = 1, 2, 4
-OBJ = {'e_state': 14, 'e_kind': 14, 'e_xl': 14, 'e_xh': 14, 'e_yl': 14, 'e_yh': 14}
+OBJ = {'e_state': 17, 'e_kind': 17, 'e_xl': 17, 'e_xh': 17, 'e_yl': 17, 'e_yh': 17}
 SEL, I, RIGHT = '10', '40', '04'
 
 
@@ -29,6 +31,10 @@ def run(r, frames, keys):
     a = peek(r, frames, keys, {'p_x': 2, 'score': 3})
     b = peek(r, frames, keys, OBJ)
     return [dict(**x, **y) for x, y in zip(a, b)]
+
+
+def w16(v):
+    return v[0] | v[1] << 8
 
 
 def x_of(f, k):
@@ -39,7 +45,7 @@ def lives(r, kind):
     """Each object of a kind: [(frame, x, state)] over its life."""
     out, cur = [], {}
     for i, f in enumerate(r):
-        for k in range(14):
+        for k in range(17):
             if f['e_state'][k] and f['e_kind'][k] == kind:
                 cur.setdefault(k, []).append((i, x_of(f, k), f['e_state'][k]))
             elif k in cur:
@@ -96,6 +102,21 @@ def bcd(v):
 
 gain = [bcd(r[i]['score']) - bcd(r[i - 1]['score']) for i, _ in kills]
 check('a sword hit kills a chimera, worth 300', kills and 300 in gain, f'{len(kills)} killed, score steps {gain}')
+
+# Boulder at 4601 (checkpoint 2, the same jumping route).
+keys = [100, 100, SEL, 110, 110, RIGHT, 116, 116, RIGHT, 150, 150, I, 200, 1000, '05']
+for f in range(220, 1000, 60):
+    keys += [f, f + 3, I]
+r = run(god, 1000, keys)
+rk = [(i, x_of(f, k), f['e_yl'][k] | f['e_yh'][k] << 8, w16(f['p_x'])) for i, f in enumerate(r) for k in (6, 7, 8)
+      if f['e_state'][k] and f['e_kind'][k] == EK_ROCK]
+check('a boulder appears when Rastan is 169 px left of 4601', rk and rk[0][1] == 4601 and abs(rk[0][3] - (4601 - 169)) <= 3,
+      f'at x {rk[0][1] if rk else None}, Rastan {rk[0][3] if rk else None}')
+ys = sorted({y for _, _, y, _ in rk})
+check('it lands at y 311, rolls, then drops to y 343', 311 in ys and 343 in ys, f'rests {[y for y in ys if y in (311, 343)]}')
+roll = [(i, x) for i, x, y, _ in rk if y == 311]
+v = (roll[0][1] - roll[-1][1]) / (roll[-1][0] - roll[0][0]) if len(roll) > 30 else 0
+check('rolling left at 7/6 px/frame', abs(v - 7 / 6) < 0.05, f'{v:.3f}')
 
 print(f'{len(fails)} failure(s)')
 sys.exit(1 if fails else 0)

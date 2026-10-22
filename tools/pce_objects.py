@@ -26,11 +26,11 @@ import numpy as np
 from PIL import Image
 from arcade_gfx import load_region, decode_packed
 from snap import read_snaps, palette_rgb
-from object_specs import FILES, GROUPS, POSE_SYMBOLS
+from object_specs import FILES, GROUPS, POSE_SYMBOLS, GROUP_MAX
 
 ROMDIR = os.environ.get('RASTAN_ROMS', os.path.join(os.path.dirname(__file__), '..', 'roms', 'rastan'))
 PAL_SLOTS = [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14]   # 0 Rastan, 8 props, 15 HUD
-MAX_PIECES = 15                                           # object slot buffers hold 15 cells
+MAX_PIECES = 12                                           # walker and special slot buffers hold 12 cells
 JITTER = 3                                                # poses this close count as one (see below)
 
 
@@ -112,7 +112,7 @@ def main():
             anims[name] = seq
         assert len(poses) < 128, g        # pose_ptr doubles the number in 8 bits
         for i, p in enumerate(poses):
-            assert len(p) <= MAX_PIECES, f'{g} pose {i} has {len(p)} pieces'
+            assert len(p) <= GROUP_MAX.get(g, MAX_PIECES), f'{g} pose {i} has {len(p)} pieces'
         groups[g] = (poses, anims)
 
     # PCE sprite palettes: identical arcade palettes share a slot.

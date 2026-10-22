@@ -5,7 +5,7 @@ sim/sim, with the .own sidecar). GROUPS lists object groups; each group's poses 
 animations share one ROM bank (mapped at $8000 while its objects run). A sequence is
 (animation name, capture, slot, first frame, last frame[, cell range]); consecutive
 frames with the same pieces collapse into one animation step with a duration.
-Slots are the arcade's 64-byte object slots from $10C2C0 (0-2 map objects, 4-8 enemies,
+Arcade slots are its 64-byte object slots from $10C2C0 (0-2 map objects, 4-8 enemies,
 9-10 big flyers, 14-16 rocks/items, 17 boss, 18-22 projectiles, 23-28 small things).
 """
 
@@ -44,7 +44,15 @@ GROUPS = {
         ('chim_death', 'chimera', 7, 2132, 2162),
         ('fireball', 'chimera', 18, 1028, 1043, (0x1ba, 0x1bc)),
     ],
+    # Boulders (arcade slots 14/15): one spin cycle.
+    'rocks': [
+        ('boulder', 'chimera', 14, 1294, 1341),
+    ],
 }
+
+# Pieces per pose, where a group's objects use smaller slot buffers (default 12;
+# src/enemies.asm: items and bats 4, projectiles 2 - single-piece here).
+GROUP_MAX = {'items': 4}
 
 # Poses the engine refers to by number: (group, animation, step) -> symbol.
 POSE_SYMBOLS = {
