@@ -128,10 +128,11 @@ class Listing(dict):
     decoded out of alignment (code right after data) are disassembled on demand."""
     def __init__(self, path, dasm=None, rom=None):
         super().__init__()
-        for ln in open(path):
-            m = LINE_RE.match(ln)
-            if m:
-                self[int(m.group(1), 16)] = (len(m.group(2).split()) * 2, m.group(3).strip())
+        with open(path) as stream:
+            for ln in stream:
+                m = LINE_RE.match(ln)
+                if m:
+                    self[int(m.group(1), 16)] = (len(m.group(2).split()) * 2, m.group(3).strip())
         self.dasm, self.rom = dasm, rom
 
     def __missing__(self, addr):
@@ -162,3 +163,4 @@ def decode(lines, addr):
         op, sz = mn, None
     ops = [parse_operand(o, addr) for o in split_operands(args)] if args else []
     return Insn(addr, size, op, sz, ops, text)
+

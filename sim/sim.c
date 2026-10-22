@@ -15,7 +15,8 @@
  *   watch <addr> <lenhex>                  log writes (frame, PC, addr, byte) to stderr
  *   profile <from_frame>                   per-PC instruction counts + RAM access map
  *   focus <entryhex>                       restrict profile to calls of one routine
- *   callsnap <entryhex> <file>             RAM+regs at entry/exit of every call (lockstep tests)
+ *   callsnap <entryhex> <file>             legacy CSNP entry regs + entry/exit RAM
+ *   callsnap2 <entryhex> <file>            CSN2: also SR, exit regs, return PC, hardware writes
  *   trace                                  log PCs that write tilemap RAM (stderr at end)
  */
 #include <stdio.h>
@@ -43,6 +44,41 @@ static int profile_from = 0x7fffffff;
 static uint32_t focus_entry, focus_sp; static int in_focus;
 static gzFile callsnap_f;                 /* callsnap <entry> <file>: RAM + regs at entry and exit of each call */
 static uint8_t callsnap_in[0x4000]; static uint32_t callsnap_regs[16];   /* focus <entry>: profile only inside that routine */
+static int callsnap_version;
+static uint16_t callsnap_sr;
+static uint32_t callsnap_return;
+static uint8_t *callsnap_hw;
+static size_t callsnap_hw_count, callsnap_hw_capacity;
+
+static void capture_write(const void *data, unsigned len)
+{
+    if (gzwrite(callsnap_f, data, len) != (int)len) {
+        fprintf(stderr, "callsnap write failed\n"); exit(1);
+    }
+}
+
+static void capture_u32(uint32_t value)
+{
+    uint8_t b[4] = {value >> 24, value >> 16, value >> 8, value};
+    capture_write(b, sizeof b);
+}
+
+static void capture_hw_write(uint32_t addr, uint8_t value)
+{
+    if (!callsnap_f || callsnap_version != 2 || !in_focus) return;
+    if (callsnap_hw_count == 1000000) {
+        fprintf(stderr, "callsnap hardware-write limit exceeded\n"); exit(1);
+    }
+    if (callsnap_hw_count == callsnap_hw_capacity) {
+        size_t capacity = callsnap_hw_capacity ? callsnap_hw_capacity * 2 : 64;
+        uint8_t *buffer = realloc(callsnap_hw, capacity * 5);
+        if (!buffer) { fprintf(stderr, "callsnap allocation failed\n"); exit(1); }
+        callsnap_hw = buffer; callsnap_hw_capacity = capacity;
+    }
+    uint8_t *b = callsnap_hw + callsnap_hw_count++ * 5;
+    b[0] = addr >> 24; b[1] = addr >> 16; b[2] = addr >> 8; b[3] = addr; b[4] = value;
+}
+
 static uint32_t watch_lo, watch_hi;   /* watch <addr> <len>: log writes in [lo,hi) */
 static FILE *watch_f;
 static uint32_t wtrace_lo = 1, wtrace_hi = 0;   /* wtrace <lo> <hi>: log writer PCs for an address range */
@@ -61,19 +97,34 @@ void sim_instr_hook(unsigned int pc)
         uint32_t sp = m68k_get_reg(NULL, M68K_REG_SP);
         if (pc == focus_entry && !in_focus) {
             in_focus = 1; focus_sp = sp;
+            callsnap_return = m68k_read_memory_32(sp);
             if (callsnap_f) {
                 memcpy(callsnap_in, wram, sizeof wram);
+                callsnap_sr = m68k_get_reg(NULL, M68K_REG_SR);
+                callsnap_hw_count = 0;
                 for (int r = 0; r < 16; r++) callsnap_regs[r] = m68k_get_reg(NULL, M68K_REG_D0 + r);
             }
         }
-        else if (in_focus && sp > focus_sp) {
+        else if (in_focus && sp == focus_sp + 4 && pc == callsnap_return) {
             in_focus = 0;
-            if (callsnap_f) {     /* record: "CSNP", frame, 16 regs at entry, RAM at entry, RAM at exit */
-                uint8_t h[8] = {'C', 'S', 'N', 'P', frame >> 24, frame >> 16, frame >> 8, frame};
-                gzwrite(callsnap_f, h, 8);
-                for (int r = 0; r < 16; r++) { uint8_t b[4] = {callsnap_regs[r] >> 24, callsnap_regs[r] >> 16, callsnap_regs[r] >> 8, callsnap_regs[r]}; gzwrite(callsnap_f, b, 4); }
-                gzwrite(callsnap_f, callsnap_in, sizeof wram);
-                gzwrite(callsnap_f, wram, sizeof wram);
+            if (callsnap_f) {
+                capture_write(callsnap_version == 2 ? "CSN2" : "CSNP", 4);
+                capture_u32(frame);
+                if (callsnap_version == 2) {
+                    capture_u32(focus_entry);
+                    capture_u32(pc);
+                    uint16_t sr = m68k_get_reg(NULL, M68K_REG_SR);
+                    uint8_t flags[4] = {callsnap_sr >> 8, callsnap_sr, sr >> 8, sr};
+                    capture_write(flags, sizeof flags);
+                    capture_u32(callsnap_hw_count);
+                }
+                for (int r = 0; r < 16; r++) capture_u32(callsnap_regs[r]);
+                if (callsnap_version == 2)
+                    for (int r = 0; r < 16; r++) capture_u32(m68k_get_reg(NULL, M68K_REG_D0 + r));
+                capture_write(callsnap_in, sizeof wram);
+                capture_write(wram, sizeof wram);
+                if (callsnap_version == 2 && callsnap_hw_count)
+                    capture_write(callsnap_hw, callsnap_hw_count * 5);
             }
         }
     }
@@ -125,6 +176,7 @@ static void write8(uint32_t a, uint8_t v)
         if (profile_on && frame >= profile_from && (!focus_entry || in_focus)) ram_touch[a - 0x10c000] |= 2;
         wram[a - 0x10c000] = v; return;
     }
+    capture_hw_write(a, v);
     if (a >= 0x200000 && a < 0x201000) { pal[a - 0x200000] = v; return; }
     if (a >= 0xc00000 && a < 0xc10000) {
         vram[a - 0xc00000] = v;
@@ -172,7 +224,15 @@ static void load_script(const char *fn)
         else if (sscanf(line, "wtrace %x %x", &addr, &val) == 2) { wtrace_lo = addr; wtrace_hi = val; trace_on = 1; continue; }
         else if (strncmp(line, "trace", 5) == 0) { trace_on = 1; continue; }
         else if (sscanf(line, "focus %x", &addr) == 1) { focus_entry = addr; continue; }
-        else if (sscanf(line, "callsnap %x %255s", &addr, ct_file) == 2) { focus_entry = addr; callsnap_f = gzopen(ct_file, "wb1"); continue; }
+        else if (sscanf(line, "callsnap2 %x %255s", &addr, ct_file) == 2 ||
+                 sscanf(line, "callsnap %x %255s", &addr, ct_file) == 2) {
+            if (callsnap_f) { fprintf(stderr, "only one callsnap command is allowed\n"); exit(1); }
+            focus_entry = addr;
+            callsnap_version = strncmp(line, "callsnap2", 9) == 0 ? 2 : 1;
+            callsnap_f = gzopen(ct_file, "wb1");
+            if (!callsnap_f) { perror(ct_file); exit(1); }
+            continue;
+        }
         else if (sscanf(line, "profile %d", &a) == 1) { profile_on = 1; profile_from = a; continue; }
         else if (sscanf(line, "watch %x %x", &addr, &val) == 2) { watch_lo = addr; watch_hi = addr + val; if (!watch_f) watch_f = stderr; continue; }
         else continue;
@@ -238,7 +298,13 @@ int main(int argc, char **argv)
         m68k_set_irq(5);
     }
     gzclose(g);
-    if (callsnap_f) gzclose(callsnap_f);
+    if (callsnap_f && gzclose(callsnap_f) != Z_OK) {
+        fprintf(stderr, "callsnap close failed\n"); return 1;
+    }
+    free(callsnap_hw);
+    if (callsnap_version && in_focus) {
+        fprintf(stderr, "incomplete callsnap call at end of run\n"); return 1;
+    }
     fprintf(stderr, "frames=%d pc=%06x unmapped r=%llu w=%llu last_w=%06x\n", frame, (unsigned)m68k_get_reg(NULL, M68K_REG_PC),
             (unsigned long long)unmapped_reads, (unsigned long long)unmapped_writes, last_unmapped_w);
     if (profile_on) {
@@ -257,3 +323,4 @@ int main(int argc, char **argv)
     }
     return 0;
 }
+

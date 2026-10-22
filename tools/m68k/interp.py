@@ -27,6 +27,14 @@ class Machine:
         self.hooks = hooks or {}        # addr -> callable(machine): replaces a routine (acts as bsr+rts)
         self.count = 0
 
+    @property
+    def ccr(self):
+        return self.X << 4 | self.N << 3 | self.Z << 2 | self.V << 1 | self.C
+
+    @ccr.setter
+    def ccr(self, value):
+        self.X, self.N, self.Z, self.V, self.C = ((value >> bit) & 1 for bit in (4, 3, 2, 1, 0))
+
     # ---- memory
     def rd8(self, a):
         a &= 0xffffff
@@ -389,3 +397,4 @@ class Machine:
                     self.A[src.reg] = a & 0xffffffff
             return nxt
         raise Unsupported(f'{i.addr:06x}: {i.text}')
+
