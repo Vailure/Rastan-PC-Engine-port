@@ -90,5 +90,16 @@ cnt = [int(l.split(':')[1].split()[0], 16) | int(l.split(':')[1].split()[1], 16)
 slow = sum(1 for i in range(200, len(cnt)) if cnt[i] - cnt[i - 1] != 1)
 check('no slow frames during play', slow == 0, f'{slow} frames')
 
+# Cave block (x 798-830 over the 32 px gap): walking right crosses it; a down
+# thrust onto it crumbles it (arcade: 3 steps of 6 frames) and he drops into the cave.
+r = run(600, 60, 600, '04')
+on = [x for x in r if 800 <= x['x'] <= 830]
+check('the cave block holds him up', on and all(x['y'] == 295 for x in on), f"y {sorted({x['y'] for x in on})}")
+r = run(600, 60, 448, '04', 450, 453, '40', 460, 463, '82', 463, 540, '02')
+land = next((x['frame'] for x in r if x['frame'] > 470 and x['state'] == 2), None)
+fall = next((x['frame'] for x in r if x['frame'] > 470 and x['y'] > 300), None)
+check('a down thrust breaks it and he falls into the cave', land and fall and 10 <= fall - land <= 40
+      and r[-1]['y'] > 400, f'landed {land}, falling {fall}, y {r[-1]["y"]}')
+
 print(f'{len(fails)} failure(s)')
 sys.exit(1 if fails else 0)

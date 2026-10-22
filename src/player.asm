@@ -210,21 +210,23 @@ st_crouch:	bbr1	<padtrg, !+
 		jmp	enter_stand
 !:		bbr5	<pad, !+		; Turn while crouched.
 		stz	<p_face
-!:		bbr7	<pad, !+
+!:		bbr7	<pad, ground_check
 		lda	#1
 		sta	<p_face
+; ground_check - fall if the floor went away (the cave block crumbling).
+ground_check:	jsr	floor_below
+		bcs	!+
+		jmp	start_fall
 !:		rts
 
 ; --- Standing attack: no movement until the swing ends.
 st_attack:	lda	<p_animend
-		beq	!+
+		beq	ground_check
 		jmp	enter_stand
-!:		rts
 
 st_catk:	lda	<p_animend
-		beq	!+
+		beq	ground_check
 		jmp	enter_crouch
-!:		rts
 
 ; --- In the air.
 st_air:		bbr1	<padtrg, .no_atk	; Air attack (once per jump):
@@ -918,9 +920,15 @@ is_floor:	and	#$0F
 .tab:		db	0, 1, 0, 1, 1, 0, 0, 1
 
 ; coll_at - collision code at world (cx, cy); 0 outside the map, 1 past
-; the end of the stage. Data (MPR5 $A000): 16 bytes per block column, then
+; the end of the stage or inside a solid prop. Data (MPR5 $A000): 16 bytes per block column, then
 ; 16-byte 4x4 patterns at COLL_PATTERNS.
-coll_at:	lda	<cy + 1
+coll_at:	lda	<prop_solid		; A solid prop (the cave block) first.
+		beq	.map
+		jsr	prop_coll
+		bcc	.map
+		lda	#1
+		rts
+.map:		lda	<cy + 1
 		cmp	#2			; Also rejects negative ($FF).
 		bcs	.empty
 		sta	<ctx + 1

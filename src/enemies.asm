@@ -23,7 +23,7 @@
 
 NUM_EN		=	4		; The arcade keeps at most 4 alive.
 NUM_OBJ		=	NUM_EN + 4	; ... plus up to 4 clubs in flight.
-EN_SATB_FIRST	=	7 + 24		; SATB entries after the HUD's 7 and Rastan's 24.
+EN_SATB_FIRST	=	7 + 24 + 4	; SATB entries after the HUD's 7, Rastan's 24, the props' 4.
 EN_VRAM		=	$5C00		; Resident enemy cells.
 EN_PATTERN	=	EN_VRAM >> 5
 

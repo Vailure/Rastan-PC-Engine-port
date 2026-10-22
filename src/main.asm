@@ -10,7 +10,8 @@
 ; II attacks.
 ;
 ; VRAM:  $0000-$0FFF BAT (64x64)
-;        $1000-$4FFF streamed BG tiles (tile #$100-#$4FF)
+;        $1000-$4BFF streamed BG tiles (tile #$100-#$4BF)
+;        $4C00-$4FFF stage prop cells (loaded on demand)
 ;        $5000-$5BFF Rastan's two sprite pattern buffers (24 cells each)
 ;        $5C00-$76FF enemy cells (resident)
 ;        $7700-$7EFF HUD cells
@@ -50,7 +51,9 @@ mawr_hi:	ds	1		; Scratch for stream_column (tmp belongs to stream_ahead).
 
 		.code
 
-core_main:	call	init_screen
+core_main:	lda	#GAME_BANK		; (the boot mapping already has it there)
+		tam6
+		call	init_screen
 
 		; Load all 16 BG palettes.
 		lda	#^palette_data
@@ -64,6 +67,9 @@ core_main:	call	init_screen
 		jsr	hud_init		; (the camera test compares pure BG)
 	.endif
 		jsr	enemies_init
+	.if	!CAMERA_TEST
+		jsr	props_init
+	.endif
 		jsr	stage_start
 
 ; Main loop: one iteration per frame, starting right after VBLANK.
@@ -81,12 +87,14 @@ core_main:	call	init_screen
 		jsr	stream_ahead
 	.else
 		jsr	player_update		; Compute the next frame.
+		jsr	props_update		; (the cave block: solid, breakable)
 	.if	!NO_ENEMIES
 		jsr	enemies_update
 	.endif
 		jsr	camera_update
 		jsr	stream_ahead		; Make its columns resident.
 		jsr	player_draw		; SATB for the next frame.
+		jsr	props_draw
 		jsr	enemies_draw
 		jsr	hud_update
 	.endif
@@ -114,10 +122,12 @@ stage_start:	call	set_dspoff
 	.else
 		jsr	player_init_pos
 		jsr	enemies_reset
+		jsr	props_reset
 		jsr	dyn_reset
 		jsr	camera_update
 		jsr	set_scroll_regs
 		jsr	player_draw
+		jsr	props_draw
 		jsr	enemies_draw
 	.endif
 		call	wait_vsync		; SATB DMA, then show the screen.
@@ -423,9 +433,17 @@ init_screen	.proc
 		.endp
 
 		include	"player.asm"
-		include	"enemies.asm"
 		include	"hud.asm"
 		include	"dyncolor.asm"
+
+; Enemies and props run from bank GAME_BANK, which stays in MPR6 ($C000) the
+; whole time (the core's procedure calls save and restore MPR6).
+GAME_BANK	=	$04
+		.code
+		.bank	GAME_BANK
+		.page	6
+		include	"enemies.asm"
+		include	"props.asm"
 
 ; ---------------------------------------------------------------------------
 ; Data.
@@ -437,6 +455,7 @@ palette_data:	incbin	"palette.bin"
 sprite_palette:	incbin	"sprpal.bin"
 enemy_palettes:	incbin	"enepal.bin"
 hud_palette:	incbin	"hudpal.bin"
+prop_palette:	incbin	"proppal.bin"
 
 		.bank	$10
 		.page	3
@@ -457,3 +476,7 @@ enemy_cells:	incbin	"enemies.bin"
 		.bank	$5A
 		.page	3
 hud_cells:	incbin	"hud.bin"
+
+		.bank	$5C
+		.page	3
+prop_cells:	incbin	"props.bin"

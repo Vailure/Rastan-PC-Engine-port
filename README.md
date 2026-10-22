@@ -135,6 +135,11 @@ weapon pickups, and leftward scrolling.
 - **Enemy VRAM:** cells that are flips of each other are stored once, so lizardmen, throwers, clubs and the explosion
   fit in 105 resident cells (`$5C00-$76FF`; the HUD moved to `$7700`). Later kinds (chimeras, the woman warrior,
   the castle's enemies) will need cells loaded per section.
+- **Cave block** (`src/props.asm`, `tools/pce_props.py`, `sim/scripts/block.txt`): the brown block over the cave
+  entrance (arcade object slot 0, cells `$179`.., spawned by map marker `$48`) fills the 32 px gap in the ground.
+  It is solid (`coll_at` asks the active prop first); a down thrust that reaches it crumbles it in three steps of
+  6 frames and the gap opens. Standing swings don't break it (checked in the arcade). Props' cells are loaded on
+  demand into `$4C00-$4FFF`, so the BG tile pool is now 960 slots (peak use 932).
 - `tools/pce_enemies.py` converts the captured lizardman poses (`tools/enemy_capture.py` reads the
   arcade's object slots). `tools/test_enemies.py` checks hits, deaths, spawns, the throwers' clubs and the frame budget
   (the `god.pce` test build keeps Rastan unhurt so the bot reaches later sections).
@@ -217,6 +222,7 @@ The headless runner is built with `tools/tgrun/build.sh`, after running `make` i
 - [x] Stage 1 lizardmen (approximate): walk in, club attacks, knockback, death bursts; health and stage restart
 - [x] HUD: lives, icon, health bar (drains like the arcade's), ROUND 1
 - [x] Enemy spawns on the arcade's lanes, with its timing; blue club throwers
+- [x] The cave block (solid, broken by a down thrust)
 - [ ] The rest of stage 1's enemies, items, and the boss
 - [ ] Restart at the arcade's checkpoints after a death (needs per-checkpoint tile preloads)
 

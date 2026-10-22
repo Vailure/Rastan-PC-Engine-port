@@ -34,7 +34,7 @@ from snap import read_snaps
 ROMDIR = os.environ.get('RASTAN_ROMS', os.path.join(os.path.dirname(__file__), '..', 'roms', 'rastan'))
 WINDOW = 35            # resident: 33 visible + 1 preloaded + 1 lagging (no overwrite of on-screen tiles)
 FIRST_SLOT = 0x100     # tile # of first streamed slot (VRAM $1000)
-NUM_SLOTS = 1024
+NUM_SLOTS = 960       # $1000-$4BFF; $4C00-$4FFF holds stage prop cells
 ROWS = 64
 
 

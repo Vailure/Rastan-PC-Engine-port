@@ -2,7 +2,7 @@
 
 Objects: 64-byte slots at $10C2C0 (9 slots). +$08 active, +$09 animation frame,
 +$0D state, +$1E x, +$22 y (screen coordinates, like the player).
-Slot k (1-8) draws with hardware sprite entries 140+10k .. 149+10k (block k - 1), so
+Slot k (0-8) draws with hardware sprite entries 140+10k .. 149+10k (block k - 1), so
 its pieces can be read exactly, even when objects overlap.
 """
 from snap import read_snaps
@@ -28,10 +28,9 @@ def slot_pieces(s, k):
     the block that best matches its position."""
     b = 0x10c2c0 + k * 0x40
     x, y = s.w(b + 0x1e), s.w(b + 0x22)
-    if k > 0:
-        p = block_pieces(s, k - 1, x, y)
-        if p:
-            return p
+    p = block_pieces(s, k - 1, x, y)
+    if p:
+        return p
     best, best_d = [], None
     for blk in range(9):
         p = block_pieces(s, blk, x, y)

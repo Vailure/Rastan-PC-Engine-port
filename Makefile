@@ -12,7 +12,7 @@ BUILD      := build
 STAGE      := $(BUILD)/stage1
 PLAYER     := $(BUILD)/player
 
-export PCE_INCLUDE := $(abspath $(STAGE)):$(abspath $(PLAYER)):$(abspath $(BUILD)/enemies):$(abspath $(BUILD)/hud):$(abspath src):$(abspath $(HUC))/include/hucc
+export PCE_INCLUDE := $(abspath $(STAGE)):$(abspath $(PLAYER)):$(abspath $(BUILD)/enemies):$(abspath $(BUILD)/hud):$(abspath $(BUILD)/props):$(abspath src):$(abspath $(HUC))/include/hucc
 export RASTAN_ROMS := $(abspath $(ROMS))
 
 all: $(BUILD)/rastan.pce
@@ -81,7 +81,15 @@ $(ENEMIES)/enemies.bin: tools/pce_enemies.py tools/enemy_capture.py $(BUILD)/liz
 $(BUILD)/hud/hud.bin: tools/pce_hud.py $(BUILD)/actions.snp
 	cd tools && python3 pce_hud.py ../$(BUILD)/actions.snp ../$(BUILD)/hud
 
-GAME_DEPS  := src/main.asm src/player.asm src/enemies.asm src/hud.asm src/dyncolor.asm $(STAGE)/stage.bin $(PLAYER)/player.bin $(BUILD)/enemies/enemies.bin $(BUILD)/hud/hud.bin
+# Stage props (the cave block) from a bot run that breaks it with a down thrust.
+$(BUILD)/block.snp: sim/sim sim/maincpu.bin sim/scripts/block.txt
+	@mkdir -p $(BUILD)
+	sim/sim sim/maincpu.bin sim/scripts/block.txt $@ 1
+
+$(BUILD)/props/props.bin: tools/pce_props.py tools/enemy_capture.py $(BUILD)/block.snp
+	cd tools && python3 pce_props.py ../$(BUILD)/block.snp ../$(BUILD)/props
+
+GAME_DEPS  := src/main.asm src/player.asm src/enemies.asm src/props.asm src/hud.asm src/dyncolor.asm $(STAGE)/stage.bin $(PLAYER)/player.bin $(BUILD)/enemies/enemies.bin $(BUILD)/hud/hud.bin $(BUILD)/props/props.bin
 
 $(BUILD)/rastan.pce: $(GAME_DEPS)
 	@mkdir -p $(BUILD)/opt
