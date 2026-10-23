@@ -7,7 +7,7 @@ Arcade values (sim/scripts/snake.txt; README, round 2):
 - Then it crawls on, turns away at 48-51 px and flees at twice its 7/8 px a
   frame until 104 px away.
 - Its strike (box $5F: x 16 .. 32, y -20 .. -12) drains 8 units (type 2).
-- A crouching Rastan's swing kills it, for 200 points.
+- A crouching Rastan's swing kills it, for 200 points; a standing swing passes over it.
 """
 import sys
 from peek import peek
@@ -88,6 +88,14 @@ for i in range(1, len(r)):
         if r[i]['e_state'][k] == ES_DYING and r[i - 1]['e_state'][k] != ES_DYING and r[i]['e_kind'][k] == EK_SNAKE:
             kills.append(bcd(r[i]['score']) - bcd(r[i - 1]['score']))
 check('a crouching swing kills snakes, 200 each', len(kills) >= 2 and all(v == 2 for v in kills), f'score steps {kills}')
+
+# Standing, swinging (II every 12 frames): no snake dies (the arcade's neither, at any distance:
+# its sword passes over them; a crouching swing kills them at 61-65 px).
+keys = sum([[f, f + 3, '80'] for f in range(250, 1200, 12)], [])
+r = run(1200, keys)
+dead = [i for i in range(1, len(r)) for k in range(17)
+        if r[i]['e_kind'][k] == EK_SNAKE and r[i]['e_state'][k] == ES_DYING and r[i - 1]['e_state'][k] != ES_DYING]
+check('a standing swing passes over snakes', not dead, f'deaths at {dead}')
 
 print(f'{len(fails)} failure(s)')
 sys.exit(1 if fails else 0)

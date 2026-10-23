@@ -11,7 +11,8 @@
 ; drain; crouching ducks it). Then it crawls on, and at 48 .. 51 px it turns
 ; away ($0474A8) and flees twice as fast until 104 px away ($04742E), then
 ; crawls off. At a wall or a ledge it turns. Touching it drains 4 units (type
-; 1); one hit kills it (200 points).
+; 1); one hit kills it (200 points). It is low: a standing swing passes over
+; it (the arcade's too, at any distance); a crouching one reaches it at 61-65 px.
 ;
 ; The arcade decides to strike at the lanes' markers ($3A), with a random
 ; byte; the port strikes whenever Rastan is near and a 16-frame rest is over.

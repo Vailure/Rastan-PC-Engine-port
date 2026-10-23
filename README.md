@@ -80,7 +80,8 @@ Two ROMs:
   from x 8192 and the boss room (map segments `$17`-`$2D`, all scrolled to the right), with their
   collision and the arcade's nine restart checkpoints in the debug menu (it starts straight in the
   game; hold UP + SELECT for the menu). Its walkers: lizardmen and round 2's snakes, then throwers and
-  chimeras, and the castle's soldiers; its two swinging vines; its own colours. Still to come: its
+  chimeras, and the castle's soldiers; its two swinging vines; its own colours. Snakes are low:
+  as in the arcade, a standing swing passes over them; crouch and swing (DOWN + II). Still to come: its
   dragonflies, demons, piranhas, golden women and tree-dropping throwers, the castle's traps, the
   round's items, boss and music.
 
