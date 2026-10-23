@@ -30,7 +30,11 @@ rock_mode:	db	RM_LOOP, RM_LOOP, RM_FALL, RM_FALL
 rock_bit:	db	1, 2, 4, 8
 
 ; rock_spawn - boulders whose spot Rastan nears (uses etmp, ex).
-rock_spawn:	cly
+rock_spawn:
+	.if	STAGE_ROUND - 1		; (round 1's own: none in other rounds yet)
+		rts
+	.endif
+		cly
 .loop:		lda	rocks_done
 		and	rock_bit, y
 		bne	.next

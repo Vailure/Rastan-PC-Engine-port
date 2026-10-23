@@ -396,10 +396,10 @@ try_spawn:	dec	<spawn_timer
 .castle:	sty	<spawn_kind
 		lda	spawn_castle, y
 		bra	.kind
-!:		lda	<cx			; x >= 2400: a cycle of 3.
-		cmp	#<2400
+!:		lda	<cx			; x >= SPAWN_THREE: a cycle of 3.
+		cmp	#<SPAWN_THREE
 		lda	<cx + 1
-		sbc	#>2400
+		sbc	#>SPAWN_THREE
 		bcs	.three
 		cpy	#2
 		bcc	!+
@@ -419,6 +419,11 @@ try_spawn:	dec	<spawn_timer
 		stz	e_flash, x
 		jmp	start_walk
 
+	.if	STAGE_ROUND = 1
+SPAWN_THREE	=	2400
+	.else
+SPAWN_THREE	=	3584		; (round 2: chimeras from segment $1E, its census)
+	.endif
 spawn_gaps:	db	49, 81, 65
 spawn_two:	db	EK_LIZARD, EK_BLUE
 spawn_three:	db	EK_BLUE, EK_CHIM, EK_LIZARD

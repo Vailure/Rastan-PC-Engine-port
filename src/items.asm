@@ -44,7 +44,11 @@ item_bit:	db	1, 2, 4, 8, 16
 ; ---------------------------------------------------------------------------
 ; item_spawn - the next item (and its bat) when Rastan comes near it.
 
-item_spawn:	lda	e_state + ITEM_SLOT	; One item at a time.
+item_spawn:
+	.if	STAGE_ROUND - 1		; (round 1's own: none in other rounds yet)
+		rts
+	.endif
+		lda	e_state + ITEM_SLOT	; One item at a time.
 		bne	.r
 		cly
 .loop:		lda	items_done

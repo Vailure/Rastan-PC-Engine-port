@@ -70,7 +70,11 @@ weights_reset:	stz	wt_act
 
 ; weights_update - once a frame in the castle (enemies_update): the touch
 ; (with this frame's lengths: the arcade's are a frame late), then the clocks.
-weights_update:	lda	wt_act
+weights_update:
+	.if	STAGE_ROUND - 1		; (round 1's own: none in other rounds yet)
+		rts
+	.endif
+		lda	wt_act
 		bne	.run
 		lda	<scroll_x + 1		; The camera in shaft 2 (x 9728 - 10239)
 		and	#$FE			; and up to y -744.

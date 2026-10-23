@@ -208,7 +208,7 @@ Check bank usage with `make … build/rastan.pce 2>&1 | grep ^BANK`. That build 
 | `$0000` | BAT, 64×64 |
 | `$1000–$4A7F` | Streamed BG tiles: 936 slots (`NUM_SLOTS` in `pce_stage.py`), peak use 930. The converter fails if a line would need more. |
 | `$4A80–$4AFF` | The swarm's bat cells (`$268`, `$269`) |
-| `$4B00–$4BFF` | The floor spears' cells |
+| `$4B00–$4BFF` | The floor spears' cells (round 2: streamed BG tiles, `$4B00-$4FFF`) |
 | `$4C00–$4FFF` | Props: outside, the cave block. In the castle, the fire's 32 tiles (`$4C00-$4DFF`) and the hanging column's 6 cells (`$4E00-$4F7F`). |
 | `$5000` / `$5600` | Rastan's two pattern buffers (double-buffered) |
 | `$5C00–$76BF` | Object slot buffers |
@@ -546,11 +546,25 @@ The order is roughly by the value it adds to the demo for the effort.
    - A cheap per-pattern code would save about 15%: a bit mask for zero bytes and for rows that repeat the row above.
    - zlib-class LZ would save about 35%, but would need a RAM window and more CPU time in the frame.
    - At the current size, two rounds fit in each free page, so this is not urgent.
-4. **Rounds 2–6.**
-   - The world decoder, segment layout and converter are generic. The bot needs to reach those rounds to capture their palettes.
-   - Each round needs its own stage outputs, placed in a free page (0, 2 or 3).
-   - Make `sf2_round` and the `^stage_*` bank references per round: a small table of page, banks and line count, indexed by the round.
-   - `$10D2A6` is only a candidate health counter. Poke invincibility, or jump straight to a round via the continue table.
+4. **Rounds 2–6.** Round 2 has a build of its own, `rastan_r2.pce`:
+   - `RASTAN_ROUND=2` makes `world.py` lay out the round's segments (`$17 × (round − 1)` on, the boss
+     room last; round 2 scrolls only to the right, its castle from `$27`, x 8192) and `pce_stage.py`,
+     `pce_coll.py` (the collision, split out of `pce_player.py`) and `pce_hud.py` write `build/stage2`
+     and `build/hud2`, which the round 2 build puts first in its include path. `STAGE_ROUND` (in
+     `stage.inc`) switches the round's tables in `src/` (checkpoints in `debug.asm`, spawn kinds in
+     `enemies.asm`) and turns off round 1's own objects (props, traps, fire, column, wall, weights,
+     items, boulders, gargoyle, woman, jets, vines, boss).
+   - Colours come from the arcade started at the round's checkpoints (`patch 5073a 17`, `2a`, `2d`:
+     `sim/scripts/round2*.txt`, hazards NOP'd, health held): the forest, the castle's line `$2x` and the
+     boss room's own line `$2x`.
+   - Round 2 needs 960 resident tiles at its peak, so it also streams into `$4B00-$4FFF` (slots
+     `$4B0-$4FF`), which round 1's spears, props and fire use; their uploads are off in round 2.
+   - Still to do, by the arcade (`sim/scripts/snake.txt` has the snakes): the snakes (walker kind,
+     spawned like the lizardmen; the code at `$0473B8`: they crawl about 0.9 px a frame, strike three
+     times when Rastan is near, touch type 1, strike type 2, 1 hit point), the golden woman (`$420`
+     cells, map markers in segment `$22`), the castle wizard (`$1C0`), the round's items, its boss and music.
+   - One ROM for every round needs `sf2_round` and the `^stage_*` bank references per round: a small
+     table of page, banks and line count, indexed by the round.
 5. **The exact port of the player.**
    - `tools/m68k` and `tools/lockstep.py` reproduce the arcade's player update call for call (9,215/9,215 calls).
    - A HuC6280 back end translating those routines would replace the hand-written `player.asm`.

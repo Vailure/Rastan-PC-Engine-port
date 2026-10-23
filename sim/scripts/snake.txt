@@ -1,0 +1,73 @@
+# Round 2's snakes (map segment $17 restart, health held): Rastan stands still facing right while the
+# first snakes crawl in and strike, then swings (every 24 frames from 760) until they die.
+patch 53e0c 4e
+patch 53e0d 71
+patch 53e0e 4e
+patch 53e0f 71
+patch 53e10 4e
+patch 53e11 71
+patch 54ebe 4e
+patch 54ebf 71
+patch 54ec0 4e
+patch 54ec1 71
+patch 54ec2 4e
+patch 54ec3 71
+patch 553e6 4e
+patch 553e7 71
+patch 553e8 4e
+patch 553e9 71
+patch 553ea 4e
+patch 553eb 71
+patch 5073a 17
+poke 300 30000 10c13a w 3000
+in 100 ff 3f
+in 106 ff 1f
+in 200 ff 17
+in 206 ff 1f
+end 1300
+in 760 ef 1f
+in 766 ff 1f
+in 784 ef 1f
+in 790 ff 1f
+in 808 ef 1f
+in 814 ff 1f
+in 832 ef 1f
+in 838 ff 1f
+in 856 ef 1f
+in 862 ff 1f
+in 880 ef 1f
+in 886 ff 1f
+in 904 ef 1f
+in 910 ff 1f
+in 928 ef 1f
+in 934 ff 1f
+in 952 ef 1f
+in 958 ff 1f
+in 976 ef 1f
+in 982 ff 1f
+in 1000 ef 1f
+in 1006 ff 1f
+in 1024 ef 1f
+in 1030 ff 1f
+in 1048 ef 1f
+in 1054 ff 1f
+in 1072 ef 1f
+in 1078 ff 1f
+in 1096 ef 1f
+in 1102 ff 1f
+in 1120 ef 1f
+in 1126 ff 1f
+in 1144 ef 1f
+in 1150 ff 1f
+in 1168 ef 1f
+in 1174 ff 1f
+in 1192 ef 1f
+in 1198 ff 1f
+in 1216 ef 1f
+in 1222 ff 1f
+in 1240 ef 1f
+in 1246 ff 1f
+in 1264 ef 1f
+in 1270 ff 1f
+in 1288 ef 1f
+in 1294 ff 1f

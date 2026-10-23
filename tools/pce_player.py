@@ -1,4 +1,4 @@
-"""Build Rastan's PC Engine sprite data and stage collision from the arcade program.
+"""Build Rastan's PC Engine sprite data from the arcade program.
 
 usage: pce_player.py maincpu.bin actions.snp attract.snp thrusts.snp lizard.snp waterfall.snp outdir
 
@@ -12,7 +12,7 @@ Outputs:
                u8 ncells; ncells * (s8 dx, s8 dy); ncells * 128 bytes cell patterns
   player.inc   pose numbers, animation tables, hitbox constants
   sprpal.bin   16 colors (VCE format) for sprite palette 0
-  collision.bin square table, per-square block-collision indexes, 16-byte 4x4 patterns
+
   poses.png    preview of the converted poses
 """
 import os
@@ -362,35 +362,6 @@ def main():
     print(f'{len(names)} poses, {sum(r[0] for r in blob_records)} cells, player.bin {len(table) + len(blob)} bytes, '
           f'{len(pal9)} sprite colors')
 
-    # ---- collision for round 1, per world square (tools/world.py):
-    #   $000  3 x 24 bytes: square id at (square x, square y + 2), $FF none
-    #   $100  256 bytes per square id: 4x4 pattern index per block, column-major
-    #   COLL_PATTERNS: 16-byte 4x4 patterns
-    # Engine byte: the collision code's low nibble (1 solid, 2 rope, 3/4/7 floors,
-    # 6 water, 8 deadly, $E a door: $7E), bit 4 for an enemy lane (arcade spawn
-    # marker $3A in the high byte, at the height of an enemy's anchor, 16 px above
-    # a floor) and bit 7 for a passage a shaft seals behind the camera ($80, $82).
-    import world
-    table = bytearray([0xFF] * 0x100)
-    squares = bytearray()
-    pats = {}
-    for sid, seg in enumerate(world.ORDER):
-        sx, sy, _ = world.LAYOUT[seg]
-        assert 0 <= sx < 24 and -2 <= sy <= 0
-        table[(sy + 2) * 24 + sx] = sid
-        coll = world.square_tiles(rom, seg)[2]
-        for bc in range(16):
-            for br in range(16):
-                p = coll[br * 4:br * 4 + 4, bc * 4:bc * 4 + 4]
-                k = bytes((int(v) & 0x0f) | (0x10 if int(v) >> 8 == 0x3a else 0) | (0x80 if int(v) & 0x80 else 0)
-                          for v in p.flat)
-                squares.append(pats.setdefault(k, len(pats)))
-    data = table + squares + b''.join(sorted(pats, key=pats.get))
-    assert len(data) <= 8192
-    open(f'{out}/collision.bin', 'wb').write(data)
-    with open(f'{out}/player.inc', 'a') as f:
-        f.write(f'\nCOLL_PATTERNS\t= {len(table) + len(squares)}\t; offset of 4x4 patterns in collision.bin\n')
-    print(f'collision: {len(pats)} patterns, {len(data)} bytes')
 
 
 if __name__ == '__main__':

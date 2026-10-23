@@ -99,7 +99,11 @@ column_cells:	lda	col_on
 .r:		rts
 
 ; column_update - once a frame in the castle (traps_update).
-column_update:	lda	col_act
+column_update:
+	.if	STAGE_ROUND - 1		; (round 1's own: none in other rounds yet)
+		rts
+	.endif
+		lda	col_act
 		bne	.run
 		lda	<scroll_x		; On the screen: scroll_x in (COL_X - 256,
 		sec				; COL_X + 32) and scroll_y < COL_TOP + 32
@@ -332,7 +336,11 @@ col_emit:	sta	col_w
 ; ---------------------------------------------------------------------------
 ; wall_update - once a frame in the castle (enemies_update, after column_update).
 
-wall_update:	lda	wl_act
+wall_update:
+	.if	STAGE_ROUND - 1		; (round 1's own: none in other rounds yet)
+		rts
+	.endif
+		lda	wl_act
 		bne	.run
 		lda	<p_y + 1		; Rastan come into the lava hall's square
 		cmp	#$FE			; (x 8704 on, y -512 .. -1: in the arcade,

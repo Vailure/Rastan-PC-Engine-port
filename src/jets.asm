@@ -31,7 +31,11 @@ jet_y_l:	db	<-232, <-235, <-232
 jet_y_h:	db	>-232, >-235, >-232
 
 ; jets_spawn - erupt the jets Rastan is near, once per JET_PERIOD each.
-jets_spawn:	cly
+jets_spawn:
+	.if	STAGE_ROUND - 1		; (round 1's own: none in other rounds yet)
+		rts
+	.endif
+		cly
 .loop:		lda	jet_wait, y
 		beq	!+
 		dec	a

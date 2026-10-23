@@ -13,6 +13,7 @@
 ; ***************************************************************************
 
 		include	"player.inc"
+		include	"coll.inc"		; (the round's: pce_coll.py, in its stage directory)
 
 PLAYER_BANK	=	^player_data
 COLL_BANK	=	^collision_data

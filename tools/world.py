@@ -29,6 +29,7 @@ scroll_x + LEAD >= x, a row at world y once scroll_y - LEAD_Y <= y. The camera
 is held inside a box that depends on the next line to stream (the arcade's
 streaming mode decides which way it may scroll in the same way).
 """
+import os
 import numpy as np
 from fgmap import fg_blocks, block_tiles, block_collision
 
@@ -40,34 +41,55 @@ SCREEN_W, SCREEN_H = 256, 224
 ROW_REACH = 512 - SCREEN_H     # scroll_y stays <= (y of the last row streamed) + this
 COL_REACH = 512 - 8            # scroll_x stays >= (x of the last column streamed) - this
 
-# map segment -> (square x, square y, orientation), in play order
-LAYOUT = {s: (s, 0, H) for s in range(0x11)}
-LAYOUT.update({0x11: (0x10, -1, UP), 0x12: (0x11, -1, H), 0x13: (0x12, -1, H), 0x14: (0x13, -1, H),
-               0x15: (0x13, -2, UP), 0x16: (0x16, 0, H)})
-DOOR_TO = 0x16          # the door at the top of shaft 2 leads here
-# Camera boxes (x0, x1, y0, y1 of scroll_x/scroll_y) while a segment's lines are next.
-BOXES = {}
-for s in range(0x11):
-    BOXES[s] = (0, 0x10 * 512 + 512 - SCREEN_W, 0, 512 - SCREEN_H)
-BOXES[0x11] = (0x10 * 512, 0x10 * 512 + 512 - SCREEN_W, -512, 512 - SCREEN_H)
-for s in (0x12, 0x13, 0x14):
-    BOXES[s] = (0x10 * 512, 0x13 * 512 + 512 - SCREEN_W, -512, -SCREEN_H)
-BOXES[0x15] = (0x13 * 512, 0x13 * 512 + 512 - SCREEN_W, -1024, -SCREEN_H)
-BOX_END = (0x16 * 512, 0x16 * 512 + 512 - SCREEN_W, 0, 512 - SCREEN_H)   # the boss room: square $16
-BOXES[0x16] = BOX_END
+# The round (RASTAN_ROUND, default 1). Rounds are runs of 23 map segments, from $17 x
+# (round - 1) (the arcade's boss rooms, $0502AC: $16, $2D, $44, ...); a segment's
+# streaming mode is the byte at $50F6C + segment.
+ROUND = int(os.environ.get('RASTAN_ROUND', '1'))
+SEG0 = 0x17 * (ROUND - 1)          # the round's first map segment
+SEG_BOSS = SEG0 + 0x16             # its boss room
+
+if ROUND == 1:
+    # map segment -> (square x, square y, orientation), in play order
+    LAYOUT = {s: (s, 0, H) for s in range(0x11)}
+    LAYOUT.update({0x11: (0x10, -1, UP), 0x12: (0x11, -1, H), 0x13: (0x12, -1, H), 0x14: (0x13, -1, H),
+                   0x15: (0x13, -2, UP), 0x16: (0x16, 0, H)})
+    DOOR_TO = 0x16          # the door at the top of shaft 2 leads here
+    # Camera boxes (x0, x1, y0, y1 of scroll_x/scroll_y) while a segment's lines are next.
+    BOXES = {}
+    for s in range(0x11):
+        BOXES[s] = (0, 0x10 * 512 + 512 - SCREEN_W, 0, 512 - SCREEN_H)
+    BOXES[0x11] = (0x10 * 512, 0x10 * 512 + 512 - SCREEN_W, -512, 512 - SCREEN_H)
+    for s in (0x12, 0x13, 0x14):
+        BOXES[s] = (0x10 * 512, 0x13 * 512 + 512 - SCREEN_W, -512, -SCREEN_H)
+    BOXES[0x15] = (0x13 * 512, 0x13 * 512 + 512 - SCREEN_W, -1024, -SCREEN_H)
+    BOX_END = (0x16 * 512, 0x16 * 512 + 512 - SCREEN_W, 0, 512 - SCREEN_H)   # the boss room: square $16
+    BOXES[0x16] = BOX_END
+    # Where the arcade holds the camera lower than following Rastan would: the lava
+    # hall (square $12; its fire spans x 8766..9151), whose fire fills the bottom of its
+    # screen. (Not square $13, the room past the hall's wall: there the camera follows
+    # him down the rope to its floor, y -33, where checkpoint 5 restarts him.) Its camera
+    # stays at world y -457 there (hall.snp, census camy 55), so the 240 lines it shows
+    # (from line 8) are -449..-210; the PC Engine's 224 centred on the same middle start
+    # at -441. While Rastan is in x0..x1, the camera sinks toward that y as far as his
+    # head (8 px below the top) allows. (x0, x1, scroll_y)
+    CAMERA_REST = (0x11 * 512, 0x12 * 512, -441)
+    # Segments whose camera follows Rastan both ways (the shafts, and the boss room the
+    # arcade's camera pans across).
+    FREE = {s for s, v in LAYOUT.items() if v[2] == UP} | {0x16}
+    CASTLE_SEG, HALL_SEG = 0x10, 0x12
+else:
+    # Round 2 (the forest, then a castle from $27, as round 1's from $10: the arcade's
+    # restart at $27 shows its first room, cp27 in the round 2 captures): every segment
+    # is streamed to the right, the boss room last.
+    LAYOUT = {s: (s - SEG0, 0, H) for s in range(SEG0, SEG_BOSS + 1)}
+    DOOR_TO = None
+    X1 = (SEG_BOSS - SEG0) * 512 + 512 - SCREEN_W
+    BOXES = {s: (0, X1, 0, 512 - SCREEN_H) for s in LAYOUT}
+    BOX_END = BOXES[SEG_BOSS]
+    CAMERA_REST = None
+    FREE = set()
+    CASTLE_SEG, HALL_SEG = SEG0 + 0x10, None
 ORDER = sorted(LAYOUT)
-# Where the arcade holds the camera lower than following Rastan would: the lava
-# hall (square $12; its fire spans x 8766..9151), whose fire fills the bottom of its
-# screen. (Not square $13, the room past the hall's wall: there the camera follows
-# him down the rope to its floor, y -33, where checkpoint 5 restarts him.) Its camera
-# stays at world y -457 there (hall.snp, census camy 55), so the 240 lines it shows
-# (from line 8) are -449..-210; the PC Engine's 224 centred on the same middle start
-# at -441. While Rastan is in x0..x1, the camera sinks toward that y as far as his
-# head (8 px below the top) allows. (x0, x1, scroll_y)
-CAMERA_REST = (0x11 * 512, 0x12 * 512, -441)
-# Segments whose camera follows Rastan both ways (the shafts, and the boss room the
-# arcade's camera pans across).
-FREE = {s for s, v in LAYOUT.items() if v[2] == UP} | {0x16}
 
 
 def square_blocks(m, orient):
@@ -181,6 +203,8 @@ def census_to_world(x, y, seg):
     screen, y is wrapped to 0-511; seg is the streamed-segment count it was seen at.
     The camera's square is the one before the streamed segment (or the shaft being
     streamed, whose census x stays in the square below it)."""
+    if ROUND != 1:
+        return x - SEG0 * 512, y
     m = x // 512
     if m <= 0x10 or m >= 0x16:
         return x, y

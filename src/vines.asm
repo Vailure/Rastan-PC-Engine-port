@@ -54,7 +54,11 @@ vine_dy:		db	107, 107, 107, 107, 106, 106, 106, 106, 105, 105, 104, 104, 103, 10
 			db	100, 101, 102, 103, 104, 104, 105, 105, 106, 106, 106, 106, 107, 107, 107
 
 ; vines_spawn - vines whose anchor Rastan is near (uses etmp).
-vines_spawn:	cly
+vines_spawn:
+	.if	STAGE_ROUND - 1		; (round 1's own: none in other rounds yet)
+		rts
+	.endif
+		cly
 .loop:		lda	vines_done
 		and	vine_bit, y
 		bne	.next

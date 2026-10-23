@@ -1,12 +1,13 @@
 """Build PC Engine stage data: one composited BG layer with streamed tile patterns.
 
-usage: pce_stage.py maincpu.bin snapfile palframe seg_first seg_last outdir [dynsnap [castlesnap:frame]]
+usage: pce_stage.py maincpu.bin snapfile palframe seg_first seg_last outdir [dynsnap [castlesnap:frame [bosssnap:frame]]]
 
 The castle (segments from CASTLE_SEG) has colours of its own in the arcade's palette
 line $2x (its stone), and the lava hall (HALL_SEG) in line $14x too (its fire),
 which the arcade loads as Rastan enters them; they are taken from castlesnap at
 that frame, a frame in the hall. (sim/scripts/castle.txt, from checkpoint $13 on,
-shows line $14x back to its round-start colours past the hall.)
+shows line $14x back to its round-start colours past the hall.) In round 2 the
+boss room loads line $2x colours of its own too: from bosssnap at its frame.
 
 The arcade FG layer is composited over the BG layer locked at 1:1 scroll
 (the round's BG strips repeat to cover the FG width). Colors are quantized to
@@ -50,8 +51,8 @@ import world
 
 ROMDIR = os.environ.get('RASTAN_ROMS', os.path.join(os.path.dirname(__file__), '..', 'roms', 'rastan'))
 FIRST_SLOT = 0x100     # tile # of first streamed slot (VRAM $1000)
-CASTLE_SEG = 0x10      # the castle's first room (the gate loads its colours: line $2x)
-HALL_SEG = 0x12        # the lava hall, whose fire takes line $14x as well
+CASTLE_SEG = world.CASTLE_SEG  # the castle's first room (the gate loads its colours: line $2x)
+HALL_SEG = world.HALL_SEG      # the lava hall, whose fire takes line $14x as well (round 1)
 # The lava hall's fire (markers $4C, $52-$55): the arcade draws 32x32 flames, cells
 # $224-$233 (4 phases of 4 cells, a phase every 4 frames, neighbouring blocks one phase
 # apart), along the lava from FIRE_X0 to FIRE_X1, top at FIRE_Y (hall.snp: two of the
@@ -64,6 +65,7 @@ FIRE_CELL = 0x224
 FIRE_TILE0 = 0x4C0     # VRAM $4C00: the stage props' cells, unused in the castle
 NUM_SLOTS = 936       # $1000-$4A7F; $4A80-$4AFF the swarm's bat cells, $4B00-$4BFF the floor spears'
                       # cells, $4C00-$4FFF stage props
+EXTRA_SLOT0, EXTRA_SLOT1 = 0x4B0, 0x500   # rounds without round 1's spears and props: $4B00-$4FFF
 ROWS = 64
 QUAD_SHORT = 0xE0   # line codes: $00-$DF quad #, $E0-$EF repeat, $F0-$FF long quad #
 
@@ -267,17 +269,26 @@ def main():
         cf, cfr = sys.argv[8].rsplit(':', 1)
         hpal = np.array(next(s.pal for s in read_snaps(cf) if s.frame == int(cfr)))
         cpal = hpal.copy()
-        cpal[0x140:0x150] = np.array(pal)[0x140:0x150]  # (the fire's line: the hall only)
+        if HALL_SEG is not None:
+            cpal[0x140:0x150] = np.array(pal)[0x140:0x150]  # (the fire's line: the hall only)
         crgb, hrgb = to_pce_rgb(np.array(cpal)), to_pce_rgb(hpal)
         px[:, castle] = crgb[idx[:, castle]]
         px[:, hall] = hrgb[idx[:, hall]]
         print(f'castle colours from {os.path.basename(cf)} frame {cfr}: '
               f'{int((rgb != crgb).any(1).sum())} palette entries differ, {int((crgb != hrgb).any(1).sum())} more in the hall')
+    if len(sys.argv) > 9:                                 # the boss room's own colours
+        bf, bfr = sys.argv[9].rsplit(':', 1)
+        bpal = np.array(next(s.pal for s in read_snaps(bf) if s.frame == int(bfr)))
+        boss = np.array([ln['seg'] == world.SEG_BOSS for ln in world.lines()])
+        brgb = to_pce_rgb(bpal)
+        px[:, boss] = brgb[idx[:, boss]]
+        print(f'boss room colours from {os.path.basename(bf)} frame {bfr}: '
+              f'{int((crgb != brgb).any(1).sum())} palette entries differ from the castle\'s')
     code = (px[..., 0] << 6) | (px[..., 1] << 3) | px[..., 2]   # r<<6|g<<3|b packed key
 
     # Dynamic colors become virtual colors with slots of their own.
-    cycle, sky, sky_col = ({}, {}, None)
-    if len(sys.argv) > 7:
+    cycle, sky, sky_col = ({}, {}, [seg0 * 64])
+    if len(sys.argv) > 7 and sys.argv[7] != '-':
         cycle, sky, sky_col = find_dynamic(sys.argv[7], sorted(set((np.unique(idx) // 16).tolist())))
     dyn_ids = {}                  # arcade index -> id ; id -> states (9-bit)
     dyn_states = []
@@ -335,7 +346,7 @@ def main():
 
     # ---- the fire: its composite tiles (4 phases x 16 positions), their palettes
     fire = None
-    if len(sys.argv) > 8:
+    if len(sys.argv) > 8 and HALL_SEG is not None:
         fsnap = next(s_ for s_ in read_snaps(cf) if s_.frame == int(cfr))
         bank = (fsnap.sprctrl & 0xe0) >> 1
         spr = decode_packed(load_region(ROMDIR, 'pc090oj'), 16, 16).astype(int)
@@ -417,7 +428,10 @@ def main():
     # resident while a BAT cell shows it; a line's upload list holds the patterns
     # it brings that are not resident.
     lines = world.lines()
-    free = list(range(FIRST_SLOT + NUM_SLOTS - 1, FIRST_SLOT - 1, -1))
+    slots_all = list(range(FIRST_SLOT, FIRST_SLOT + NUM_SLOTS))
+    if world.ROUND != 1:          # (no floor spears, cave block or fire: their cells too)
+        slots_all += list(range(EXTRA_SLOT0, EXTRA_SLOT1))
+    free = slots_all[::-1]
     resident = {}        # pattern -> slot
     refs = {}            # pattern -> number of live BAT cells showing it
     bat_pat = -np.ones((64, 64), np.int64)
@@ -621,6 +635,7 @@ def main():
             f.write(vce_list(f'dyn_sky{s_}', pairs))
     print(f'dynamic slots: ' + ', '.join(f'{i}:{len(v)}' for i, v in sorted(slots.items())))
     with open(f'{out}/stage.inc', 'w') as f:
+        f.write(f'STAGE_ROUND = {world.ROUND}\t; the round (RASTAN_ROUND)\n')
         f.write(f'STAGE_LINES = {W}\nSTAGE_BANKS = {(len(blob) + 8191) // 8192}\n')
         f.write(f'STAGE_PAT_BANKS = {(len(pats_blob) + 8191) // 8192}\t; stage_pats.bin: 256 patterns a bank\n')
         f.write(f'STAGE_QUAD_BANKS = {(len(quads_blob) + 8191) // 8192}\t; stage_quads.bin: 1024 quads a bank\n')
@@ -631,11 +646,14 @@ def main():
         f.write(f'STAGE_REGION_END = {len(regions) - 1}\n')
         f.write(f'STAGE_ROW_REACH = {world.ROW_REACH}\t; scroll_y <= last row streamed + this\n')
         f.write(f'STAGE_COL_REACH = {world.COL_REACH}\t; scroll_x >= last column streamed - this\n')
-        x0, x1, y = world.CAMERA_REST
+        x0, x1, y = world.CAMERA_REST or (0, 0, 0)
         f.write(f'CAM_REST_X0 = {x0}\nCAM_REST_X1 = {x1}\nCAM_REST_Y = {y}\t; the lava hall (world.CAMERA_REST)\n')
         f.write(f'CASTLE_X = {world.square_origin(CASTLE_SEG)[0]}\t; from here on the castle\'s palettes\n')
         f.write(f'FIRE_X0 = {FIRE_X0}\nFIRE_X1 = {FIRE_X1}\nFIRE_TILE0 = ${FIRE_TILE0:03X}\t; the lava hall\'s fire\n')
-        f.write(f'STAGE_DOOR_LINE = {next(i for i, ln in enumerate(lines) if ln["stop"])}\t; the boss room door\'s line\n')
+        door = next((i for i, ln in enumerate(lines) if ln['stop']), None)
+        if door is None:             # (no door: the boss room's first line - 1)
+            door = next(i for i, ln in enumerate(lines) if ln['seg'] == world.SEG_BOSS) - 1
+        f.write(f'STAGE_DOOR_LINE = {door}\t; the boss room door\'s line\n')
     with open(f'{out}/stage_regions.inc', 'w') as f:
         f.write('; Generated by tools/pce_stage.py.\n')
         f.write('; Camera boxes per region (the region of the next line to stream): x0, x1, y0, y1;\n')

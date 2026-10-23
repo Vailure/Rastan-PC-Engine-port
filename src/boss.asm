@@ -47,7 +47,11 @@ BA_DEATH	=	4
 
 ; boss_spawn - once, when Rastan enters the room: body in slot SPEC_FIRST, the
 ; rest in the next.
-boss_spawn:	lda	boss_done
+boss_spawn:
+	.if	STAGE_ROUND - 1		; (round 1's own: none in other rounds yet)
+		rts
+	.endif
+		lda	boss_done
 		bne	.r
 		lda	<p_x
 		cmp	#<BOSS_ROOM

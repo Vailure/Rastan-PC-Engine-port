@@ -23,7 +23,11 @@ garg_y_h:	db	>295, >167
 garg_bit:	db	1, 2
 
 ; garg_spawn - a gargoyle (two special slots) when Rastan nears its spot.
-garg_spawn:	cly
+garg_spawn:
+	.if	STAGE_ROUND - 1		; (round 1's own: none in other rounds yet)
+		rts
+	.endif
+		cly
 .loop:		lda	gargs_done
 		and	garg_bit, y
 		bne	.next

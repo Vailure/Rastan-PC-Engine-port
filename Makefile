@@ -31,8 +31,27 @@ $(BUILD)/bot1.txt: tools/make_bot.py
 $(BUILD)/bot1.snp: sim/sim sim/maincpu.bin $(BUILD)/bot1.txt
 	sim/sim sim/maincpu.bin $(BUILD)/bot1.txt $@ 20
 
-$(STAGE)/stage.bin: tools/pce_stage.py tools/world.py tools/fgmap.py tools/bgmap.py sim/maincpu.bin $(BUILD)/bot1.snp $(BUILD)/waterfall.snp $(BUILD)/hall.snp $(BUILD)/sky04.snp $(BUILD)/sky0c.snp
+$(STAGE)/stage.bin: tools/pce_stage.py tools/pce_coll.py tools/world.py tools/fgmap.py tools/bgmap.py sim/maincpu.bin $(BUILD)/bot1.snp $(BUILD)/waterfall.snp $(BUILD)/hall.snp $(BUILD)/sky04.snp $(BUILD)/sky0c.snp
 	cd tools && SKY_SNAPS=../$(BUILD)/sky04.snp,../$(BUILD)/sky0c.snp python3 pce_stage.py ../sim/maincpu.bin ../$(BUILD)/bot1.snp $(PALFRAME) 0 0x16 ../$(STAGE) ../$(BUILD)/waterfall.snp ../$(BUILD)/hall.snp:4400
+	cd tools && python3 pce_coll.py ../sim/maincpu.bin ../$(STAGE)
+
+# Round 2 (the forest, then a castle; map segments $17-$2D): the arcade started at the
+# round's first segment, at its castle checkpoint and in its boss room (the restart
+# table byte $5073A: $17, $2A, $2D), its palette at frame 420 of each. The stage and collision go to $(STAGE2),
+# which the round 2 build puts ahead of $(STAGE) in its include path.
+STAGE2     := $(BUILD)/stage2
+$(BUILD)/round2.snp: sim/sim sim/maincpu.bin sim/scripts/round2.txt
+	sim/sim sim/maincpu.bin sim/scripts/round2.txt $@ 20 300
+
+$(BUILD)/round2_castle.snp: sim/sim sim/maincpu.bin sim/scripts/round2_castle.txt
+	sim/sim sim/maincpu.bin sim/scripts/round2_castle.txt $@ 20 300
+
+$(BUILD)/round2_boss.snp: sim/sim sim/maincpu.bin sim/scripts/round2_boss.txt
+	sim/sim sim/maincpu.bin sim/scripts/round2_boss.txt $@ 20 300
+
+$(STAGE2)/stage.bin: tools/pce_stage.py tools/pce_coll.py tools/world.py tools/fgmap.py tools/bgmap.py sim/maincpu.bin $(BUILD)/round2.snp $(BUILD)/round2_castle.snp $(BUILD)/round2_boss.snp
+	cd tools && RASTAN_ROUND=2 python3 pce_stage.py ../sim/maincpu.bin ../$(BUILD)/round2.snp 420 0x17 0x2d ../$(STAGE2) - ../$(BUILD)/round2_castle.snp:420 ../$(BUILD)/round2_boss.snp:420
+	cd tools && RASTAN_ROUND=2 python3 pce_coll.py ../sim/maincpu.bin ../$(STAGE2)
 
 # The sky darkens toward dusk in eight steps along the outdoor stage. The same bot from
 # checkpoints 1 and 3 (the arcade's restart table byte: segments 4 and 12) sees the
@@ -145,6 +164,9 @@ $(OBJECTS)/objcells.bin: tools/pce_objects.py tools/object_specs.py tools/census
 $(BUILD)/hud/hud.bin: tools/pce_hud.py $(BUILD)/actions.snp
 	cd tools && python3 pce_hud.py ../$(BUILD)/actions.snp ../$(BUILD)/hud
 
+$(BUILD)/hud2/hud.bin: tools/pce_hud.py $(BUILD)/actions.snp
+	cd tools && RASTAN_ROUND=2 python3 pce_hud.py ../$(BUILD)/actions.snp ../$(BUILD)/hud2
+
 # Music and sound effects: sim/snd runs the arcade's Z80 sound driver and logs
 # its YM2151 writes; pce_sound.py turns each command's tune or effect into a
 # stream the PC Engine's PSG can play.
@@ -244,6 +266,14 @@ $(BUILD)/testdbg.pce: $(GAME_DEPS)
 	printf "CAMERA_TEST = 0\nNO_ENEMIES = 0\nGOD_MODE = 0\nBG_CHECK = 0\nTITLE = 0\nDEBUG_MENU = 1\n" > $(BUILD)/opt_tdbg/options.inc
 	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_tdbg):$$PCE_INCLUDE $(PCEAS) --newproc --sf2 --strip -l 0 --raw ../src/main.asm -o testdbg.pce
 	$(SF2PAD) $(BUILD)/testdbg.pce
+
+# Round 2 (a build of its own for now: the round's stage, collision and checkpoints in
+# place of round 1's), straight into the game with the debug menu in play.
+$(BUILD)/rastan_r2.pce: $(GAME_DEPS) $(STAGE2)/stage.bin $(BUILD)/hud2/hud.bin
+	@mkdir -p $(BUILD)/opt_r2
+	printf "CAMERA_TEST = 0\nNO_ENEMIES = 0\nGOD_MODE = 0\nBG_CHECK = 0\nTITLE = 0\nDEBUG_MENU = 1\n" > $(BUILD)/opt_r2/options.inc
+	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_r2):$(abspath $(STAGE2)):$(abspath $(BUILD)/hud2):$$PCE_INCLUDE $(PCEAS) --newproc --sf2 --strip -l 0 --raw ../src/main.asm -o rastan_r2.pce
+	$(SF2PAD) $(BUILD)/rastan_r2.pce
 
 # Test build: the pad drives the camera directly and Rastan is not drawn.
 $(BUILD)/camtest.pce: $(GAME_DEPS)

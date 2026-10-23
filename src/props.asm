@@ -78,7 +78,11 @@ props_reset:	ldx	#NUM_PROPS - 1
 ; ---------------------------------------------------------------------------
 ; props_update - after player_update (the sword box is this frame's).
 
-props_update:	lda	<pr_state
+props_update:
+	.if	STAGE_ROUND - 1		; (round 1's own: none in other rounds yet)
+		rts
+	.endif
+		lda	<pr_state
 		bne	.active
 		jmp	props_find
 
@@ -347,7 +351,11 @@ prop_anim:	dec	<pr_animt
 ; ---------------------------------------------------------------------------
 ; props_draw - SATB entries from satb_n, after Rastan's (none when nothing is shown).
 
-props_draw:	php				; VDC writes: IRQ held off (see stream_line).
+props_draw:
+	.if	STAGE_ROUND - 1		; (round 1's own: none in other rounds yet)
+		rts
+	.endif
+		php				; VDC writes: IRQ held off (see stream_line).
 		sei
 		st0	#VDC_MAWR
 		lda	<satb_n			; SATB_ADDR + satb_n * 4 ($7F00: low byte 0)

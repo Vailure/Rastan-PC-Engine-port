@@ -63,7 +63,7 @@ def main():
     text = np.full((16, 64, 3), -1, int)
     for i, code in enumerate((52, 53, 54)):
         text[:, i * 16:i * 16 + 16] = np.where(rgb_cell(code) >= 0, rgb_cell(code), text[:, i * 16:i * 16 + 16])
-    one = rgb_cell(43)
+    one = rgb_cell(42 + int(os.environ.get('RASTAN_ROUND', '1')))   # the round's digit
     region = text[:, 40:56]
     text[:, 40:56] = np.where(one >= 0, one, region)
     cells += [text[:, i * 16:i * 16 + 16] for i in range(4)]
@@ -125,7 +125,7 @@ def main():
         f.write('HUD_LEVEL0\t= 0\t\t; bar cell with level 0..8 filled\n')
         f.write('HUD_ICON\t= 9\t\t; 970, 971 (flash), 972\n')
         f.write('HUD_DIGIT0\t= 12\n')
-        f.write('HUD_TEXT\t= 22\t\t; "ROUND 1", 4 cells\n')
+        f.write('HUD_TEXT\t= 22\t\t; "ROUND n", 4 cells\n')
         f.write('HUD_TOP\t\t= 26\t\t; top line label cells: 4 left ("1UP"), 6 right ("HIGH SCORE")\n')
         f.write(f'HUD_CELLS\t= {len(cells)}\n')
     Image.fromarray(np.concatenate(prev, 1)).resize((len(prev) * 48, 48), Image.NEAREST).save(f'{out}/hud.png')

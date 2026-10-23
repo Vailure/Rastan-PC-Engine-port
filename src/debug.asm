@@ -23,7 +23,13 @@
 ;
 ; ***************************************************************************
 
+	.if	STAGE_ROUND = 1
 NUM_CP		=	6			; The arcade's checkpoints,
+CP_CASTLE	=	4			; (the first in the castle)
+	.else
+NUM_CP		=	9
+CP_CASTLE	=	6
+	.endif
 NUM_WARP	=	NUM_CP + 1		; and a debug warp to the boss room.
 
 FONT_VRAM	=	$5C00			; Enemy cells (reloaded on close).
@@ -101,6 +107,7 @@ txt_end:
 ; first line of the camera's segment (64 per segment; the boss warp also takes
 ; the door line). Measured in the arcade by starting the round at each one.
 
+	.if	STAGE_ROUND = 1
 cp_cam_x:	dw	0, 2048, 4096, 6144, 8192, 9216, 11264
 cp_cam_y:	dw	192, 160, 192, 192, 265, -247, 265
 cp_p_x:		dw	48, 2096, 4144, 6192, 8240, 9296, 11320
@@ -109,6 +116,20 @@ cp_line:	dw	0, 0, 0, 0, 0, $12 * 64, STAGE_DOOR_LINE + 1
 ; The sky's step a restart shows (src/dyncolor.asm; the arcade's restarts at
 ; segments 5, 9 and 13 load steps 3, 5 and 7 of 8; the castle has none).
 cp_sky:		db	0, 2, 4, 6, 0, 0, 0
+	.else
+; Round 2 restarts at segments $17, $19, $1D, $20, $22, $24, $27, $2A and $2D
+; (squares 0, 2, 6, 9, 11, 13, 16, 19, 22): Rastan 16 px right of the arcade's
+; screen x 32 (24 at $19 and $20; at $22 the camera is 160 on and he 184), on
+; the floor below him (the collision map: tools/world.py), the camera 128 px above
+; it as far as the box allows. (sim/scripts/round2*.txt and the checkpoints'
+; captures.) The last is the boss room, and the warp the same.
+cp_cam_x:	dw	0, 1024, 3072, 4608, 5792, 6656, 8192, 9728, 11264, 11264
+cp_cam_y:	dw	192, 32, 192, 288, 160, 192, 288, 32, 288, 288
+cp_p_x:		dw	48, 1064, 3120, 4648, 5992, 6704, 8240, 9776, 11312, 11312
+cp_p_y:		dw	295, 135, 295, 455, 263, 295, 455, 135, 391, 391
+cp_line:	dw	0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+cp_sky:		db	0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+	.endif
 
 ; checkpoint_track - once a frame: the checkpoint moves on when the camera
 ; reaches the next one's segment (the arcade picks it by segment).
@@ -171,7 +192,7 @@ checkpoint_start:
 		stz	new_game		; and 5: the castle soldiers turn green),
 		bne	!+			; else 48 - and 48 for a game begun there
 		lda	<cur_cp			; (the start screen's menu: the arcade's
-		cmp	#4			; game started at segment $10 keeps 48,
+		cmp	#CP_CASTLE		; game started at segment $10 keeps 48,
 		bcc	!+			; its restart there after a death is 64).
 		inx
 !:		stx	obj_b64

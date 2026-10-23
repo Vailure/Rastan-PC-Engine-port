@@ -23,7 +23,11 @@ fire_on:	ds	1		; The tiles are in VRAM (bg_palettes clears it).
 		.code
 
 ; fire_update - once a frame, in VBLANK.
-fire_update:	lda	<bg_set			; Outdoors the tiles are the props'.
+fire_update:
+	.if	STAGE_ROUND - 1		; (round 1's own: none in other rounds yet)
+		rts
+	.endif
+		lda	<bg_set			; Outdoors the tiles are the props'.
 		bne	!+
 		stz	<fire_on
 		rts
