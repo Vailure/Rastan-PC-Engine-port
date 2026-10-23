@@ -193,7 +193,7 @@ Pages 0, 2 and 3 are empty.
 - A round's data must sit in one page, and `sf2_round` must select it before the stage streams. It runs at boot and from `stream_reset`.
 - Round 1 is deliberately in page 1, not page 0, so a missing or wrong page write breaks the tests at once.
 
-Bank $04, the game code, has about 3 KB left, and bank $05 has about 3 KB left. New code will soon need a third code bank: map it in MPR2 alongside, or move a module out.
+**Code space is the tight resource now:** bank $00 has 0.6 KB left, bank $04 (game code) 2.1 KB and bank $05 (debug and late objects) 1 KB. The next sizeable module needs a third code bank. Map it in MPR2 alongside bank $05 (swap around calls), or move a module out to a bank of its own.
 
 Check bank usage with `make … build/rastan.pce 2>&1 | grep ^BANK`. That build has the listing on, and `pceas` prints used and free space per bank.
 
@@ -202,10 +202,13 @@ Check bank usage with `make … build/rastan.pce 2>&1 | grep ^BANK`. That build 
 | Address | Use |
 |---|---|
 | `$0000` | BAT, 64×64 |
-| `$1000–$4BFF` | Streamed BG tiles: 960 slots, peak use 932 |
-| `$4C00–$4FFF` | Props (the cave block). In the castle, the fire's 32 tiles (`FIRE_TILE0` = `$4C0`). |
+| `$1000–$4A7F` | Streamed BG tiles: 936 slots (`NUM_SLOTS` in `pce_stage.py`), peak use 930. The converter fails if a line would need more. |
+| `$4A80–$4AFF` | The swarm's bat cells (`$268`, `$269`) |
+| `$4B00–$4BFF` | The floor spears' cells |
+| `$4C00–$4FFF` | Props: outside, the cave block. In the castle, the fire's 32 tiles (`$4C00-$4DFF`) and the hanging column's 6 cells (`$4E00-$4F7F`). |
 | `$5000` / `$5600` | Rastan's two pattern buffers (double-buffered) |
-| `$5C00–$767F` | Object slot buffers |
+| `$5C00–$76BF` | Object slot buffers |
+| `$76C0` | The killed bat's cell (`$276`) |
 | `$7700` | HUD |
 | `$7F00` | SATB |
 
@@ -398,6 +401,7 @@ tgrun rom.pce frames out.ppm [from to padhex]...
 | `TGRUN_WAV` | Audio |
 | `TGRUN_PSGLOG` | Every PSG register write |
 | `TGRUN_NOSPRLIMIT=1` | Turns off the 16-cells-a-line sprite limit |
+| `TGRUN_PC=1` | The CPU's PC at the end of every frame, on stderr (to find a hang) |
 
 | Test | Checks |
 |---|---|
@@ -407,8 +411,8 @@ tgrun rom.pce frames out.ppm [from to padhex]...
 | `test_effects.py` | Waterfall cycle, sky switch, hazards, death animation |
 | `test_debug.py` | The menu needs a hold; the screen comes back exactly; warps, invincibility, checkpoint restart |
 | `test_items.py` | Weapons, items, bats (weapon drawing is sampled over 4 frames: the fire sword's flame hides behind the blade on some) |
-| `test_monsters.py` | Chimeras, boulders, gargoyle, woman, boss; the round-clear screen and jingle |
-| `test_castle.py` | Soldiers, spears, jets, vines, doors, camera walls; the round is cleared within 4400 frames |
+| `test_monsters.py` | Chimeras, boulders, gargoyle, woman, boss; the round-clear screen and jingle; the hurry-up swarm (arrives after 40 counts, closes in, bites every 45 frames at most, dies to the sword for 100) |
+| `test_castle.py` | Soldiers, spears, jets, vines, doors, camera walls; the round is cleared within 4400 frames; the hanging column's cycle and its blocking; the sealing wall's timing and push; colour bank 48 / 64 (VCE) |
 | `test_sound.py` | PSG writes match the streams; notes are in the audio spectrum; the voices' levels in order on channel 5 |
 | `test_demo.py` | The image is a 2.5 MB SF2 card; title, blink, RUN starts, pause; no debug menu after RUN; UP+SELECT on the title opens it (on screen, warp works) and unlocks it in the game; GAME OVER → title → new game |
 
@@ -472,7 +476,10 @@ tgrun rom.pce frames out.ppm [from to padhex]...
     - Anything shared between rounds, or read from an interrupt, goes in `$00-$3F`.
     - The page register is write-only and is not saved anywhere, so code that switches pages must switch back.
 11. **`make` does not notice recipe changes.** Changing an argument in a rule (for example the objects' first bank) does not rebuild its target. Delete the output (`build/objects/objcells.bin`) to force the rebuild.
-12. **The debug menu once popped up at random.** SELECT alone was enough to open it, and some pads and emulators send it spuriously. It now needs UP+SELECT held, and in the demo build it stays locked until unlocked on the title screen.
+12. **Zero page is full.** The HuC core and System Card variables start at `$20DC`; the core's own (`_bp`, `_si`, `vdc_crl`, `irq_vec`, `_ax`…) from `$20EC`. PCEAS does not stop a `.zp` variable from landing on them. Six bytes of swarm variables did, `irq_vec` was overwritten, and the game hung in `wait_vsync` the moment the first bat appeared. New variables go in `.bss`. Check the top of the zero page in `src/main.lst` (`F8:20xx`); it now ends at `$20E1`. `TGRUN_PC=1` prints where a hang sits.
+13. **`pb_*` is one solid box shared by the cave block, the hanging column and the sealing wall.** They never meet: outside, the first room's row 0, below row 0. The swarm borrows `pb_*` for its hit tests and restores it.
+14. **Frame-timed routes and fixed-cycle objects.** The hanging column shuts route A's corridor for most of its 540-frame cycle, so route A waits there 540 frames (three vine periods too). A new periodic object on a route needs the same care.
+15. **The debug menu once popped up at random.** SELECT alone was enough to open it, and some pads and emulators send it spuriously. It now needs UP+SELECT held, and in the demo build it stays locked until unlocked on the title screen.
 
 ---
 
@@ -515,16 +522,10 @@ Then:
 
 The order is roughly by the value it adds to the demo for the effort.
 
-1. **The castle bat swarm.**
-   - Nine small bats (cells `$268–$26A`, arcade slots 20–28) flutter around shaft 1 and the lava hall from the moment Rastan climbs into the shaft.
-   - The data is in the `hall.txt` capture from frame 2892. Record their paths and timings with `tools/track.py`.
-   - They need 9 more sprites, so watch the SATB and the per-line budget.
-   - It is probably best to treat them as projectile-class objects (2 cells), or to cap the count and alternate.
-2. **Castle soldiers' colours.**
-   - The arcade's sprite colour bank is 48 in the first half of the castle (gold and blue soldiers) and 64 after the lava hall (green).
-   - The port uses the green palette throughout. Load a second object palette for the soldier kind keyed on `p_x`, or give the early soldiers a kind of their own.
-3. **Ceiling spikes** at x 8328 and 8488. Markers `$47` at (8480, 16) and `$45`/`$4D` are unidentified. They could also be the hanging stone column in shaft 1.
-   - Capture with a bot that stands under them (see `sim/scripts/spikes.txt`) until they drop.
+1. **Shaft 2's markers `$45`** (three at y -752, x 9920–10055). They are piston-type map objects (type `$18`, the hanging column's kind) spawned by an event (`$04621E`, when `$10C28A` is 1), not on sight.
+   - No arcade capture reaches shaft 2 yet. Write a bot script that climbs it (route B shows the way in the port), then measure them as the column was measured (`src/column.asm`).
+2. **The swarm's sprite budget.** Nine bats on top of a crowd hit the 64-entry and 16-cells-a-line limits. They are drawn last and rotate, so they flicker first. The audit reports this, as it does for the walkers.
+3. **The bite and push details.** The bats' touch box (16×16) and the column's and wall's push distances were derived from positions, not read from the arcade's collision code (the hit list at `$10D2A8` comes from `$0449xx`).
 4. **The lava hall's vines and the fire's sparks.** The three vines swing together, and their grab box is a guess. Measure them like the chasm vine (`vine.snp`).
 5. **More compression, if needed.**
    - The stage stream is now 206 KB (dictionaries; §4.7). The 3,645 raw patterns are 57% of it.

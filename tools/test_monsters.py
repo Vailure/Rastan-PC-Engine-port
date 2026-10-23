@@ -17,6 +17,9 @@ Arcade values (round 1 census, sim/scripts/chimera.txt; see README):
 - The boss drops in when Rastan enters the last room and lands at y 446; ten
   hits kill it for 5000; the arcade's round-clear screen ("YOU ARE A BRAVE
   FIGHTER..."), then the title (test builds: a new game at once).
+- The hurry-up swarm (sim/scripts/swarm.txt): 40 x 64 frames in one pair of
+  segments bring nine small bats; they close in on where Rastan was, bite
+  (1024, then 45 frames before the next bite) and die to one sword hit (100).
 """
 import sys
 from peek import peek
@@ -204,6 +207,32 @@ check('with its jingle (sound command $27)', any(r3[i]['snd_track'][0] == SND_CL
       f"tracks {sorted({r3[i]['snd_track'][0] for i in ending})}")
 check('then a new game from the start of round 1', back is not None and bcd(r[back]['score']) == 0,
       f'restart at frame {back}')
+
+# The hurry-up swarm: Rastan waits at the round start (god build: the bites cost
+# nothing but still count), then swings at them.
+SW = {'sw_st': 9, 'sw_xl': 9, 'sw_xh': 9, 'sw_yl': 9, 'sw_yh': 9, 'sw_bite': 1, 'sw_level': 1,
+      'p_x': 2, 'p_y': 2, 'score': 3}
+keys = sum([[f, f + 1, '80'] for f in range(3000, 3400, 12)], [])     # II: swings
+r = peek(god, 3400, keys, SW)
+alive = [sum(1 for v in f['sw_st'] if v) for f in r]
+first = next((i for i, n in enumerate(alive) if n), None)
+check('after 40 x 64 frames in one pair of segments, nine bats come', first is not None
+      and 2540 <= first <= 2620 and alive[first] == 9 and r[first]['sw_level'][0] == 1,
+      f'first at frame {first}, {alive[first] if first else 0} bats')
+s16 = lambda lo, hi: ((lo | hi << 8) ^ 0x8000) - 0x8000
+f = r[2950]
+near = sum(1 for k in range(9) if f['sw_st'][k] and abs(s16(f['sw_xl'][k], f['sw_xh'][k]) - w16(f['p_x'])) < 48
+           and abs(s16(f['sw_yl'][k], f['sw_yh'][k]) - s16(*f['p_y'])) < 64)
+check('they close in on Rastan', near >= 6, f'{near} of 9 within 48 px at frame 2950')
+bites = [i for i in range(1, 3000) if r[i]['sw_bite'][0] == 45 and r[i - 1]['sw_bite'][0] != 45]
+gaps = {b - a for a, b in zip(bites, bites[1:])}
+check('touching him, they bite every 45 frames at most', len(bites) >= 3 and min(gaps) >= 45,
+      f'{len(bites)} bites, gaps {sorted(gaps)[:4]}')
+kills = [i for i in range(3000, 3400) for k in range(9) if r[i]['sw_st'][k] == 15 and r[i - 1]['sw_st'][k] != 15]
+# (several can die in one swing; a lizardman killed with them adds 300)
+check('his sword kills them, 100 points each', len(kills) >= 3
+      and all(bcd(r[i + 1]['score']) - bcd(r[i - 1]['score']) - 100 * kills.count(i) in (0, 300) for i in kills),
+      f'{len(kills)} killed')
 
 print(f'{len(fails)} failure(s)')
 sys.exit(1 if fails else 0)

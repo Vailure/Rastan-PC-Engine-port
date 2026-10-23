@@ -21,6 +21,7 @@ FILES = {
     'castle': 'castle.snp',      # sim/scripts/castle.txt: castle soldiers (mace slot 4, sword slot 6)
     'boss': 'boss.snp',          # sim/scripts/boss.txt: the boss (slot 17), its fire (slots 18-22)
     'vine': 'vine.snp',          # the bot run (build/vine.txt): the vine at x 2750, slot 0
+    'swarm': 'swarm.snp',        # sim/scripts/swarm.txt: the hurry-up swarm at the round start
 }
 
 GROUPS = {
@@ -100,6 +101,36 @@ GROUPS = {
     'vine': [
         ('vine_swing', 'vine', 0, 10755, 10934),
     ],
+    # The hurry-up swarm's small bats (arcade slots 20-28): flapping (cells $268-$26A,
+    # all bats on one global clock) and the cell a sword hit leaves ($276). src/swarm.asm
+    # draws them itself (CELL_SYMBOLS); these captures only bring in the cells.
+    'swarm': [
+        ('swarm_flap', 'swarm', 21, 2895, 2926),
+        ('swarm_dead', 'swarm', 20, 2932, 2934),
+    ],
+}
+
+# The arcade's sprite colour bank (PC090OJ control, palettes bank..bank+15) is 48 in
+# round 1, but a restart at a checkpoint from segment 16 on (the castle's last two)
+# switches it to 64 ($0452DA: the restart segment mod 23 >= 16), so everything drawn
+# with bank 48's palettes takes bank 64's: the castle soldiers go from gold and blue
+# to green. GROUP_BANK fixes a group's bank where its capture used the other one
+# (castle.snp's soldiers walk in after such a restart); pce_objects also writes
+# objpal_b64.bin, the same palette slots with bank 64's colours, from BANK64_SNAP.
+# (The boss capture also ran in bank 64.) B64_GROUPS: the groups a restart at checkpoint
+# 4 or 5 can show, whose colours objpal_b64.bin changes.
+GROUP_BANK = {'castle': 48, 'boss': 48}
+BANK64_SNAP = ('castle', 2600)
+B64_GROUPS = ('castle', 'jets', 'vine', 'swarm', 'items', 'boss')
+
+# Single cells the engine draws by itself: symbol -> (group, arcade cell). objects.inc
+# gets SYMBOL (the cell's number in objcells.bin) and SYMBOL_ATTR (its SATB attribute
+# byte as pce_objects writes it for poses: palette, cell bits 8-9, flips).
+CELL_SYMBOLS = {
+    'SWARM_CELL0': ('swarm', 0x268),
+    'SWARM_CELL1': ('swarm', 0x269),
+    'SWARM_CELL2': ('swarm', 0x26A),
+    'SWARM_DEAD': ('swarm', 0x276),
 }
 
 # Scripted flights, replayed relative to the spawn point:

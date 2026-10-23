@@ -159,7 +159,8 @@ cd tools && python3 contact.py ../out/play1.snp ../out/play1.png 700 900 1100
 - **VRAM streaming:** round 1 has about 4,000 unique 8x8 patterns, but VRAM holds 960 for the stage.
   The converter models the BAT offline: a pattern stays resident while a BAT cell that can still be seen
   shows it (the camera rules above say which can), and each line record carries the patterns it needs
-  uploaded, plus its 64 BAT words. Peak use is 929 of 960 slots.
+  uploaded, plus its 64 BAT words. Peak use is 930 of the 936 slots it may use (`$1000-$4A7F`; the
+  swarm's bat cells take `$4A80-$4AFF`).
 - **Compression:** the stream was 513 KB: 9,149 pattern uploads of 32 bytes (only 3,645 distinct
   patterns, re-uploaded as they come back into view) and 128 bytes of BAT words per line. Now
   (206 KB, 2.5x smaller):
@@ -173,8 +174,10 @@ cd tools && python3 contact.py ../out/play1.snp ../out/play1.png 700 900 1100
   the old byte loop. Patterns themselves are not compressed: a cheap codec would save about 15% of
   them for a decoder in the frame.
 
-VRAM layout: BAT `$0000`, streamed tiles `$1000-$4BFF`, props `$4C00`, Rastan's two sprite pattern
-buffers `$5000`/`$5600` (20 body cells + 4 weapon cells each), object buffers `$5C00-$767F`, HUD `$7700`, SATB `$7F00`.
+VRAM layout: BAT `$0000`, streamed tiles `$1000-$4A7F`, the swarm's bat cells `$4A80-$4AFF`, the floor
+spears' cells `$4B00`, props `$4C00` (outside: the cave block; in the castle the fire's tiles `$4C00-$4DFF` and
+the hanging column's cells `$4E00-$4F7F`), Rastan's two sprite pattern buffers `$5000`/`$5600` (20 body cells +
+4 weapon cells each), object buffers `$5C00-$76BF`, the killed bat's cell `$76C0`, HUD `$7700`, SATB `$7F00`.
 
 ## Rastan (milestone 2, approximate)
 
@@ -264,8 +267,34 @@ Not done yet: slopes, waterfall currents, the other collision codes, rope attack
 - **Fire jets** (`src/jets.asm`): over the lava pits at world x 9870, 9966 and 10062 (the arcade's census:
   10382-10574 in segment `$14`, now the jets' room at square ($13, -1)). Each erupts when Rastan is 172 px
   left of it (the flame rises for 17 frames, dies down for 18, then a column flickers for 57) and again about 220
-  frames later while he is near; touching the flame hurts. Not done: the castle's ceiling spikes
-  (x 8328, 8488), whose bot captures show too little to model.
+  frames later while he is near; touching the flame hurts.
+- **The hanging column** (`src/column.asm`, marker `$47`; measured on `sim/scripts/hall.txt` and variants
+  that stop Rastan under it with the soldiers and the swarm poked away): over the first room's top corridor
+  at x 8480 a 32x32 block hangs from the ceiling (y 32) and a piston comes out of it. Once on the screen it
+  waits 9 frames, then cycles every 540: down 2 px every 2 frames until its foot is on the floor, held 258
+  frames, up 2 px every 4, held 54. It does no harm, but it is solid and pushes Rastan out to 21 px from its
+  middle, so the corridor is open about 140 frames in 540. (These were the "ceiling spikes" of earlier notes;
+  the floor spears at 8328 and 8488 are the room's only spikes.) Drawn with sprites like the spears.
+- **The sealing wall** (`src/column.asm`, marker `$4D`; `hall.txt` frames 4230-4700): 257 frames after Rastan
+  comes into the lava hall, a wall of the spears' slot-cover cells comes out of the shaft's wall at x 8680 and
+  moves right 2 px every 7 frames (31 steps), its top row growing behind it. It is solid and pushes: whoever is
+  still on the ledge before the fire is pushed off into it (the arcade's Rastan at step 29).
+- **The hurry-up swarm** (`src/swarm.asm`, arcade `$049FA6`; `sim/scripts/swarm.txt`): not only the castle's.
+  While the stream stays in one pair of segments a count goes up every 64 frames; at 40 (42 s) nine small bats
+  come (arcade slots 20-28, type `$0B`), each wave raising a level (to 3) and the next coming after 30, 20, then
+  10 counts; a new pair restarts the count, a death clears it all, and there is none in the boss room. Bats enter
+  at the screen's edges (heights by where Rastan stands) and from below him, and fly toward where he was when they
+  came (a point on the screen: the arcade keeps objects in screen coordinates): scripts of six steps, a step every
+  4 frames (2 from level 2, 1 at level 3), turning one of 56 directions a step (the arcade's velocity table), the
+  next script picked by where the target is, on a bit of each bat's own pseudo-random byte (`$041FAC`). At level 3
+  they aim at Rastan as he is. A touch bites 1024 (4 units, then 45 frames before the next); one sword hit kills a
+  bat (100). All flap on one clock (cells `$268`, `$269`, `$26A`, `$269`, 4 frames each).
+- **Colour bank** (the soldiers' colours): the arcade's sprite colour bank is 48 in round 1, but a restart at a
+  checkpoint from segment 16 on (checkpoints 4 and 5) sets it to 64 (`$0452DA`: the restart segment mod 23 >= 16),
+  so all sprites drawn with bank 48's palettes take bank 64's: the castle soldiers go from gold and blue to green.
+  The converter takes the soldiers' (and the boss's) palettes from bank 48 (`GROUP_BANK` in
+  `tools/object_specs.py`) and writes `objpal_b64.bin` for the castle's groups in bank 64; `checkpoint_start`
+  loads that set after a restart at checkpoint 4 or 5.
 - **The boss** (`src/boss.asm`; `sim/scripts/boss.txt`): drops in when Rastan enters the last room and lands
   (anchor y 446). It walks at him, leaps when he is far, and alternates fire (five fragments form at the top of the
   screen in front of it, then rain down at him in a fan) and a staff swing reaching about 80 px. Ten sword hits kill it
@@ -432,7 +461,8 @@ music gets the channel back, and that the voice shows in the audio.
   frame at the boss door, castle soldiers losing pieces.
 - **`tools/tgemu`** (the test emulator) now emulates the 16-cells-a-line limit (`TGRUN_NOSPRLIMIT=1` turns
   it off) and the PSG's direct D/A, and its H6280 timer keeps running after it fires; `tgrun` can dump the
-  SATB every frame (`TGRUN_SATB`).
+  SATB every frame (`TGRUN_SATB`), and print the CPU's PC at the end of every frame (`TGRUN_PC=1`: where a
+  hang sits).
 
 ## Arcade notes (reverse engineering)
 
@@ -482,15 +512,15 @@ music gets the channel back, and that the voice shows in the audio.
 - [x] Standing UP+II: the sword over his head (arcade bodies 12-14, `sim/scripts/upatk.txt`); its hit
       box is the up thrust's, which has not been measured against the arcade for this attack
 - [x] The lava hall's fire (markers `$4C`, `$52-$55`), baked into the tile map and animated
-- [ ] The castle's swarm: nine small bats (cells `$268-$26A`, arcade slots 20-28) that flutter about shaft 1
-      and the lava hall from the moment Rastan climbs into the shaft (`sim/scripts/hall.txt`, frame 2892 on;
-      the "sparks" of earlier notes)
+- [x] The hurry-up swarm: nine small bats after 42 s in one pair of segments, anywhere but the boss room
+      (`src/swarm.asm`)
 - [x] The castle in its own colours (a second set of 16 BG palettes)
 - [x] Title screen, GAME OVER, the round-clear screen and jingle (`tools/pce_still.py`, `src/still.asm`)
 - [x] RUN pauses
-- [ ] The castle's ceiling spikes (x 8328, 8488)
-- [ ] Castle soldiers' colours: the arcade switches its sprite colour bank in the castle (gold soldiers
-      in the first rooms, green ones past the lava hall); the port shows them green throughout
+- [x] The first room's hanging column (marker `$47`) and the lava hall's sealing wall (marker `$4D`)
+- [x] The sprite colour bank: gold and blue castle soldiers, green after a restart at checkpoint 4 or 5
+- [ ] Shaft 2's three markers `$45` (y -752): piston objects of the same kind (type `$18`), spawned by an
+      event (`$04621E`, `$28A` = 1); no capture reaches shaft 2 yet
 
 (Checked and not needed: Rastan shows no score popups when anything dies, and the "small castle
 flyers" seen in an early census are the blue throwers' clubs, which the port already has.)

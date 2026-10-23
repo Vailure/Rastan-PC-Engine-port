@@ -66,7 +66,9 @@ int main(int argc, char **argv)
             }
             wav_samples += snd.buffer_size;
         }
-        if (satb) fwrite(objram, 1, 0x200, satb);  /* TGRUN_SATB=file : the sprite table shown, each frame */
+        if (satb) fwrite(objram, 1, 0x200, satb);
+        if (getenv("TGRUN_PC"))   /* TGRUN_PC=1 : the CPU's PC at the end of each frame (hangs) */
+            fprintf(stderr, "%5d: pc %04X\n", f, h6280_get_reg(H6280_PC));  /* TGRUN_SATB=file : the sprite table shown, each frame */
         if (peek_len) {           /* TGRUN_PEEK=offset,len : dump RAM ($2000+offset) each frame */
             printf("%5d:", f);
             for (int i = 0; i < peek_len; i++) printf(" %02x", ram[peek_off + i]);

@@ -58,6 +58,7 @@ dbg_on:		ds	1		; The menu can be opened (debug builds; the demo:
 dbg_now:	ds	1		; Open it at the next game frame (from the title).
 
 		.bss
+obj_b64:	ds	1		; The arcade's sprite colour bank is 64 (enemies_load).
 dbg_save:	ds	MENU_W * MENU_H * 2	; The tile map under the menu.
 
 		.code
@@ -128,6 +129,15 @@ checkpoint_start:
 		sta	<p_y + 1
 		jsr	enemies_reset
 		jsr	props_reset
+		jsr	swarm_reset		; (src/swarm.asm)
+		jsr	column_reset		; (src/column.asm)
+		ldx	#0			; The arcade's sprite colour bank: 64 after a
+		lda	<cur_cp			; restart from segment 16 on (checkpoints 4
+		cmp	#4			; and 5: the castle soldiers turn green),
+		bcc	!+			; else 48.
+		inx
+!:		stx	obj_b64
+		jsr	enemies_load
 		jsr	bg_palettes_here	; (the castle has palettes of its own)
 		jsr	bg_black0
 		jsr	music_here		; The tune for where he restarts.
@@ -202,6 +212,7 @@ door_enter:	stz	<p_door
 		cmp	#>8192
 		bcs	.no
 		jsr	screen_cut
+		jsr	swarm_save		; (bats keep their place on the screen)
 		lda	#<8240
 		sta	<p_x
 		lda	#>8240
@@ -216,6 +227,7 @@ door_enter:	stz	<p_door
 		jsr	music_here		; (the castle's tune)
 		jsr	camera_update		; (it keeps inside the castle's wall)
 		jsr	stream_ahead
+		jsr	swarm_follow
 		bra	.show
 .boss:
 		jsr	screen_cut
@@ -245,6 +257,7 @@ door_enter:	stz	<p_door
 		stz	<p_y + 1
 		jsr	start_fall
 		jsr	enemies_reset
+		jsr	swarm_reset
 		jsr	music_here		; (the boss room's tune)
 		jsr	camera_update
 .show:		jsr	set_scroll_regs
@@ -470,6 +483,7 @@ menu_close:	php
 		lda	<dbg_noenemy		; Enemies switched off: clear them.
 		beq	!+
 		jsr	enemies_reset
+		jsr	swarm_reset
 !:		rts
 
 ; menu_close_quiet - colors, enemy cells and sprites back (no tile map).

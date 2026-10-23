@@ -66,7 +66,7 @@ def warp(cp):
 def route(cp):
     if cp == 4:
         k, base = route_keys(rom, cp, ROUTE_A)
-        return k, base + 3377
+        return k, base + 3377 + 540     # (+540: the column, routes.py)
     if cp == 5:
         k, base = route_keys(rom, cp, ROUTE_B)
         return k, base + 3572

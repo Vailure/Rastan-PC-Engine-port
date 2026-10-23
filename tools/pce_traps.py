@@ -7,9 +7,14 @@ object slot (sim/scripts/spikes.txt, frame 1480): a slot cover ($234) on the flo
 per spear, a head ($266) over a shaft ($267, repeated). Two spears 16 px apart make a
 trap; markers $46 at x 8328 and 8488 place two traps.
 
+The same room's hanging column (marker $47, hall.txt) is drawn the same way: a 32x32
+block ($236-$239) hanging from the ceiling and a piston, shaft ($23A, repeated) and
+foot ($23B), in the spears' palette.
+
 Outputs:
   traps.bin    3 cells (cover, head, shaft), 128 bytes each (PCE sprite format)
   trappal.bin  two sprite palettes (the cover's, the spear's)
+  column.bin   6 cells: the block (4, in 32x32 sprite order), shaft, foot
 """
 import os
 import sys
@@ -20,6 +25,7 @@ from snap import read_snaps, palette_rgb
 ROMDIR = os.environ.get('RASTAN_ROMS', os.path.join(os.path.dirname(__file__), '..', 'roms', 'rastan'))
 FRAME = 1480
 CELLS = (0x234, 0x266, 0x267)
+COLUMN = (0x236, 0x237, 0x238, 0x239, 0x23A, 0x23B)
 
 
 def to9(c):
@@ -40,6 +46,22 @@ def main():
     assert set(color) == set(CELLS), color
     pals = [color[0x234], color[0x266]]
     assert color[0x267] == color[0x266]
+    def cells(codes):
+        blob = bytearray()
+        for code in codes:
+            g = spr[code]
+            b = bytearray(128)
+            for pl in range(4):
+                for y in range(16):
+                    v = 0
+                    for x in range(16):
+                        if (g[y, x] >> pl) & 1:
+                            v |= 0x8000 >> x
+                    b[pl * 32 + y * 2] = v & 0xff
+                    b[pl * 32 + y * 2 + 1] = v >> 8
+            blob += b
+        return blob
+    open(f'{out}/column.bin', 'wb').write(cells(COLUMN))
     blob = bytearray()
     for code in CELLS:
         g = spr[code]

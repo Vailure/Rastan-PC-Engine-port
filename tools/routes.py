@@ -27,8 +27,14 @@ ROUTE_A = [200, 449, '04', 450, 453, '08', 470, 473, '41', 474, 700, '01', 710, 
 # (Measured from power-on on a build whose warp to checkpoint 4 resumed play 2 frames
 # sooner than the one that later ran it at 223: the route, 2 frames later, from 223.)
 ROUTE_A = shift(ROUTE_A, 2 - 223)
-# The same up to the top of shaft 1's lower rope, where he hangs still (from 2249).
-SHAFT_HANG = 2249
+# The top corridor's hanging column (src/column.asm) comes down as he walks right at
+# 1103 and shuts the corridor for most of its 540-frame cycle: he keeps pushing right
+# until it has gone up and he is through (at the rope by about 1700), 540 frames more
+# (the column's period, three of the vines'), so the rest runs as it did.
+_i = ROUTE_A.index(1359)                 # (the end of that walk: 1580 - 221)
+ROUTE_A = ROUTE_A[:_i] + [1359 + 540] + shift(ROUTE_A[_i + 1:], 540)
+# The same up to the top of shaft 1's lower rope, where he hangs still (from 2789).
+SHAFT_HANG = 2249 + 540
 ROUTE_SHAFT = ROUTE_A[:ROUTE_A.index(SHAFT_HANG)]
 
 ROUTE_B = [200, 830, '05'] + sum([[f, f + 3, I] for f in range(220, 830, 60)], []) + [

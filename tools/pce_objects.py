@@ -26,11 +26,11 @@ import numpy as np
 from PIL import Image
 from arcade_gfx import load_region, decode_packed
 from snap import read_snaps, palette_rgb
-from object_specs import FILES, GROUPS, POSE_SYMBOLS, GROUP_MAX, PATHS
+from object_specs import B64_GROUPS, BANK64_SNAP, GROUP_BANK, CELL_SYMBOLS, FILES, GROUPS, POSE_SYMBOLS, GROUP_MAX, PATHS
 import census_all
 
 ROMDIR = os.environ.get('RASTAN_ROMS', os.path.join(os.path.dirname(__file__), '..', 'roms', 'rastan'))
-PAL_SLOTS = [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14]   # 0 Rastan, 8 props, 15 HUD
+PAL_SLOTS = [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12]   # 0 Rastan, 8 props, 13-14 floor spears, 15 HUD
 MAX_PIECES = 11                                           # walker slot buffers hold 11 cells
 JITTER = 3                                                # poses this close count as one (see below)
 
@@ -96,7 +96,7 @@ def main():
                 p = [q for q in pieces(s, slot) if lo <= q[2] < hi][i0:i1]
                 if not p and 'index' not in opt:     # (a split part may be empty: keep its timing)
                     continue
-                bank = (s.sprctrl & 0xe0) >> 1
+                bank = GROUP_BANK.get(g, (s.sprctrl & 0xe0) >> 1)
                 p = [(attr, dy, code, dx, bank + (attr & 15)) for attr, dy, code, dx in p]
                 for q in p:
                     if q[4] not in used_pals:
@@ -146,14 +146,24 @@ def main():
 
     # PCE sprite palettes: identical arcade palettes share a slot.
     to9 = lambda c: tuple(int(round(int(v) * 7 / 255)) for v in c)
+    # A slot holds a palette in colour bank 48 and (objpal_b64.bin) in bank 64: arcade
+    # palettes share one only if both their colours agree. Bank 64 changes only the
+    # palettes of the groups that can be seen after a restart at checkpoint 4 or 5
+    # (B64_GROUPS); the others keep theirs, so that more of them can share a slot.
+    cap, fr = BANK64_SNAP
+    ref = next(s for s in read_snaps(os.path.join(build, FILES[cap])) if s.frame == fr)
+    rgb64 = palette_rgb(ref.pal)
+    late = {q[4] for g in B64_GROUPS for p in groups[g][0] for q in p}
     pal9, slot_of = {}, {}
     for ap, cols in sorted(used_pals.items()):
         key = tuple(to9(c) for c in cols)
-        if key not in pal9:
+        alt = (tuple(to9(c) for c in rgb64[(ap + 16) * 16:(ap + 16) * 16 + 16])
+               if 48 <= ap < 64 and ap in late else key)
+        if (key, alt) not in pal9:
             if len(pal9) == len(PAL_SLOTS):
                 raise SystemExit('too many sprite palettes')
-            pal9[key] = PAL_SLOTS[len(pal9)]
-        slot_of[ap] = pal9[key]
+            pal9[key, alt] = PAL_SLOTS[len(pal9)]
+        slot_of[ap] = pal9[key, alt]
 
     # Cells: unique image up to flips, per PCE palette slot.
     cells, cell_ids, cell_of = [], {}, {}
@@ -191,11 +201,17 @@ def main():
     open(f'{out}/objcells.bin', 'wb').write(blob)
     cell_banks = (len(blob) + 8191) // 8192
 
-    vce = bytearray()
-    for key, ps in sorted(pal9.items(), key=lambda kv: kv[1]):
+    vce, vce64, changed = bytearray(), bytearray(), []
+    for (key, alt), ps in sorted(pal9.items(), key=lambda kv: kv[1]):
         for r, g_, b in key:
             vce += ((g_ << 6) | (r << 3) | b).to_bytes(2, 'little')
+        for r, g_, b in alt:
+            vce64 += ((g_ << 6) | (r << 3) | b).to_bytes(2, 'little')
+        if alt != key:
+            changed.append(ps)
     open(f'{out}/objpal.bin', 'wb').write(vce)
+    open(f'{out}/objpal_b64.bin', 'wb').write(vce64)
+    print(f'bank 64 changes sprite palette slots {changed}')
 
     # Data banks: cells first, then one bank per group.
     with open(f'{out}/objects_data.inc', 'w') as f:
@@ -235,6 +251,11 @@ def main():
             f.write(f'GRP_{g.upper()}_BANK\t= ${first_bank + cell_banks + gi:02X}\n')
         for (g, name, step), sym in POSE_SYMBOLS.items():
             f.write(f'{sym}\t= {groups[g][1][name][step][0]}\n')
+        for sym, (g, code) in CELL_SYMBOLS.items():
+            ap = next(q[4] for p in groups[g][0] for q in p if q[2] == code)
+            c, fx, fy = cell_of[code, slot_of[ap]]
+            a = slot_of[ap] | ((c >> 8) << 4) | (0x40 if fx else 0) | (0x80 if fy else 0)
+            f.write(f'{sym}\t= {c}\n{sym}_ATTR\t= ${a:02X}\n')
         f.write(f'OBJ_PAL_COUNT\t= {len(pal9)}\n')
         f.write('obj_pal_slots:\tdb\t' + ', '.join(str(ps) for ps in sorted(pal9.values())) + '\n')
         f.write('; Arcade palette (bank + color) -> PCE sprite palette:\n')

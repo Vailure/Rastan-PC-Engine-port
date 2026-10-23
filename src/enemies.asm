@@ -148,7 +148,9 @@ enemies_init:	lda	#64			; (the first frame clears every entry
 		dw	128
 		db	$60			; rts
 
-; enemies_load - the objects' sprite palettes (cells come with each pose).
+; enemies_load - the objects' sprite palettes (cells come with each pose):
+; the arcade's colour bank 48, or with obj_b64 set its bank 64 (a restart at
+; checkpoint 4 or 5: tools/object_specs.py GROUP_BANK).
 enemies_load:	jsr	traps_load
 		php
 		sei
@@ -158,7 +160,13 @@ enemies_load:	jsr	traps_load
 		sta	<ep
 		lda	#>obj_palettes
 		sta	<ep + 1
-		clx
+		lda	obj_b64
+		beq	!+
+		lda	#<obj_palettes_b64
+		sta	<ep
+		lda	#>obj_palettes_b64
+		sta	<ep + 1
+!:		clx
 .pal:		lda	obj_pal_slots, x	; VCE address 256 + slot * 16
 		asl	a
 		asl	a
@@ -235,7 +243,11 @@ enemies_update:	lda	<dbg_noenemy		; Debug menu: no walkers (items still come).
 		jsr	vines_tick
 		jsr	vines_spawn
 		jsr	traps_update
-		jsr	boss_spawn
+		lda	<bg_set			; In the castle: the first room's hanging
+		beq	!+			; column (src/column.asm).
+		jsr	column_update
+		jsr	wall_update		; (and the lava hall's sealing wall)
+!:		jsr	boss_spawn
 		lda	boss_clear		; The boss is dead: the round is clear soon.
 		beq	!+
 		dec	boss_clear
@@ -1208,6 +1220,7 @@ enemies_draw:	php				; VDC writes: IRQ held off (see stream_line).
 		dec	<en_wk
 		bne	.walker
 		jsr	traps_draw		; The castle's floor spears.
+		jsr	swarm_draw		; The hurry-up swarm (src/swarm.asm).
 		; Clear entries the last frame used beyond this frame's.
 		lda	<en_satb
 		clc

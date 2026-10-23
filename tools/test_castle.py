@@ -63,12 +63,12 @@ from routes import ROUTE_A, ROUTE_SHAFT, ROUTE_B, ROUTE_V, SHAFT_HANG, keys as r
 
 # A: up shaft 1 and across the lava hall.
 ka, base = route_keys(god, 4, ROUTE_A)
-r = run(god, base + 3377, ka)
+r = run(god, base + 3377 + 540, ka)          # (+540: the column, routes.py)
 ys = [s16(f['scroll_y']) for f in r]
 check('the floor spears of the middle corridor can be walked past', all(f['p_state'][0] != ST_DEAD for f in r),
       f"died at frame {next((i for i, f in enumerate(r) if f['p_state'][0] == ST_DEAD), None)}")
-check('climbing out of the first room, the camera follows up into shaft 1', min(ys[:base + 2577]) <= -450,
-      f'highest scroll_y {min(ys[:base + 2577])}')
+check('climbing out of the first room, the camera follows up into shaft 1', min(ys[:base + 2577 + 540]) <= -450,
+      f'highest scroll_y {min(ys[:base + 2577 + 540])}')
 top = next((i for i, f in enumerate(r) if f['cam_region'][0] == 2), None)
 check("once the shaft's rows have all streamed, the lava hall's columns come next",
       top is not None and w16(r[top]['next_col']) >= 0x12 * 64, f"frame {top}")
@@ -76,7 +76,7 @@ vines = sorted({f['p_vine'][0] for f in r if f['p_state'][0] == ST_SWING})
 check('the three vines over the lava are caught in turn', len(vines) == 3, f'vine slots {vines}')
 end = r[-1]
 check('he lands past the lava', w16(end['p_x']) >= 9280 and s16(end['p_y']) == -345
-      and all(f['p_state'][0] != ST_DEAD for f in r[base + 2577:]), f"at ({w16(end['p_x'])}, {s16(end['p_y'])})")
+      and all(f['p_state'][0] != ST_DEAD for f in r[base + 2577 + 540:]), f"at ({w16(end['p_x'])}, {s16(end['p_y'])})")
 lc = [w16(f['loop_cnt']) for f in r]
 slow = min((lc[i + 60] - lc[i]) & 0xffff for i in range(300, len(r) - 60, 60))
 check('no slowdown on the way (60 logic frames a second)', slow >= 59, f'fewest {slow}')
@@ -140,6 +140,56 @@ plain = shot(ks, b4 + SHAFT_HANG + 48)
 menu = shot(km, b4 + SHAFT_HANG + 48)
 diff = (plain != menu).any(-1).mean() * 100
 check('in a shaft, closing the debug menu restores the screen', diff == 0, f'{diff:.2f}% pixels differ')
+
+
+# The top corridor's hanging column (marker $47): once seen it cycles every 540 frames
+# (down to 112 below its top, up to 34); it shuts the corridor while down: Rastan,
+# walking right on route A, is held 21 px left of its middle (8475) until it rises.
+rc = peek(god, base + 2200, ka, {'col_act': 1, 'col_len': 1, 'p_x': 2, 'p_y': 2})
+act = next((i for i, f in enumerate(rc) if f['col_act'][0]), None)
+lens = [f['col_len'][0] for f in rc[act:]] if act else []
+downs = [i for i in range(1, len(lens)) if lens[i] > 34 and lens[i - 1] == 34]
+check('the hanging column comes down and goes up again every 540 frames', act is not None and max(lens) == 112
+      and len(downs) >= 2 and all(abs(b - a - 540) <= 1 for a, b in zip(downs, downs[1:])), f'downs at {downs[:3]}')   # (samples: +/-1)
+held = [i for i, f in enumerate(rc) if w16(f['p_x']) == 8475 and s16(f['p_y']) == 135]
+past = next((i for i in range(len(rc)) if w16(rc[i]['p_x']) > 8517 and s16(rc[i]['p_y']) == 135), None)
+check('down, it holds Rastan back (8475); risen, he walks through', len(held) > 200 and past is not None
+      and past > held[-1] and rc[held[-1]]['col_len'][0] <= 70, f'held {len(held)} frames, through at {past}')
+
+# The lava hall's sealing wall (marker $4D): 257 frames after Rastan comes into the
+# hall it slides out of the shaft's wall, 2 px every 7 frames; left standing on the
+# ledge before the fire, he is pushed off into it at its 29th step (the arcade's).
+J = ROUTE_A.index(2990 - 221 + 540)                  # (route A up to the lava hall's ledge)
+kw, bw = route_keys(god, 4, ROUTE_A[:J - 2] + [3263, '04'])
+rw = peek(god, bw + 3900, kw, {'p_x': 2, 'p_y': 2, 'p_state': 1, 'wl_act': 1, 'wl_step': 1})
+seen = next((i for i, f in enumerate(rw) if f['wl_act'][0]), None)
+out = next((i for i, f in enumerate(rw) if f['wl_step'][0]), None)
+fell = next((i for i, f in enumerate(rw) if out and i > out and f['p_state'][0] == ST_DEAD), None)
+check('the sealing wall comes out 257 frames after he comes into the hall', seen and out and abs(out - seen - 257) <= 1,
+      f'in at {seen}, out at {out}')
+check('and pushes him off the ledge into the fire', fell is not None and 27 <= rw[fell]['wl_step'][0] <= 31
+      and w16(rw[fell]['p_x']) >= 8768, f"dead at {fell}, step {rw[fell]['wl_step'][0] if fell else None}")
+
+# The arcade's sprite colour bank: 48 through round 1 (gold and blue soldiers), 64
+# after a restart at checkpoint 4 or 5 (green): the object palettes the VCE holds.
+def sprite_pals(keys, frame):
+    out = os.path.join(tmp, f'castle_vce_{os.getpid()}.bin')
+    subprocess.run([TGRUN, god, str(frame), '/dev/null'] + [str(k) for k in keys],
+                   env=dict(os.environ, TGRUN_VCE=out), check=True, capture_output=True)
+    return np.frombuffer(open(out, 'rb').read(), '<u2')[256:512]
+
+
+objdir = os.path.join(os.path.dirname(os.path.abspath(god)), 'objects')
+slots = [int(v) for v in open(os.path.join(objdir, 'objects.inc')).read().split('obj_pal_slots:')[1]
+         .split('\n')[0].replace('db', '').split(',')]
+want48 = np.frombuffer(open(os.path.join(objdir, 'objpal.bin'), 'rb').read(), '<u2')
+want64 = np.frombuffer(open(os.path.join(objdir, 'objpal_b64.bin'), 'rb').read(), '<u2')
+held = lambda v: np.concatenate([v[ps * 16:ps * 16 + 16] for ps in slots])
+v3 = held(sprite_pals(warp(3), 300))
+v4 = held(sprite_pals(warp(4), 300))
+check('colour bank 48 after a restart before the castle (gold and blue soldiers)', (v3 == want48).all())
+check('colour bank 64 after a restart at checkpoint 4 (green soldiers)', (v4 == want64).all()
+      and (want64 != want48).any())
 
 print(f'{len(fails)} failure(s)')
 sys.exit(1 if fails else 0)

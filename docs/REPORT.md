@@ -20,7 +20,8 @@ The demo ROM is `build/rastan.pce`:
 | **Round 1, outdoors** | The arcade's map from the start to the castle gate:<br>• the cave and its block, broken by a down thrust;<br>• ropes;<br>• the chasm vine;<br>• the waterfall, with its flowing colour cycle and deadly lip;<br>• the dusk sky change;<br>• rockfalls and rolling boulders. |
 | **Enemies outdoors** | • Lizardmen;<br>• blue club throwers and their clubs;<br>• chimeras and their fireballs;<br>• two gargoyle flights;<br>• the woman warrior;<br>• five weapon items, each with its bat. |
 | **The castle** | Laid out as the arcade lays it out, in the castle's own colours:<br>• the first room;<br>• shaft 1, scrolling up;<br>• the lava hall, with its animated fire and three vines;<br>• the jets' room;<br>• shaft 2;<br>• the boss room door. |
-| **Enemies in the castle** | • Sword and mace soldiers;<br>• floor spears;<br>• fire jets. |
+| **Enemies in the castle** | • Sword and mace soldiers, gold and blue (green after a restart at the last two checkpoints, as in the arcade);<br>• floor spears;<br>• the first room's hanging column, which shuts the top corridor most of the time;<br>• the lava hall's sealing wall, which pushes a lingering Rastan into the fire;<br>• fire jets. |
+| **Hurry-up swarm** | Anywhere but the boss room: dawdle 42 s in one pair of segments and nine small bats come for Rastan, faster with each wave. |
 | **Boss** | Drops in, walks, leaps, staff swing, a fan of fire from above. Ten hits kill it. |
 | **Round clear** | The arcade's screen (YOU ARE A BRAVE FIGHTER…) with its jingle for 7 s (RUN skips it after 2 s), then the title. |
 | **Rastan** | • Walk, crouch, jumps (low, high and forward);<br>• attacks: standing, crouched, in the air;<br>• the standing up-swing;<br>• down and up thrusts;<br>• ropes and vines;<br>• the four weapons;<br>• knockback, invulnerability flashes and the death animation. |
@@ -79,16 +80,16 @@ A bot plays every section in god mode, starting from each checkpoint.
 - **The bgcheck build:** every 10th frame is compared pixel for pixel with the converter's preview. That build shows the tile map alone.
 - **Contact sheets** (`build/audit/cpN.png`) are written for review by eye.
 
-The results below are from the run on 2026-10-22 on the compressed SF2 build.
+The results below are from the run on 2026-10-23, with the swarm, the hanging column and the sealing wall in.
 
 | Section (start) | Distance covered (world x) | Slow frames | Bad poses | Tile-map frames wrong | SATB full¹ | Frames with a sprite lost to the 16-a-line limit¹ |
 |---|---|---|---|---|---|---|
-| cp0: round start | 49 → 1830 | 0 | 0 | 0 / 240 | 0 | 165 |
-| cp1: segment 4 | 2097 → 4708 | 0 | 0 | 0 / 240 | 113 | 287 |
-| cp2: segment 8 (waterfall) | 4145 → 5638 | 0 | 0 | 0 / 240 | 118 | 161 |
+| cp0: round start | 49 → 1830 | 0 | 0 | 0 / 240 | 0 | 174 |
+| cp1: segment 4 | 2097 → 4708 | 0 | 0 | 0 / 240 | 114 | 292 |
+| cp2: segment 8 (waterfall) | 4145 → 5638 | 0 | 0 | 0 / 240 | 120 | 159 |
 | cp3: segment 12 → castle | 6193 → 8662 | 0 | 0 | 0 / 240 | 0 | 242 |
-| cp4: segment 16 (castle) | 8253 → 9300 | 0 | 0 | 0 / 357 | 0 | 270 |
-| cp5: lava hall → boss | 9306 → 11728 | 0 | 0 | 0 / 377 | 0 | 499 |
+| cp4: segment 16 (castle) | 8253 → 9300 | 0 | 0 | 0 / 411 | 0 | 273 |
+| cp5: lava hall → boss | 9306 → 11728 | 0 | 0 | 0 / 377 | 0 | 502 |
 | **Problems** | | | | | | **0 (both runs)** |
 
 ¹ These are reported, not failed: they are the PC Engine's hardware limits, 64 sprites and 16 sprite cells per scanline. When either runs out, the walkers take turns losing pieces, which shows as flicker, as many PC Engine games do. No single enemy disappears for good.
@@ -150,10 +151,8 @@ All of these are fixed, and each now has a check:
 
 | Gap | Effect on the demo | Notes |
 |---|---|---|
-| The castle bat swarm | Nine small bats that flutter around shaft 1 and the lava hall are missing | Captured (`hall.txt`, frame 2892 on); not converted. Needs sprite budget planning. |
-| Castle soldiers' colours | Every soldier is green; the arcade's first castle rooms have gold and blue ones | The arcade switches the sprite colour bank (48 → 64) part-way through |
-| Ceiling spikes | The two at x 8328 and 8488 are absent | Bot captures showed too little. Markers `$45`, `$47` and `$4D` are unidentified. |
-| Sprite flicker in crowds | Visible when 3–4 walkers share a line | Hardware limit; mitigated by rotation |
+| Shaft 2's three `$45` objects | Absent | Piston-type objects spawned by an event; no arcade capture reaches shaft 2 yet |
+| Sprite flicker in crowds | Visible when 3–4 walkers share a line, or with the swarm | Hardware limit; mitigated by rotation (walkers and bats) |
 | Fire sparks | Not drawn | Cosmetic |
 
 ---
@@ -209,11 +208,12 @@ The project spans 34 commits (2026-10-20 → 2026-10-22).
    - the castle shaft's morning star;
    - the camera clamp fix;
    - stage compression (513 KB → 206 KB) and the move to the Street Fighter II mapper.
+   - the hurry-up swarm, the sprite colour bank (soldiers' colours), the hanging column and the sealing wall.
 
 The next steps, in order, are in `docs/HANDOFF.md` §8:
-1. the swarm;
-2. soldier colours;
-3. ceiling spikes;
+1. shaft 2's `$45` objects;
+2. the swarm's sprite budget and the measured-not-read collision details;
+3. the lava hall's vines and fire sparks;
 4. more compression, if needed;
 5. rounds 2–6;
 6. the exact player port;

@@ -177,7 +177,9 @@ traps_update:	inc	trap_t
 .r:		rts
 
 ; traps_draw - SATB entries (VWR already selected, enemies_draw), en_satb counts.
-traps_draw:	jsr	traps_active
+traps_draw:	jsr	column_draw		; (src/column.asm)
+		jsr	wall_draw
+		jsr	traps_active
 		bcc	.r
 		ldx	#NUM_TRAPS - 1
 .trap:		txa

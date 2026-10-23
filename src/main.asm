@@ -160,6 +160,7 @@ core_main:	lda	#GAME_BANK		; (the boot mapping already has it there)
 		jsr	props_update		; (the cave block: solid, breakable)
 	.if	!NO_ENEMIES
 		jsr	enemies_update		; (debug ENEMIES OFF: no walkers)
+		jsr	swarm_update		; The hurry-up swarm.
 	.endif
 		jsr	camera_update
 		jsr	stream_ahead		; Make its columns resident.
@@ -187,6 +188,7 @@ bg_palettes_here:
 !:		txa
 bg_palettes:	sta	<bg_set
 		stz	<fire_on		; (the fire's tiles: again, once in)
+		stz	col_on			; (and the hanging column's cells)
 		php
 		sei
 		lda	#^palette_data
@@ -740,6 +742,7 @@ GAME_BANK	=	$04
 		include	"chimera.asm"
 		include	"boulder.asm"
 		include	"props.asm"
+		include	"column.asm"
 
 ; Checkpoints, the debug menu and more object code: bank DEBUG_BANK, in MPR2
 ; ($4000) all the time, so it is as callable as GAME_BANK.
@@ -755,6 +758,7 @@ DEBUG_BANK	=	$05
 		include	"still.asm"
 		include	"fire.asm"
 		include	"traps.asm"
+		include	"swarm.asm"
 		include	"boss.asm"
 
 ; ---------------------------------------------------------------------------
@@ -767,11 +771,13 @@ palette_data:	incbin	"palette.bin"
 palette_castle:	incbin	"palette_castle.bin"	; The castle's own set (build/stage1).
 sprite_palette:	incbin	"sprpal.bin"
 obj_palettes:	incbin	"objpal.bin"
+obj_palettes_b64: incbin	"objpal_b64.bin"	; (the same, colour bank 64)
 hud_palette:	incbin	"hudpal.bin"
 prop_palette:	incbin	"proppal.bin"
 debug_font:	incbin	"font.bin"		; HuC's 8x8 bold font, $20-$5F (build/debug).
 trap_palettes:	incbin	"trappal.bin"		; The floor spears (build/traps).
 trap_cells:	incbin	"traps.bin"
+column_data:	incbin	"column.bin"		; The hanging column (build/traps).
 
 ; The ROM uses the Street Fighter II mapper (pceas --sf2): banks $00-$3F are
 ; fixed, and banks $40-$7F show one of four 512 KB pages, chosen by a write to

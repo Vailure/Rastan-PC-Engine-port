@@ -62,7 +62,8 @@ HALL_SEG = 0x12        # the lava hall, whose fire takes line $14x as well
 FIRE_X0, FIRE_X1, FIRE_Y = 8768, 9168, -320
 FIRE_CELL = 0x224
 FIRE_TILE0 = 0x4C0     # VRAM $4C00: the stage props' cells, unused in the castle
-NUM_SLOTS = 944       # $1000-$4AFF; $4B00-$4BFF the floor spears' cells, $4C00-$4FFF stage props
+NUM_SLOTS = 936       # $1000-$4A7F; $4A80-$4AFF the swarm's bat cells, $4B00-$4BFF the floor spears'
+                      # cells, $4C00-$4FFF stage props
 ROWS = 64
 QUAD_SHORT = 0xE0   # line codes: $00-$DF quad #, $E0-$EF repeat, $F0-$FF long quad #
 
