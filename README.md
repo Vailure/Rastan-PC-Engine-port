@@ -36,6 +36,8 @@ from the ROMs (`*.bin`, snapshots, renders, disassembly) is git-ignored.
 | `src/woman.asm` | The woman warrior |
 | `src/jets.asm` | Fire jets over the castle's lava |
 | `src/vines.asm` | Swinging vines |
+| `src/traps.asm` | The castle's floor spears |
+| `src/sound.asm` | Music and sound effects (PSG) |
 | `src/boss.asm` | The round 1 boss and its fire; the round clear |
 | `src/hud.asm`, `tools/pce_hud.py` | HUD from the arcade's HUD sprites |
 | `src/debug.asm` | Checkpoints (death restarts, warps) and the debug menu |
@@ -301,6 +303,33 @@ left 04, right 08, b1 10, b2 20), `poke <from> <to> <addr> <b|w|l> <val>`,
 
 The headless runner is built with `tools/tgrun/build.sh`, after running `make` in a HuC checkout.
 
+## Sound (`sim/snd.c`, `tools/pce_sound.py`, `src/sound.asm`)
+
+The arcade's sound board is a Z80 at 4 MHz with a YM2151 (FM) and an MSM5205 (ADPCM voice).
+`sim/snd` is a Z80 interpreter with the YM2151's registers and timers: it runs the real sound
+driver, so there is no need to understand the music data itself. The main CPU sends a command
+as two nibbles through a Taito PC060HA (`sim/sim`'s `sndlog` records them); `$EF` sets the driver
+up, then `$1A` is round 1's music, `$1B` the castle's, `$1C` the boss room's, and the effects
+include `$09` sword swing, `$10` an enemy dying, `$15` a weapon item, `$17` the cave block.
+The driver keeps music on FM channels 0-5 and effects on 6-7.
+
+`tools/ym2151.py` reads the log back as, per channel: is a note sounding, at what pitch (KC/KF)
+and how loud (the loudest carrier's TL, which is how the driver shapes a voice). `tools/pce_sound.py`
+samples that at the driver's own sequencer rate - its timer A, about 54.6 Hz, not 60 - so a loop
+repeats tick for tick, and finds each tune's loop by looking for the part that repeats exactly.
+Each tune and effect becomes a stream of per-channel PSG periods and volumes; `src/sound.asm`
+plays it on the PSG's 6 channels, pacing itself with an 8.8 fixed-point tick counter, with an
+effect borrowing channels 4 and 5 and handing them back when it ends.
+
+What is lost: each FM voice becomes one PSG waveform (one shared 32-step wave), notes below the
+PSG's range move up an octave, and the MSM5205 voice samples (Rastan's jump grunt and death cry,
+commands `$0A` and `$0D`) are not converted - they would need the ADPCM decoded and played
+through the PSG's direct D/A.
+
+`tools/test_sound.py` checks it without listening: `tools/tgrun` can write a WAV of the emulated
+PSG and a log of every PSG register write, so the test compares what the ROM writes against the
+stream, and checks the notes in the audio's spectrum are the ones the stream asks for.
+
 ## Arcade notes (reverse engineering)
 
 - Screen 320×240. PC080SN: two 64×64 tilemaps of 8×8 tiles. BG is at `$C00000`, FG at `$C08000`.
@@ -342,7 +371,11 @@ The headless runner is built with `tools/tgrun/build.sh`, after running `make` i
 - [x] The round 1 boss; round clear
 - [x] The castle as the arcade lays it out: two shafts that scroll up, the lava hall, the boss room door
 - [x] Swinging vines (the chasm at x 2750, the lava hall)
-- [ ] Castle ceiling spikes; the lava hall's `$4C`/`$52-$55` objects; score popups; the small castle flyers
+- [x] The castle's floor spears (markers `$46`)
+- [x] Music and sound effects on the PSG (`$1A`/`$1B`/`$1C` and the FM effects)
+- [ ] The MSM5205 voice samples (jump, death)
+- [ ] The lava hall's flames (markers `$4C`, `$52-$55`: tall flames on the lava and the sparks
+      drifting off them, about 2 KB of VRAM); score popups; the small castle flyers
 - [x] Restart at the arcade's checkpoints after a death (stream fast-forward, no preload data)
 - [x] Debug menu (UP + SELECT): checkpoint warp, invincible, enemies on/off, health, lives, slow motion, weapon
 

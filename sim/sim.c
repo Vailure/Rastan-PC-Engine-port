@@ -10,6 +10,7 @@
  *   poke <from> <to> <addr> <b|w|l> <val>  write value at start of each frame in range
  *   end  <frame>                           stop
  *   patch <addr> <bytehex>                 patch program ROM byte before reset
+ *   sndlog <file>                          log the main CPU's writes to the sound latch
  *   pcprof <from> <to> <file>              per-PC execution counts for frames from..to
  *   wtrace <lo> <hi>                       log writer PCs for an address range (with trace output)
  *   calltrace <frame> <file>               log every JSR/BSR executed in one frame
@@ -57,6 +58,7 @@ static char ct_file[256];
 static int prof_from = -1, prof_to = -1; static char prof_file[256];
 static uint32_t *prof_hits;
 static int calltrace_frame = -1; static FILE *calltrace_out; static uint32_t ct_sp0;
+static FILE *sndlog;                     /* sndlog <file> : main-CPU writes to the sound latch */
 void sim_instr_hook(unsigned int pc)
 {
     if (prof_hits && pc < 0x60000) prof_hits[pc >> 1]++;
@@ -148,7 +150,11 @@ static void write8(uint32_t a, uint8_t v)
     if (a >= 0xc40000 && a < 0xc40004) { uint16_t *r = &scrx[(a >> 1) & 1]; if (a & 1) *r = (*r & 0xff00) | v; else *r = (*r & 0xff) | (v << 8); return; }
     if (a >= 0xc50000 && a < 0xc50004) { uint16_t *r = &vctrl[(a >> 1) & 1]; if (a & 1) *r = (*r & 0xff00) | v; else *r = (*r & 0xff) | (v << 8); return; }
     if (a == 0x380000 || a == 0x380001) { if (a & 1) sprctrl = (sprctrl & 0xff00) | v; else sprctrl = (sprctrl & 0xff) | (v << 8); return; }
-    if ((a & ~1u) == 0x350008 || (a & ~1u) == 0x3c0000 || (a & ~3u) == 0x3e0000) return;
+    if ((a & ~3u) == 0x3e0000) {        /* sound command latch: log (frame, port, value) */
+        if (sndlog) fprintf(sndlog, "%d %x %02x\n", frame, a & 3, v);
+        return;
+    }
+    if ((a & ~1u) == 0x350008 || (a & ~1u) == 0x3c0000) return;
     unmapped_writes++; last_unmapped_w = a;
 }
 
@@ -178,6 +184,7 @@ static void load_script(const char *fn)
         if (sscanf(line, "in %d %x %x", &a, &p1, &sys) == 3) { c.kind = 1; c.from = a; c.p1 = p1; c.sys = sys; }
         else if (sscanf(line, "poke %d %d %x %c %x", &a, &b, &addr, &sz, &val) == 5) { c.kind = 2; c.from = a; c.to = b; c.addr = addr; c.size = sz; c.val = val; }
         else if (sscanf(line, "patch %x %x", &addr, &val) == 2) { rom[addr] = val; continue; }
+        else if (sscanf(line, "sndlog %255s", ct_file) == 1) { sndlog = fopen(ct_file, "w"); continue; }
         else if (sscanf(line, "end %d", &a) == 1) { end_frame = a; continue; }
         else if (sscanf(line, "calltrace %d %255s", &a, prof_file) == 2) { calltrace_frame = a; strcpy(ct_file, prof_file); continue; }
         else if (sscanf(line, "pcprof %d %d %255s", &a, &b, prof_file) == 3) { prof_from = a; prof_to = b; continue; }

@@ -26,8 +26,13 @@ void psg_shutdown(void)
 /* PSG emulation                                                            */
 /*--------------------------------------------------------------------------*/
 
+#include <stdlib.h>
+#include <stdio.h>
+FILE *psg_log;
 void psg_w(uint16 address, uint8 data)
 {
+    if (!psg_log && getenv("TGRUN_PSGLOG")) psg_log = fopen(getenv("TGRUN_PSGLOG"), "w");
+    if (psg_log) fprintf(psg_log, "%d %04x %02x\n", psg.select, address, data);
     switch(address)
     {
         case 0x0800: /* Channel select */

@@ -288,7 +288,9 @@ st_air:		bbr1	<padtrg, .no_atk	; Air attack (once per jump):
 		ldx	#>anim_uthrust
 		jsr	set_anim
 		bra	.no_atk
-.swing:		lda	#<anim_jatk
+.swing:		lda	#SFX_SWING
+		jsr	sound_sfx
+		lda	#<anim_jatk
 		ldx	#>anim_jatk
 		jsr	set_anim
 .no_atk:	lda	<p_jatk			; Back to the jump pose when done.
@@ -782,13 +784,19 @@ enter_crouch:	lda	#ST_CROUCH
 		ldx	#>anim_crouch
 		jmp	set_anim
 
-enter_attack:	lda	#ST_ATTACK
+enter_attack:	pha
+		lda	#SFX_SWING
+		jsr	sound_sfx
+		pla
+		lda	#ST_ATTACK
 		sta	<p_state
 		lda	#<anim_attack
 		ldx	#>anim_attack
 		jmp	set_anim
 
-enter_catk:	lda	#ST_CATK
+enter_catk:	lda	#SFX_SWING
+		jsr	sound_sfx
+		lda	#ST_CATK
 		sta	<p_state
 		lda	#<anim_catk
 		ldx	#>anim_catk
@@ -863,6 +871,10 @@ player_invalidate:
 
 ; player_set_weapon - A = weapon; a taken one lasts WEAPON_FRAMES.
 player_set_weapon:
+		pha
+		lda	#SFX_ITEM
+		jsr	sound_sfx
+		pla
 		sta	<p_weapon
 		lda	#<WEAPON_FRAMES
 		sta	<p_wtime

@@ -1,0 +1,41 @@
+# Bot run from checkpoint segment $10 (health held) to the castle's lava hall: up the
+# first room's ropes, through shaft 1, right into the hall (frame 4280 on). The hall's
+# flames (arcade slots 0/1, types $4C/$52) stand on the lava; sparks (slots 20-27,
+# single cells) drift up from them.
+patch 5073a 10
+in 100 ff 3f
+in 106 ff 1f
+in 200 ff 17
+in 206 ff 1f
+poke 300 30000 10c13a w 3000
+in 400 f7 1f
+in 1100 fb 1f
+in 1104 ff 1f
+in 1120 de 1f
+in 1125 fe 1f
+in 1430 db 1f
+in 1436 fb 1f
+in 1760 de 1f
+in 1765 fe 1f
+in 2000 d7 1f
+in 2006 f7 1f
+in 2400 fb 1f
+in 2404 ff 1f
+in 2420 de 1f
+in 2425 fe 1f
+in 2660 db 1f
+in 2666 fb 1f
+in 3300 f7 1f
+in 3343 ff 1f
+in 3370 de 1f
+in 3376 fe 1f
+in 3720 d7 1f
+in 3726 f7 1f
+in 3913 ff 1f
+in 3930 f7 1f
+in 3934 ff 1f
+in 3960 fe 1f
+in 4160 d7 1f
+in 4166 f7 1f
+in 4300 ff 1f
+end 4800

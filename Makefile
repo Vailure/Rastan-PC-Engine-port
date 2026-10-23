@@ -12,7 +12,7 @@ BUILD      := build
 STAGE      := $(BUILD)/stage1
 PLAYER     := $(BUILD)/player
 
-export PCE_INCLUDE := $(abspath $(STAGE)):$(abspath $(PLAYER)):$(abspath $(BUILD)/objects):$(abspath $(BUILD)/hud):$(abspath $(BUILD)/props):$(abspath $(BUILD)/traps):$(abspath $(BUILD)/debug):$(abspath src):$(abspath $(HUC))/include/hucc
+export PCE_INCLUDE := $(abspath $(STAGE)):$(abspath $(PLAYER)):$(abspath $(BUILD)/objects):$(abspath $(BUILD)/hud):$(abspath $(BUILD)/props):$(abspath $(BUILD)/traps):$(abspath $(BUILD)/sound):$(abspath $(BUILD)/debug):$(abspath src):$(abspath $(HUC))/include/hucc
 export RASTAN_ROMS := $(abspath $(ROMS))
 
 all: $(BUILD)/rastan.pce
@@ -115,12 +115,29 @@ $(BUILD)/item_%.snp: sim/sim sim/maincpu.bin sim/scripts/item_%.txt
 # Object (enemy, projectile, item) poses: groups and captures in tools/object_specs.py.
 # Cells start at bank $60; each group's poses and anims get the next banks.
 OBJECTS    := $(BUILD)/objects
-$(OBJECTS)/objcells.bin: tools/pce_objects.py tools/object_specs.py tools/census_all.py $(BUILD)/lizard.snp $(BUILD)/blue.snp $(BUILD)/item.snp $(BUILD)/item_fire.snp $(BUILD)/item_star.snp $(BUILD)/chimera.snp $(BUILD)/gargoyle.snp $(BUILD)/woman.snp $(BUILD)/castle.snp $(BUILD)/boss.snp $(BUILD)/vine.snp
+$(OBJECTS)/objcells.bin: tools/pce_objects.py tools/object_specs.py tools/census_all.py $(BUILD)/lizard.snp $(BUILD)/blue.snp $(BUILD)/item.snp $(BUILD)/item_fire.snp $(BUILD)/item_star.snp $(BUILD)/chimera.snp $(BUILD)/gargoyle.snp $(BUILD)/woman.snp $(BUILD)/castle.snp $(BUILD)/boss.snp $(BUILD)/vine.snp $(BUILD)/hall.snp
 	cd tools && python3 pce_objects.py ../$(BUILD) ../$(OBJECTS) 0x61
 
 # HUD cells (lives, icon, health bar, ROUND) from the arcade's HUD sprites.
 $(BUILD)/hud/hud.bin: tools/pce_hud.py $(BUILD)/actions.snp
 	cd tools && python3 pce_hud.py ../$(BUILD)/actions.snp ../$(BUILD)/hud
+
+# Music and sound effects: sim/snd runs the arcade's Z80 sound driver and logs
+# its YM2151 writes; pce_sound.py turns each command's tune or effect into a
+# stream the PC Engine's PSG can play.
+sim/snd: sim/snd.c
+	$(MAKE) -C sim snd
+
+$(BUILD)/sound/sound.bin: tools/pce_sound.py tools/ym2151.py sim/snd sim/audiocpu.bin sim/adpcm.bin
+	@mkdir -p $(BUILD)/sound
+	cd tools && python3 pce_sound.py ../sim/audiocpu.bin ../sim/adpcm.bin ../$(BUILD)/sound
+
+sim/audiocpu.bin sim/adpcm.bin: sim/maincpu.bin
+
+# The castle's lava hall: its flames and the sparks drifting off them.
+$(BUILD)/hall.snp: sim/sim sim/maincpu.bin sim/scripts/hall.txt
+	@mkdir -p $(BUILD)
+	sim/sim sim/maincpu.bin sim/scripts/hall.txt $@ 1 4280
 
 # The castle's floor spears (sprite cells resident in VRAM).
 $(BUILD)/spikes.snp: sim/sim sim/maincpu.bin sim/scripts/spikes.txt
@@ -143,7 +160,7 @@ $(BUILD)/debug/font.bin: $(HUC)/examples/asm/elmer/font/font8x8-ascii-bold-short
 	@mkdir -p $(BUILD)/debug
 	dd if=$< of=$@ bs=8 skip=16 count=64 status=none
 
-GAME_DEPS  := $(wildcard src/*.asm) $(BUILD)/debug/font.bin $(STAGE)/stage.bin $(PLAYER)/player.bin $(OBJECTS)/objcells.bin $(BUILD)/hud/hud.bin $(BUILD)/props/props.bin $(BUILD)/traps/traps.bin
+GAME_DEPS  := $(wildcard src/*.asm) $(BUILD)/debug/font.bin $(STAGE)/stage.bin $(PLAYER)/player.bin $(OBJECTS)/objcells.bin $(BUILD)/hud/hud.bin $(BUILD)/props/props.bin $(BUILD)/traps/traps.bin $(BUILD)/sound/sound.bin
 
 $(BUILD)/rastan.pce: $(GAME_DEPS)
 	@mkdir -p $(BUILD)/opt
@@ -180,6 +197,7 @@ test: $(BUILD)/camtest.pce $(BUILD)/noenemy.pce $(BUILD)/rastan.pce $(BUILD)/god
 	python3 tools/test_items.py $(BUILD)/rastan.pce $(BUILD)/god.pce $(BUILD)/noenemy.pce
 	python3 tools/test_monsters.py $(BUILD)/rastan.pce $(BUILD)/god.pce
 	python3 tools/test_castle.py $(BUILD)/rastan.pce $(BUILD)/god.pce $(BUILD)/noenemy.pce
+	python3 tools/test_sound.py $(BUILD)/rastan.pce $(BUILD)/god.pce $(BUILD)
 
 tools/tgrun/tgrun: tools/tgrun/tgrun.c
 	HUC=$(abspath $(HUC)) tools/tgrun/build.sh

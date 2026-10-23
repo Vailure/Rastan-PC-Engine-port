@@ -189,8 +189,10 @@ bo = [(i, f['e_yl'][6] | f['e_yh'][6] << 8) for i, f in enumerate(r) if f['e_sta
 check('the boss drops in and lands at y 446', bo and bo[0][1] < 400 and any(y == 446 for _, y in bo), f'from y {bo[0][1] if bo else None}')
 dead = next((i for i, f in enumerate(r) if f['e_kind'][6] == EK_BOSS and f['e_state'][6] == ES_DYING), None)
 hits = r3[dead]['e_range'][6] if dead else None
-check('ten hits kill it, for 5000', dead and hits == 10 and bcd(r[dead]['score']) - bcd(r[dead - 1]['score']) == 5000,
-      f'hits {hits}, score {bcd(r[dead]["score"]) if dead else None}')
+# (RAM is sampled at a fixed point of the frame, so the points can land a frame either side)
+gain = (bcd(r[min(dead + 2, len(r) - 1)]['score']) - bcd(r[max(dead - 2, 0)]['score'])) if dead else 0
+check('ten hits kill it, for 5000', dead and hits == 10 and gain == 5000,
+      f'hits {hits}, {gain} points')
 back = next((i for i in range(dead or 0, len(r)) if w16(r[i]['p_x']) == 48), None) if dead else None
 check('then the round is clear: round 1 again, score kept', back and bcd(r[back]['score']) >= 5000,
       f'restart at frame {back}')

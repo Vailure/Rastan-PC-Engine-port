@@ -122,6 +122,7 @@ checkpoint_start:
 		jsr	enemies_reset
 		jsr	props_reset
 		jsr	dyn_reset
+		jsr	music_here		; The tune for where he restarts.
 		jsr	dyn_update		; (sky for this column, before showing it)
 		jsr	camera_update
 		jsr	set_scroll_regs
@@ -131,6 +132,22 @@ checkpoint_start:
 		call	wait_vsync		; SATB DMA, then show the screen.
 		call	set_dspon
 		rts
+
+; ---------------------------------------------------------------------------
+; music_here - the tune for where Rastan is: the castle from x 8192, the boss
+; room from x 11264 (the arcade changes it at the same places).
+
+music_here:	lda	<p_x + 1
+		cmp	#>11264
+		bcc	!+
+		lda	#SND_BOSS
+		bra	.play
+!:		cmp	#>8192
+		bcc	!+
+		lda	#SND_CASTLE
+		bra	.play
+!:		lda	#SND_ROUND1
+.play:		jmp	sound_music
 
 ; ---------------------------------------------------------------------------
 ; door_enter - Rastan walked into a door ($7E). The castle gate takes him in,
@@ -180,6 +197,7 @@ door_enter:	stz	<p_door
 		stz	<p_y + 1
 		jsr	start_fall
 		jsr	enemies_reset
+		jsr	music_here		; (the boss room's tune)
 		jsr	camera_update
 		jsr	set_scroll_regs
 		jsr	player_draw
@@ -221,6 +239,7 @@ debug_menu:	php
 		jsr	menu_draw
 
 .loop:		call	wait_vsync
+		jsr	sound_update		; (the music plays on)
 		php				; Keep the tile map still while open.
 		sei
 		st0	#VDC_BXR

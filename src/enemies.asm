@@ -563,7 +563,11 @@ enemy_think:	lda	e_kind, x
 		jmp	enemy_step
 
 ; kill_enemy - X: points, then its death animation (ES_DYING frees it after).
-kill_enemy:	lda	#ES_DYING
+kill_enemy:	phx
+		lda	#SFX_ENEMY
+		jsr	sound_sfx
+		plx
+		lda	#ES_DYING
 		sta	e_state, x
 		ldy	e_kind, x
 		lda	kind_score, y		; Points (hundreds, BCD).

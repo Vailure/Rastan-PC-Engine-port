@@ -109,6 +109,8 @@ props_update:	lda	<pr_state
 		ldx	<pr_index
 		lda	#1
 		sta	prop_done, x
+		lda	#SFX_BLOCK
+		jsr	sound_sfx
 		lda	#<anim_block_break
 		ldy	#>anim_block_break
 		jmp	prop_set_anim
