@@ -19,6 +19,7 @@ st_ptr:		ds	2		; Source, $6000 up.
 st_cnt:		ds	2		; Words to go.
 st_n:		ds	1		; The still shown.
 st_t:		ds	2		; Frames it has been up.
+still_on:	ds	1		; A still is up (tools/audit.py: no game frames then).
 
 		.code
 
@@ -37,6 +38,8 @@ still_hud:	db	1, 0, 1			; The HUD's top line (score) shown?
 ; line where the arcade shows it) and show it from the next VBLANK.
 
 still_show:	stx	<st_n
+		lda	#1
+		sta	<still_on
 		jsr	screen_cut
 		php
 		sei
@@ -192,7 +195,8 @@ still_copy:	cly
 
 ; still_end - back from a still: the stage's colours and the HUD's sprites
 ; (the caller then restarts the stage, which streams its tiles in again).
-still_end:	jsr	screen_cut		; (stage_start loads the palettes)
+still_end:	stz	<still_on
+		jsr	screen_cut		; (stage_start loads the palettes)
 		php
 		sei
 		jsr	hud_satb

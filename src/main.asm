@@ -114,6 +114,7 @@ core_main:	lda	#GAME_BANK		; (the boot mapping already has it there)
 		jsr	dyn_update		; Waterfall cycle, sky change (VBLANK).
 !:
 	.endif
+		jsr	fire_update		; The lava hall's fire (VBLANK).
 		jsr	objects_upload		; Changed object poses' cells (VBLANK).
 		jsr	sound_update		; Music and effects (the PSG).
 		jsr	debug_check		; SELECT: debug menu.
@@ -142,7 +143,7 @@ core_main:	lda	#GAME_BANK		; (the boot mapping already has it there)
 		beq	!+
 		txa
 		jsr	bg_palettes
-!:
+!:		jsr	fire_update
 	.else
 		jsr	player_update		; Compute the next frame.
 		lda	<p_door			; Walked into a door.
@@ -178,6 +179,7 @@ bg_palettes_here:
 		inx
 !:		txa
 bg_palettes:	sta	<bg_set
+		stz	<fire_on		; (the fire's tiles: again, once in)
 		php
 		sei
 		lda	#^palette_data
@@ -666,6 +668,7 @@ DEBUG_BANK	=	$05
 		include	"jets.asm"
 		include	"vines.asm"
 		include	"still.asm"
+		include	"fire.asm"
 		include	"traps.asm"
 		include	"boss.asm"
 
@@ -734,3 +737,7 @@ still_title:	incbin	"title.bin"		; The title screen (two banks).
 		.bank	$02
 		.page	3
 still_gameover:	incbin	"gameover.bin"		; GAME OVER.
+
+		.bank	$03
+		.page	3
+fire_data:	incbin	"fire.bin"		; The lava hall's fire (build/stage1).

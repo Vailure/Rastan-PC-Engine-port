@@ -2,7 +2,7 @@
 ;
 ; Rastan - weapon items and their bats (approximate), round 1.
 ;
-; Measured in the arcade (sim/scripts/item*.txt, round 1 census): four items
+; Measured in the arcade (sim/scripts/item*.txt, round 1 census): five items
 ; hang in the air, each appearing when Rastan reaches 164 px left of it, with
 ; a bat 20 px below. Touching one (or hitting it with the weapon, as the up
 ; thrust does in the cave) takes it: the axe (twice), the fire sword or the
@@ -15,7 +15,7 @@
 ;
 ; ***************************************************************************
 
-NUM_ITEMS	=	4
+NUM_ITEMS	=	5
 ITEM_AHEAD	=	164		; Spawns when p_x >= item x - 164 ...
 ITEM_WINDOW	=	196		; ... and p_x < item x + 32.
 BAT_DROP	=	20		; The bat starts this far below the item.
@@ -32,14 +32,16 @@ BP_DIVE		=	2
 BP_CLING	=	3
 
 ; Items: world x, y, weapon, animation.
-item_x_l:	db	<1004, <2893, <3854, <6829
-item_x_h:	db	>1004, >2893, >3854, >6829
-item_y_l:	db	<340, <164, <364, <276
-item_y_h:	db	>340, >164, >364, >276
-item_weapon:	db	WPN_AXE, WPN_FIRE, WPN_AXE, WPN_STAR
-item_anim_l:	db	<anim_item_axe, <anim_item_fire, <anim_item_axe, <anim_item_star
-item_anim_h:	db	>anim_item_axe, >anim_item_fire, >anim_item_axe, >anim_item_star
-item_bit:	db	1, 2, 4, 8
+; (The fifth, a morning star, hangs in the castle's first shaft: arcade census
+; (8384, 334) in the shaft's square, sim/scripts/hall.txt frame 3432.)
+item_x_l:	db	<1004, <2893, <3854, <6829, <8384
+item_x_h:	db	>1004, >2893, >3854, >6829, >8384
+item_y_l:	db	<340, <164, <364, <276, <-178
+item_y_h:	db	>340, >164, >364, >276, >-178
+item_weapon:	db	WPN_AXE, WPN_FIRE, WPN_AXE, WPN_STAR, WPN_STAR
+item_anim_l:	db	<anim_item_axe, <anim_item_fire, <anim_item_axe, <anim_item_star, <anim_item_star
+item_anim_h:	db	>anim_item_axe, >anim_item_fire, >anim_item_axe, >anim_item_star, >anim_item_star
+item_bit:	db	1, 2, 4, 8, 16
 
 ; ---------------------------------------------------------------------------
 ; item_spawn - the next item (and its bat) when Rastan comes near it.
@@ -66,7 +68,10 @@ item_spawn:	lda	e_state + ITEM_SLOT	; One item at a time.
 		bne	.next
 		lda	<etmp
 		cmp	#ITEM_WINDOW
-		bcc	.spawn
+		bcs	.next
+		lda	<p_y + 1		; ... and on the same side of world y 0
+		eor	item_y_h, y		; (the shaft's item: not from the room
+		bpl	.spawn			; below it).
 .next:		iny
 		cpy	#NUM_ITEMS
 		bne	.loop

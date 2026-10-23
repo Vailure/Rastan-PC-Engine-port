@@ -8,10 +8,10 @@ checked for:
   - an object showing a pose its kind does not have (a pose read from the wrong bank),
   - frames where the game logic did not run once (slowdown), outside death restarts
     and doors,
-  - pieces left undrawn because the SATB was full (en_full),
-and it reports (without counting it as a problem) frames where the VDC's 16 sprite
-cells a line would drop a visible sprite: where walkers crowd, enemies_draw turns
-their order so that they flicker rather than one losing its cells for good.
+and it reports (without counting them as problems) frames where the VDC's 64 sprites
+were not enough for every object piece (en_full), and frames where its 16 sprite
+cells a line would drop a visible sprite: in both cases the walkers, drawn last in
+an order that turns every frame, flicker rather than one losing its cells for good.
 Use an invincible build (god.pce) so that each part is seen to its end.
 
 With AUDIT_PREVIEW=build/stage1/preview.png and the bgcheck build (god mode, the tile
@@ -77,6 +77,7 @@ def route(cp):
 
 POSES = pose_counts()
 VARS = {'p_x': 2, 'p_y': 2, 'p_state': 1, 'scroll_x': 2, 'scroll_y': 2, 'loop_cnt': 2, 'lives': 1, 'en_full': 1,
+        'still_on': 1,
         'e_state': 17, 'e_kind': 17, 'e_pose': 17, 'e_shown': 17}
 w = lambda v: v[0] | v[1] << 8
 s16 = lambda v: (w(v) ^ 0x8000) - 0x8000
@@ -166,8 +167,9 @@ for cp in CPS:
                     f"sy {s16(x['scroll_y'])} lives {x['lives'][0]} objs {objs}\n")
     wrong = []
     for f, shot in sorted(shots.items()):
-        if f < (200 if cp else 20) or (shot == shot[0, 0]).all():
-            continue                      # (the warp's menu; a blank screen: a restart)
+        if f < (200 if cp else 20) or (shot == shot[0, 0]).all() or \
+                any(r[g]['still_on'][0] for g in range(max(0, f - 2), min(len(r), f + 3))):
+            continue                      # (the warp's menu; a blank screen: a restart; a still)
         best = None
         xs_, ys_ = set(), set()               # the displayed position lags the variables, and
         for g in range(f - 3, f + 4):         # RAM is read at one point of the frame: any
@@ -205,10 +207,10 @@ for cp in CPS:
     px, py = [w(x['p_x']) for x in r], [s16(x['p_y']) for x in r]
     cuts = {j for i in range(1, len(r)) if abs(px[i] - px[i - 1]) > 32 or abs(py[i] - py[i - 1]) > 64
             for j in range(i - 8, i + 8)}        # (a door: the screen is cut to the next room)
-    slow = [i for i in range(250, len(lc)) if (lc[i] - lc[i - 1]) & 0xffff != 1 and i not in dying | cuts]
+    stills = {j for i, x in enumerate(r) if x['still_on'][0] for j in range(i - 2, i + 8)}
+    slow = [i for i in range(250, len(lc)) if (lc[i] - lc[i - 1]) & 0xffff != 1 and i not in dying | cuts | stills]
     deaths = sum(1 for i in range(1, len(r)) if r[i]['lives'][0] < r[i - 1]['lives'][0])
-    full = sum(1 for i in range(1, len(r)) if r[i]['en_full'][0] != r[i - 1]['en_full'][0])
-    problems += full
+    full = sum(1 for i in range(1, len(r)) if r[i]['en_full'][0] != r[i - 1]['en_full'][0])   # (reported)
     xs = [w(x['p_x']) for x in r]
     problems += len(bad) + len(slow)
     print(f'cp{cp}: x {xs[200]} -> {xs[-1]} (max {max(xs)}), deaths {deaths}, '

@@ -1358,40 +1358,6 @@ camera_update:	lda	<p_x			; cv = p_x - 136
 ; camera_clamp - scroll_x, scroll_y into the box of cam_region. The BAT holds
 ; 512 px each way, so the camera also stays inside the last 512 px streamed:
 ; scroll_x >= col_last - STAGE_COL_REACH and scroll_y <= row_top + STAGE_ROW_REACH.
-; cam_rest - in the lava hall (Rastan in CAM_REST_X0..X1) the arcade holds the
-; camera low, its fire filling the bottom of the screen: cv (scroll_y) sinks a
-; pixel a frame toward CAM_REST_Y, but no lower than keeps his head 8 px below
-; the top (cv <= p_y - 36). Carry set if it applied.
-cam_rest:	lda	<p_x
-		cmp	#<CAM_REST_X0
-		lda	<p_x + 1
-		sbc	#>CAM_REST_X0
-		bcc	.no
-		lda	<p_x
-		cmp	#<CAM_REST_X1
-		lda	<p_x + 1
-		sbc	#>CAM_REST_X1
-		bcs	.no
-		lda	#<CAM_REST_Y		; Sink: cv = min(cv + 1, CAM_REST_Y) ...
-		sta	<cl
-		lda	#>CAM_REST_Y
-		sta	<cl + 1
-		inc	<cv
-		bne	!+
-		inc	<cv + 1
-!:		jsr	smin
-		lda	<p_y			; ... and cv <= p_y - 36.
-		sec
-		sbc	#36
-		sta	<cl
-		lda	<p_y + 1
-		sbc	#0
-		sta	<cl + 1
-		jsr	smin
-		sec
-		rts
-.no:		clc
-		rts
 
 
 camera_clamp:	ldx	<cam_region
@@ -1465,6 +1431,41 @@ camera_clamp:	ldx	<cam_region
 		sta	<scroll_y
 		lda	<cv + 1
 		sta	<scroll_y + 1
+		rts
+
+; cam_rest - in the lava hall (Rastan in CAM_REST_X0..X1) the arcade holds the
+; camera low, its fire filling the bottom of the screen: cv (scroll_y) sinks a
+; pixel a frame toward CAM_REST_Y, but no lower than keeps his head 8 px below
+; the top (cv <= p_y - 36). Carry set if it applied.
+cam_rest:	lda	<p_x
+		cmp	#<CAM_REST_X0
+		lda	<p_x + 1
+		sbc	#>CAM_REST_X0
+		bcc	.no
+		lda	<p_x
+		cmp	#<CAM_REST_X1
+		lda	<p_x + 1
+		sbc	#>CAM_REST_X1
+		bcs	.no
+		lda	#<CAM_REST_Y		; Sink: cv = min(cv + 1, CAM_REST_Y) ...
+		sta	<cl
+		lda	#>CAM_REST_Y
+		sta	<cl + 1
+		inc	<cv
+		bne	!+
+		inc	<cv + 1
+!:		jsr	smin
+		lda	<p_y			; ... and cv <= p_y - 36.
+		sec
+		sbc	#36
+		sta	<cl
+		lda	<p_y + 1
+		sbc	#0
+		sta	<cl + 1
+		jsr	smin
+		sec
+		rts
+.no:		clc
 		rts
 
 ; smax - cv = max(cv, cl); smin - cv = min(cv, cl) (signed 16-bit). Keep X.

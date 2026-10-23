@@ -58,10 +58,18 @@ Requirements: Python 3 with numpy and Pillow, gcc and zlib, and a built checkout
 [HuC](https://github.com/pce-devel/huc), which provides `pceas` and the `tgemu` core used by the tests.
 
 ```sh
-make HUC=/path/to/huc          # -> build/rastan.pce
-make HUC=/path/to/huc test     # scroll the ROM headless and compare with the converter preview
-python3 tools/trace_player.py build/rastan.pce 600 60 300 04   # walk right, print Rastan's state
+make HUC=/path/to/huc          # -> build/rastan.pce (the demo) and build/rastan_debug.pce
+make HUC=/path/to/huc test     # the test scripts, headless (about 20 minutes)
+make HUC=/path/to/huc audit    # a whole playthrough checked frame by frame (about 10 minutes)
+python3 tools/trace_player.py build/rastan_debug.pce 600 60 300 04   # walk right, print Rastan's state
 ```
+
+Two ROMs:
+- **`rastan.pce`, the demo:** the arcade's title screen (PUSH RUN BUTTON), round 1, the arcade's
+  round-clear screen and jingle after the boss, GAME OVER when the last life goes, and back to the
+  title. No debug menu.
+- **`rastan_debug.pce`:** straight into the game, with the debug menu. The tests run on this one (and
+  on `god.pce`, `noenemy.pce`, `camtest.pce`, `bgcheck.pce`, test builds the Makefile also makes).
 
 The build:
 1. Extracts the ROM regions.
@@ -80,7 +88,7 @@ The build:
 
 The camera only scrolls forward. A death restarts at the last checkpoint reached, as in the arcade.
 
-**Debug menu:** hold UP + SELECT together for about ¾ s to open it (a press, or a stray SELECT bit
+**Debug menu** (`rastan_debug.pce`): hold UP + SELECT together for about ¾ s to open it (a press, or a stray SELECT bit
 from a pad or emulator mapping, is not enough); it freezes the game (RUN held + SELECT is still the
 core's soft reset).
 UP/DOWN pick a line, LEFT/RIGHT change a value, I applies, SELECT or II closes.
@@ -112,8 +120,23 @@ cd tools && python3 contact.py ../out/play1.snp ../out/play1.png 700 900 1100
 - **One layer:** the arcade FG layer is composited over the BG layer locked to the same scroll
   speed (1:1). Round 1's BG uses only 5 distinct strips, so they are repeated to cover the FG.
   Parallax is lost for now and can come back later with raster splits.
-- **Colors:** quantized to 9-bit RGB, with one shared color 0 (the most common color).
-  Tiles are greedily packed into 16 palettes of 15 colors. Round 1 has 71 distinct colors after quantization.
+- **Colors:** quantized to 9-bit RGB. Tiles are greedily packed into 16 palettes of 15 colors, each
+  set with one shared color 0 (its most common color). There are two sets: outdoors and the castle.
+  The arcade loads the castle's stone colors (palette line `$2x`) at the gate and the lava hall's fire
+  (line `$14x`) in the hall; converted with the round-start colors and one set of 16 palettes, the
+  castle came out 22-63% exact (pink squares in the lava). Now the castle (and the hall's fire) is
+  converted with its own colors (`build/hall.snp`) into a set of its own, which the game loads at the
+  gate and on restarts there; every segment but the waterfall's colour-cycling ones matches the arcade
+  exactly. Outside, the camera stops at the castle wall (the arcade's stops at the gate) and inside it
+  keeps inside it, so neither set ever shows the other's rooms.
+- **The lava hall's fire** (markers `$4C`, `$52-$55`): the arcade draws a row of 32x32 flame sprites
+  along the lava (cells `$224-$233`, four phases, a phase every 4 frames, neighbouring blocks a phase
+  apart). The VDC could not show that many sprites on a line, and the wall behind repeats every 32 px,
+  so the converter bakes the flames into the tile map: the strip's cells show 32 fixed tiles (VRAM
+  `$4C00`, the cave block's cells, never needed in the castle), and `src/fire.asm` rewrites them each
+  phase. The sparks that drift off the fire in the arcade are not done.
+- **The lava hall's camera:** the arcade holds its camera low there, the fire filling the bottom of the
+  screen; the port sinks toward that height as far as Rastan's head (8 px below the top) allows.
 - **A 2-D world** (`tools/world.py`): the arcade streams its map one 512 px segment at a time. A byte per
   segment (`$50F6C` + segment, read at `$0558E0` into `$10D0A8`) picks how: 0 streams block columns to the
   right, 1 streams block *rows* upwards (map column k of the segment becomes the k-th row above, map row r
@@ -170,9 +193,10 @@ Not done yet: slopes, waterfall currents, the other collision codes, rope attack
   weapon's ROM table for the pose's weapon frame (`tools/pce_player.py` checks every captured pose's weapon pieces
   against that table). Only the morning star reaches further: 88 px, and 16 px more for the thrusts. The fire sword's
   flame cycles its cells (+0/+2/+4/+6, 2 frames each); only its 2 cells are re-uploaded.
-- **Items and bats** (`src/items.asm`; `sim/scripts/item.txt`, `item_fire.txt`, `item_star.txt`): four items hang
-  in round 1: axes at x 1004 (in the cave) and 3854, the fire sword at 2893, the morning star at 6829. Each appears
-  when Rastan is 164 px left of it, with a bat 20 px below. Touching an item, or hitting it with the weapon, takes it.
+- **Items and bats** (`src/items.asm`; `sim/scripts/item.txt`, `item_fire.txt`, `item_star.txt`): five items hang
+  in round 1: axes at x 1004 (in the cave) and 3854, the fire sword at 2893, morning stars at 6829 and in the
+  castle's first shaft at (8384, -178) (found by the shaft capture of `sim/scripts/hall.txt`, frame 3432). Each
+  appears when Rastan is 164 px left of it (and on the same side of world y 0), with a bat 20 px below. Touching an item, or hitting it with the weapon, takes it.
   The bat flies off away from Rastan (about 75 frames), hovers over him, dives onto him and clings: 1024 health
   (4 bar units) when it brushes him in flight, 2048 (8 units) every 45 frames while clinging, no knockback.
   One hit kills it. A death brings the items back.
@@ -211,7 +235,7 @@ Not done yet: slopes, waterfall currents, the other collision codes, rope attack
   in the air near its end hangs there (about 2 px per step right of the anchor, 93-107 px below it); jump lets
   go, only on the side he faces (the arcade ignored a jump on the far side). The lava hall's three vines
   (`$4F`, `$50`, `$51`) are not measured: here they swing together, and the grab distance (40 x 24 px) is a guess.
-  Its markers `$4C`, `$52-$55` just above the lava are not done.
+  Its markers `$4C`, `$52-$55` just above the lava are the fire (see How stage 1 is converted).
 - **Doors** (collision `$7E`): the door at the top of the second shaft drops Rastan into the boss room at
   (11728, 98), as in the arcade. The castle gate (also `$7E`) puts him inside the castle where the arcade does.
 - **Ceilings**: a jump that meets a ceiling stops rising but goes on (the arcade glides along under it).
@@ -352,6 +376,35 @@ stream, and checks the notes in the audio's spectrum are the ones the stream ask
 voices it checks a jump writes the jump sample's levels to channel 5, every one in order, that the
 music gets the channel back, and that the voice shows in the audio.
 
+## Screens, sprites and the playthrough audit
+
+- **Still screens** (`tools/pce_still.py`, `src/still.asm`): one arcade screen, rendered from a
+  simulator snapshot, cropped to 256x224 and converted whole into tiles, a 32x28 map and palettes.
+  The title (frame 160 after power-on, with PUSH RUN BUTTON written in the arcade's own font on a
+  palette of its own, so it can blink), GAME OVER (the lettering of the attract demo's) and the
+  round-clear screen ("YOU ARE A BRAVE FIGHTER TO HAVE CLEARED SUCH A DIFFICULT STAGE.", from the boss
+  script run on: `sim/scripts/ending.txt`). After the boss the arcade stops the music (`$29`) and plays
+  `$27`, a tune that plays once (stream end `$FE`); the port shows the screen with it for 7 s (RUN skips
+  it after 2), as long as the arcade's before ROUND 2 READY, then the title.
+- **Clean cuts:** restarts, warps, the gate and the boss door turn the display off at a VBLANK before
+  rewriting the tile map, with colour 0 black meanwhile (the VCE shows BG colour 0 with the display off).
+- **Sprites:** the SATB is packed (the HUD's 12 entries, then Rastan's, the props', the objects'), so
+  three castle soldiers no longer run out of entries. The VDC fetches only 16 sprite cells (16 px wide)
+  a line; where walkers crowd onto one line, `enemies_draw` turns the order they are drawn in every
+  frame, so the one that loses its cells there takes turns (flicker) instead of always the same.
+- **`make audit`** (`tools/audit.py`): every checkpoint played through in god mode (the castle on the
+  test routes, elsewhere running right holding UP, jumping and swinging), with contact sheets
+  (`build/audit/cpN.png`) and per-frame checks: object poses that their kind doesn't have, slowdown,
+  objects left undrawn for want of SATB entries, and frames where the 16-cells-a-line limit drops a
+  sprite (reported, not failed). Then the `bgcheck` build (god mode, the tile map alone, colours as
+  converted) is compared with the converter's preview at every tenth frame. It found the bugs fixed in
+  this round: lizardmen reading their walk animation from whatever bank was mapped (invisible, or stray
+  blocks by the HUD), the castle gate dropping Rastan 256 px too high without the castle tune, a torn
+  frame at the boss door, castle soldiers losing pieces.
+- **`tools/tgemu`** (the test emulator) now emulates the 16-cells-a-line limit (`TGRUN_NOSPRLIMIT=1` turns
+  it off) and the PSG's direct D/A, and its H6280 timer keeps running after it fires; `tgrun` can dump the
+  SATB every frame (`TGRUN_SATB`).
+
 ## Arcade notes (reverse engineering)
 
 - Screen 320×240. PC080SN: two 64×64 tilemaps of 8×8 tiles. BG is at `$C00000`, FG at `$C08000`.
@@ -398,9 +451,16 @@ music gets the channel back, and that the voice shows in the audio.
 - [x] The MSM5205 voice samples (jump, death), through the PSG's direct D/A
 - [x] Standing UP+II: the sword over his head (arcade bodies 12-14, `sim/scripts/upatk.txt`); its hit
       box is the up thrust's, which has not been measured against the arcade for this attack
-- [ ] The lava hall's flames (markers `$4C`, `$52-$55`: 80x32 px flames standing on the lava,
-      five of them, and the sparks that drift up off them). They need 16 resident cells, about
-      1 KB of VRAM words, and the stage's tile pool is already at 929 of 944 slots.
+- [x] The lava hall's fire (markers `$4C`, `$52-$55`), baked into the tile map and animated
+- [ ] The castle's swarm: nine small bats (cells `$268-$26A`, arcade slots 20-28) that flutter about shaft 1
+      and the lava hall from the moment Rastan climbs into the shaft (`sim/scripts/hall.txt`, frame 2892 on;
+      the "sparks" of earlier notes)
+- [x] The castle in its own colours (a second set of 16 BG palettes)
+- [x] Title screen, GAME OVER, the round-clear screen and jingle (`tools/pce_still.py`, `src/still.asm`)
+- [x] RUN pauses
+- [ ] The castle's ceiling spikes (x 8328, 8488)
+- [ ] Castle soldiers' colours: the arcade switches its sprite colour bank in the castle (gold soldiers
+      in the first rooms, green ones past the lava hall); the port shows them green throughout
 
 (Checked and not needed: Rastan shows no score popups when anything dies, and the "small castle
 flyers" seen in an early census are the blue throwers' clubs, which the port already has.)

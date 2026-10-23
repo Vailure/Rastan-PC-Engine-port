@@ -108,6 +108,19 @@ check('jumping off on the far side lands on the ledge (arcade: 2863, 135)', land
       f"at {(w16(r[land]['p_x']), s16(r[land]['p_y'])) if land else None}")
 
 
+# The castle wall: outside, the camera stops short of the castle's rooms (whose palettes
+# are not loaded then); through the gate, it stays inside. (Running right from checkpoint 3,
+# holding UP, high jumps.)
+keys = warp(3) + [200, 2000, '05'] + sum([[f, f + 2, '41'] for f in range(260, 2000, 60)], [])
+r = run(god, 2000, keys)
+outside = [w16(f['scroll_x']) for f in r[200:] if w16(f['p_x']) < 8192]
+inside = [w16(f['scroll_x']) for f in r[200:] if w16(f['p_x']) >= 8192]
+check('outside the castle the camera stops at its wall (scroll_x <= 7936)', outside and max(outside) <= 7936,
+      f'max {max(outside) if outside else None}')
+check('through the gate it stays inside the castle (scroll_x >= 8192)', inside and min(inside) >= 8192,
+      f'min {min(inside) if inside else None}')
+
+
 # The debug menu in a shaft: the tile map comes back.
 def shot(keys, frame):
     out = os.path.join(tmp, f'castle_{os.getpid()}.ppm')

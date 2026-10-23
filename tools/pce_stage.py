@@ -45,6 +45,16 @@ ROMDIR = os.environ.get('RASTAN_ROMS', os.path.join(os.path.dirname(__file__), '
 FIRST_SLOT = 0x100     # tile # of first streamed slot (VRAM $1000)
 CASTLE_SEG = 0x10      # the castle's first room (the gate loads its colours: line $2x)
 HALL_SEG = 0x12        # the lava hall, whose fire takes line $14x as well
+# The lava hall's fire (markers $4C, $52-$55): the arcade draws 32x32 flames, cells
+# $224-$233 (4 phases of 4 cells, a phase every 4 frames, neighbouring blocks one phase
+# apart), along the lava from FIRE_X0 to FIRE_X1, top at FIRE_Y (hall.snp: two of the
+# five strips seen, 80 px each, on a 32 px grid from 8768). The wall behind repeats
+# every 32 px, so the port bakes them into the tile map instead (the VDC could not
+# show 13 sprite flames a line): the strip's cells show 32 fixed tiles at FIRE_TILE0,
+# even blocks' 16 then odd blocks', and the game rewrites them each phase.
+FIRE_X0, FIRE_X1, FIRE_Y = 8768, 9168, -320
+FIRE_CELL = 0x224
+FIRE_TILE0 = 0x4C0     # VRAM $4C00: the stage props' cells, unused in the castle
 NUM_SLOTS = 944       # $1000-$4AFF; $4B00-$4BFF the floor spears' cells, $4C00-$4FFF stage props
 ROWS = 64
 
@@ -275,6 +285,58 @@ def main():
         print(f'set {k}: {len(pals_k)} palettes, sizes {[len(p) for p in pals_k]}, tiles needing >15 colors: {over}')
     color0, pals, pal_rgb = psets[0]           # (outdoors: the dynamic colours' set)
 
+    # ---- the fire: its composite tiles (4 phases x 16 positions), their palettes
+    fire = None
+    if len(sys.argv) > 8:
+        fsnap = next(s_ for s_ in read_snaps(cf) if s_.frame == int(cfr))
+        bank = (fsnap.sprctrl & 0xe0) >> 1
+        spr = decode_packed(load_region(ROMDIR, 'pc090oj'), 16, 16).astype(int)
+        lines_ = world.lines()
+        hx0, hy0 = world.square_origin(HALL_SEG)
+        col_line = {ln['i']: c for c, ln in enumerate(lines_) if ln['seg'] == HALL_SEG and not ln['row']}
+        c0i, r0 = (FIRE_X0 - hx0) // 8, (FIRE_Y - hy0) // 8
+        bg = np.zeros((32, 32), np.int64)                 # the wall behind a block (9-bit keys)
+        for tx in range(4):
+            for ty in range(4):
+                bg[ty * 8:ty * 8 + 8, tx * 8:tx * 8 + 8] = code[r0 + ty, col_line[c0i + tx]]
+        hkey = lambda i: (lambda c: (int(c[0]) << 6) | (int(c[1]) << 3) | int(c[2]))(hrgb[i])
+        comps = []
+        for ph in range(4):
+            b = bg.copy()
+            for k, (ox, oy) in enumerate(((0, 0), (16, 0), (0, 16), (16, 16))):
+                g = spr[FIRE_CELL + ph * 4 + k]
+                for y in range(16):
+                    for x in range(16):
+                        if g[y, x]:
+                            b[oy + y, ox + x] = hkey(bank * 16 + g[y, x])
+            comps.append(b)
+        c0c = psets[1][0]
+        pos_sets = []
+        for ty in range(4):
+            for tx in range(4):
+                cs = set()
+                for b in comps:
+                    cs |= set(int(v) for v in np.unique(b[ty * 8:ty * 8 + 8, tx * 8:tx * 8 + 8]))
+                pos_sets.append(frozenset(reduce(sorted(cs - {c0c}))))
+        fpals, fasg = pack_palettes(pos_sets, c0c)
+        base = len(psets[1][1])
+        assert base + len(fpals) <= 16, f'castle palettes: {base} + fire {len(fpals)}'
+        psets[1][1].extend(fpals)
+        psets[1][2].extend(np.array([unpack(c0c)] + [unpack(c) for c in p_]) for p_ in fpals)
+        ftiles = bytearray()
+        fpix = []
+        for ph in range(4):
+            for pos in range(16):
+                ty, tx = divmod(pos, 4)
+                keys = [c0c] + list(fpals[fasg[pos]])
+                t = comps[ph][ty * 8:ty * 8 + 8, tx * 8:tx * 8 + 8]
+                lut = {k: i for i, k in enumerate(keys)}
+                pix = np.array([[lut[int(v)] if int(v) in lut else
+                                 int(np.argmin(ccost([int(v)], keys)[0])) for v in row] for row in t], np.uint8)
+                fpix.append(pix)
+        fire = dict(c0i=c0i, r0=r0, pal=[base + a for a in fasg], pix=fpix, col_line=col_line)
+        print(f'fire: {len(fpals)} palettes (castle set {base} + {len(fpals)})')
+
     # remap each unique tile to (palette, 4bpp pattern)
     pat_of = []
     for t, pi, k in zip(uniq, assign, uset):
@@ -353,8 +415,16 @@ def main():
         max_res = max(max_res, len(resident))
         records.append((ups, bat))
     print(f'max resident patterns {max_res}/{NUM_SLOTS}, total uploads {sum(len(u) for u, _ in records)}')
+    if fire:                      # the fire strip's cells: its fixed tiles
+        ncol = (FIRE_X1 - FIRE_X0) // 8
+        for k in range(ncol):
+            c = fire['col_line'][fire['c0i'] + k]
+            j, tx = divmod(k, 4)
+            for ty in range(4):
+                pos = ty * 4 + tx
+                records[c][1][fire['r0'] + ty] = (FIRE_TILE0 + (j % 2) * 16 + pos) | (fire['pal'][pos] << 12)
 
-    def pce_pattern(p):
+    def pce_pattern(p):  # noqa: E306
         b = bytearray(32)
         for y in range(8):
             for pl in range(4):
@@ -366,6 +436,8 @@ def main():
                 b[off] = v
         return bytes(b)
     pce_pats = [pce_pattern(p) for p in pat_list]
+    if fire:                      # fire.bin: 4 phases x 16 tiles, by position
+        open(f'{out}/fire.bin', 'wb').write(b''.join(pce_pattern(p) for p in fire['pix']))
 
     body = bytearray()
     offs = []
@@ -436,6 +508,7 @@ def main():
         x0, x1, y = world.CAMERA_REST
         f.write(f'CAM_REST_X0 = {x0}\nCAM_REST_X1 = {x1}\nCAM_REST_Y = {y}\t; the lava hall (world.CAMERA_REST)\n')
         f.write(f'CASTLE_X = {world.square_origin(CASTLE_SEG)[0]}\t; from here on the castle\'s palettes\n')
+        f.write(f'FIRE_X0 = {FIRE_X0}\nFIRE_X1 = {FIRE_X1}\nFIRE_TILE0 = ${FIRE_TILE0:03X}\t; the lava hall\'s fire\n')
         f.write(f'STAGE_DOOR_LINE = {next(i for i, ln in enumerate(lines) if ln["stop"])}\t; the boss room door\'s line\n')
     with open(f'{out}/stage_regions.inc', 'w') as f:
         f.write('; Generated by tools/pce_stage.py.\n')
@@ -470,6 +543,15 @@ def main():
             k = int(castle[c])
             prev[y:y + 8, x:x + 8] = (psets[k][2][colpal[r, c]][p] * 255 // 7)
             arc[y:y + 8, x:x + 8] = ref8s[2 if hall[c] else k][idx[r, c]]
+    if fire:
+        hx0, hy0 = world.square_origin(HALL_SEG)
+        for k in range((FIRE_X1 - FIRE_X0) // 8):
+            j, tx = divmod(k, 4)
+            for ty in range(4):
+                pos = ty * 4 + tx
+                pix = fire['pix'][(j % 2) * 16 + pos]
+                y, x = FIRE_Y - PY0 + ty * 8, FIRE_X0 + k * 8
+                prev[y:y + 8, x:x + 8] = psets[1][2][fire['pal'][pos]][pix] * 255 // 7
     Image.fromarray(prev).save(f'{out}/preview.png')
     Image.fromarray(arc).save(f'{out}/arcade.png')
     with open(f'{out}/stage.inc', 'a') as f:
