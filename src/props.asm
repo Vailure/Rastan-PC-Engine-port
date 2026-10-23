@@ -17,7 +17,6 @@
 
 PROP_VRAM	=	$4C00		; 16 cells after the BG tile pool ($1000-$4BFF).
 PROP_PATTERN	=	PROP_VRAM >> 5
-PROP_SATB	=	HUD_ENTRIES + 24	; 4 SATB entries after the HUD's and Rastan's.
 PROP_PAL	=	8		; Sprite palette 8 (VCE 384).
 PROP_MARGIN	=	48
 
@@ -346,20 +345,22 @@ prop_anim:	dec	<pr_animt
 		rts
 
 ; ---------------------------------------------------------------------------
-; props_draw - SATB entries PROP_SATB .. +3 (hidden when nothing is shown).
+; props_draw - SATB entries from satb_n, after Rastan's (none when nothing is shown).
 
 props_draw:	php				; VDC writes: IRQ held off (see stream_line).
 		sei
 		st0	#VDC_MAWR
-		lda	#<(SATB_ADDR + PROP_SATB * 4)
+		lda	<satb_n			; SATB_ADDR + satb_n * 4 ($7F00: low byte 0)
+		asl	a
+		asl	a
 		sta	VDC_DL
-		lda	#>(SATB_ADDR + PROP_SATB * 4)
+		lda	#>SATB_ADDR
 		sta	VDC_DH
 		st0	#VDC_VWR
 		ldx	#4			; Entries left to write.
 		lda	<pr_state
 		bne	!+
-		jmp	.clear
+		jmp	.done
 !:		lda	<pr_pose
 		asl	a
 		tay
@@ -368,7 +369,10 @@ props_draw:	php				; VDC writes: IRQ held off (see stream_line).
 		lda	ppose_table + 1, y
 		sta	<pr_ptr + 1
 		lda	[pr_ptr]
-		sta	<ctmp			; Piece count.
+		sta	<ctmp			; Piece count: the objects' entries
+		clc				; follow them.
+		adc	<satb_n
+		sta	<satb_n
 		ldy	#1
 .piece:		; Screen y + 64 = pr_y - scroll_y + dy + 64.
 		lda	[pr_ptr], y		; dx

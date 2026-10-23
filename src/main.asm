@@ -101,7 +101,13 @@ core_main:	lda	#GAME_BANK		; (the boot mapping already has it there)
 !:
 		jsr	set_scroll_regs		; Show this frame's position.
 	.if	!CAMERA_TEST
+	.if	BG_CHECK			; Test build: the tile map alone, in the
+		lda	<vdc_crl		; colours it was converted with (no
+		and	#$BF			; sprites, no colour cycling).
+		sta	<vdc_crl
+	.else
 		jsr	dyn_update		; Waterfall cycle, sky change (VBLANK).
+	.endif
 		jsr	objects_upload		; Changed object poses' cells (VBLANK).
 		jsr	sound_update		; Music and effects (the PSG).
 		jsr	debug_check		; SELECT: debug menu.

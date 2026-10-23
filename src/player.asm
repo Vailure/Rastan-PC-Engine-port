@@ -85,7 +85,6 @@ sb_x0:		ds	2		; Sword hitbox (world), valid when sword_box sets carry.
 sb_x1:		ds	2
 sb_y0:		ds	2
 sb_y1:		ds	2		; Freeze the animation (climbing, not moving).
-p_prev_cells:	ds	1
 p_weapon:	ds	1		; WPN_*.
 p_wtime:	ds	2		; Frames left with a taken weapon.
 p_var:		ds	1		; Weapon drawing variant: weapon - 1, or 3 + flame step.
@@ -129,7 +128,6 @@ player_init:	lda	#<START_X
 		stz	<p_jatk
 		stz	<p_nograb
 		stz	<p_buf
-		stz	<p_prev_cells
 		jsr	player_invalidate
 		lda	#WPN_SWORD
 		sta	<p_weapon
@@ -1358,6 +1356,8 @@ camera_update:	lda	<p_x			; cv = p_x - 136
 ; camera_clamp - scroll_x, scroll_y into the box of cam_region. The BAT holds
 ; 512 px each way, so the camera also stays inside the last 512 px streamed:
 ; scroll_x >= col_last - STAGE_COL_REACH and scroll_y <= row_top + STAGE_ROW_REACH.
+CASTLE_X	=	8192			; (low byte 0: camera_clamp relies on it)
+
 camera_clamp:	ldx	<cam_region
 		lda	<scroll_x
 		sta	<cv
@@ -1368,7 +1368,14 @@ camera_clamp:	ldx	<cam_region
 		lda	region_x0_h, x
 		sta	<cl + 1
 		jsr	smax
-		lda	<col_last		; Not back past the last column streamed
+		lda	<p_x + 1		; In the castle (p_x >= CASTLE_X, $2000),
+		cmp	#>CASTLE_X		; not back past its wall: the arcade
+		bcc	!+			; loads the room whole at the gate and
+		stz	<cl			; its camera stays in it.
+		lda	#>CASTLE_X
+		sta	<cl + 1
+		jsr	smax
+!:		lda	<col_last		; Not back past the last column streamed
 		clc				; minus the BAT's 512 px (less a margin).
 		adc	#<-STAGE_COL_REACH
 		sta	<cl
@@ -1783,21 +1790,10 @@ player_draw:	php				; VDC writes: IRQ held off (see stream_line).
 		iny
 		inx
 		jmp	.went
-.clear:		stx	<cty			; Entries this frame.
-.clr:		cpx	<p_prev_cells		; Zero leftover entries.
-		bcs	.end
-		st1	#0
-		st2	#0
-		st1	#0
-		st2	#0
-		st1	#0
-		st2	#0
-		st1	#0
-		st2	#0
-		inx
-		bra	.clr
-.end:		lda	<cty
-		sta	<p_prev_cells
+.clear:		txa				; The props' and objects' entries
+		clc				; follow his (enemies_draw clears what
+		adc	#HUD_ENTRIES		; the last frame used beyond them all).
+		sta	<satb_n
 		plp
 		rts
 

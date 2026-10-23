@@ -25,7 +25,9 @@ NUM_EN		=	4		; Slots 0-3: walkers (the arcade keeps at most 4 alive),
 					; 4: item, 5: its bat, 6-8: specials (boulders, ...),
 NUM_BIG		=	9		; 9-16: projectiles.
 NUM_OBJ		=	NUM_BIG + 8
-EN_SATB_FIRST	=	HUD_ENTRIES + 24 + 4	; SATB entries after the HUD's, Rastan's 24, the props' 4.
+; SATB: the HUD's 12 entries, then Rastan's, the props' and the objects', packed
+; (satb_n: the next free one), so that a frame where Rastan needs few cells
+; leaves the rest to the objects.
 EN_VRAM		=	$5C00		; Object cell buffers, $5C00-$76BF (107 cells):
 WALK_CELLS	=	11		; walkers,
 ITEM_CELLS	=	4		; item and bat,
@@ -79,7 +81,12 @@ rng:		ds	1
 lane_best:	ds	2		; Nearest lane so far: y, distance.
 lane_top:	ds	1		; High byte of the top of Rastan's 512 px square.
 en_satb:	ds	1		; Entries written this frame.
-en_satb_prev:	ds	1
+en_satb_prev:	ds	1		; SATB entries in use at the end of the last frame.
+en_cap:		ds	1		; Entries left for the objects this frame.
+satb_n:		ds	1		; Next free SATB entry (player_draw, props_draw).
+en_rot:		ds	1		; The walkers' drawing order turns (enemies_draw).
+en_wk:		ds	1
+en_full:	ds	1		; Pieces left undrawn for want of SATB entries.
 up_left:	ds	1		; objects_upload: cells left this VBLANK,
 up_next:	ds	1		; slot to start from next time,
 up_count:	ds	1		; slots left to look at.
@@ -124,7 +131,11 @@ ram_tia:	ds	8		; tia src, VDC_DL, 128 / rts (source patched per cell).
 ; ---------------------------------------------------------------------------
 ; enemies_init - load cells and palettes, clear slots.
 
-enemies_init:	ldx	#7			; The RAM copy of "tia cell, VDC_DL, 128".
+enemies_init:	lda	#64			; (the first frame clears every entry
+		sta	<en_satb_prev		; after the HUD's and Rastan's)
+		lda	#HUD_ENTRIES
+		sta	<satb_n
+		ldx	#7			; The RAM copy of "tia cell, VDC_DL, 128".
 !:		lda	.tia, x
 		sta	ram_tia, x
 		dex
@@ -610,13 +621,19 @@ start_walk:	lda	#ES_WALK
 		adc	e_timer, x
 		sta	e_timer, x
 		stz	e_alt, x
-		ldy	e_kind, x
-!:		lda	kind_walk_l, y
+!:		tma4				; The walk list is in the kind's group
+		pha				; bank: callers that spawn (the lane
+		jsr	map_kind		; spawner, a thrower's club) may have
+		ldy	e_kind, x		; another one at $8000.
+		lda	kind_walk_l, y
 		pha
 		lda	kind_walk_h, y
 		tay
 		pla
-		jmp	enemy_set_anim
+		jsr	enemy_set_anim
+		pla
+		tam4
+		rts
 
 ; rand - A = next value of an 8-bit LFSR (X, Y kept).
 rand:		lda	<rng
@@ -1156,35 +1173,46 @@ enemy_anim:	lda	e_animt, x
 .done:		rts
 
 ; ---------------------------------------------------------------------------
-; enemies_draw - SATB entries from EN_SATB_FIRST, after player_draw.
+; enemies_draw - SATB entries from satb_n, after player_draw and props_draw.
 
 enemies_draw:	php				; VDC writes: IRQ held off (see stream_line).
 		sei
 		jsr	plan_uploads
 		st0	#VDC_MAWR
-		lda	#<(SATB_ADDR + EN_SATB_FIRST * 4)
+		lda	<satb_n			; SATB_ADDR + satb_n * 4 ($7F00: low byte 0)
+		asl	a
+		asl	a
 		sta	VDC_DL
-		lda	#>(SATB_ADDR + EN_SATB_FIRST * 4)
+		lda	#>SATB_ADDR
 		sta	VDC_DH
 		st0	#VDC_VWR
 		stz	<en_satb
-		ldx	#NUM_OBJ - 1
-.slot:		lda	e_state, x
-		beq	.next
-		cmp	#ES_HIDDEN
-		beq	.next
-		lda	e_plan, x		; Nothing in its buffer next frame: not drawn.
-		cmp	#$FF
-		beq	.next
-		jsr	map_kind
-		phx
-		jsr	draw_one
-		plx
-.next:		dex
-		bpl	.slot
+		lda	#64
+		sec
+		sbc	<satb_n
+		sta	<en_cap
+		ldx	#NUM_OBJ - 1		; Projectiles, specials, item and bat
+.slot:		jsr	draw_slot		; first, in a fixed order,
+		dex
+		cpx	#NUM_EN
+		bcs	.slot
+		inc	<en_rot			; then the walkers, the first of them
+		lda	#NUM_EN			; changing every frame. The VDC shows 16
+		sta	<en_wk			; sprite cells a line: where walkers crowd
+.walker:	lda	<en_rot			; one (or the HUD) the one drawn last loses
+		clc				; its cells there, and this way the loss
+		adc	<en_wk			; takes turns (flicker) instead of always
+		and	#NUM_EN - 1		; cutting the same one.
+		tax
+		jsr	draw_slot
+		dec	<en_wk
+		bne	.walker
 		jsr	traps_draw		; The castle's floor spears.
 		; Clear entries the last frame used beyond this frame's.
 		lda	<en_satb
+		clc
+		adc	<satb_n
+		sta	<en_satb		; (now: all entries in use)
 .clr:		cmp	<en_satb_prev
 		bcs	.end
 		st1	#0
@@ -1201,6 +1229,20 @@ enemies_draw:	php				; VDC writes: IRQ held off (see stream_line).
 		sta	<en_satb_prev
 		plp
 		rts
+
+; draw_slot - X = slot: its SATB entries, if it is shown. Keeps X.
+draw_slot:	lda	e_state, x
+		beq	.r
+		cmp	#ES_HIDDEN
+		beq	.r
+		lda	e_plan, x		; Nothing in its buffer next frame: not drawn.
+		cmp	#$FF
+		beq	.r
+		jsr	map_kind
+		phx
+		jsr	draw_one
+		plx
+.r:		rts
 
 ; draw_one - X = slot. Pieces were captured facing left (arcade X flip set);
 ; facing right mirrors dx (-dx - 16) and toggles the flip.
@@ -1232,8 +1274,11 @@ draw_one:	lda	slot_pat_l, x		; Pattern of the buffer's first cell.
 		sta	<etmp			; piece count
 		ldy	#1
 .piece:		lda	<en_satb
-		cmp	#64 - EN_SATB_FIRST
-		bcs	.done			; Out of SATB entries.
+		cmp	<en_cap
+		bcc	!+
+		inc	<en_full		; Out of SATB entries (counted for
+		bra	.done			; tools/audit.py).
+!:
 		jsr	piece_pos		; cy = screen x, ctx = screen y; carry = visible
 		bcc	.skip
 		jsr	emit_piece

@@ -89,7 +89,7 @@ checkpoint_track:
 
 ; checkpoint_start - (re)start the stage at checkpoint cur_cp.
 checkpoint_start:
-		call	set_dspoff
+		jsr	screen_cut
 		lda	<cur_cp
 		asl	a
 		tax
@@ -124,14 +124,53 @@ checkpoint_start:
 		jsr	props_reset
 		jsr	dyn_reset
 		jsr	music_here		; The tune for where he restarts.
+	.if	!BG_CHECK
 		jsr	dyn_update		; (sky for this column, before showing it)
+	.endif
 		jsr	camera_update
 		jsr	set_scroll_regs
 		jsr	player_draw
 		jsr	props_draw
 		jsr	enemies_draw
-		call	wait_vsync		; SATB DMA, then show the screen.
-		call	set_dspon
+		jmp	screen_show
+
+; ---------------------------------------------------------------------------
+; screen_cut / screen_show - a clean cut from one view to another (a restart,
+; a warp, the castle gate, the boss door). The display goes off at a VBLANK,
+; before the tile map is rewritten, and the screen is black meanwhile (with
+; the display off the VCE shows BG colour 0, the stage's dark grey); it comes
+; back at a VBLANK, after the SATB has been sent, with colour 0 restored.
+
+screen_cut:	call	set_dspoff		; (from the next VBLANK)
+		call	wait_vsync
+		php
+		sei
+		stz	VCE_CTA + 0		; Colour 0: black.
+		stz	VCE_CTA + 1
+		stz	VCE_CTW + 0
+		stz	VCE_CTW + 1
+		plp
+		rts
+
+screen_show:	call	wait_vsync		; SATB DMA of the new frame,
+		call	set_dspon		; the display on from the next VBLANK,
+	.if	BG_CHECK
+		lda	<vdc_crl		; (bgcheck: the tile map alone)
+		and	#$BF
+		sta	<vdc_crl
+	.endif
+		call	wait_vsync
+		php				; and colour 0 back before it shows.
+		sei
+		lda	#^palette_data
+		tam3
+		stz	VCE_CTA + 0
+		stz	VCE_CTA + 1
+		lda	palette_data + 0
+		sta	VCE_CTW + 0
+		lda	palette_data + 1
+		sta	VCE_CTW + 1
+		plp
 		rts
 
 ; ---------------------------------------------------------------------------
@@ -162,16 +201,22 @@ door_enter:	stz	<p_door
 		lda	<p_x + 1		; The gate: before the castle.
 		cmp	#>8192
 		bcs	.no
+		jsr	screen_cut
 		lda	#<8240
 		sta	<p_x
 		lda	#>8240
 		sta	<p_x + 1
 		lda	#<384
 		sta	<p_y
-		stz	<p_y + 1
-		jmp	start_fall
+		lda	#>384
+		sta	<p_y + 1
+		jsr	start_fall
+		jsr	music_here		; (the castle's tune)
+		jsr	camera_update		; (it keeps inside the castle's wall)
+		jsr	stream_ahead
+		bra	.show
 .boss:
-		call	set_dspoff
+		jsr	screen_cut
 		lda	#<(STAGE_DOOR_LINE + 1)	; The rest of the shaft, the door line,
 		sta	<stream_min		; and what the camera needs.
 		lda	#>(STAGE_DOOR_LINE + 1)
@@ -200,12 +245,11 @@ door_enter:	stz	<p_door
 		jsr	enemies_reset
 		jsr	music_here		; (the boss room's tune)
 		jsr	camera_update
-		jsr	set_scroll_regs
+.show:		jsr	set_scroll_regs
 		jsr	player_draw
 		jsr	props_draw
 		jsr	enemies_draw
-		call	wait_vsync
-		call	set_dspon
+		jmp	screen_show
 .no:		rts
 
 ; ---------------------------------------------------------------------------
@@ -426,12 +470,16 @@ menu_close_quiet:
 		stz	VCE_CTA + 0
 		stz	VCE_CTA + 1
 		tia	palette_data, VCE_CTW, 512
+	.if	!BG_CHECK			; (bgcheck: the colours as converted)
 		jsr	dyn_reset
 		jsr	dyn_update
+	.endif
 		jsr	enemies_load
+	.if	!BG_CHECK
 		lda	<vdc_crl		; Sprites back on.
 		ora	#$40
 		sta	<vdc_crl
+	.endif
 		plp
 		rts
 

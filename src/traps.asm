@@ -260,7 +260,7 @@ traps_draw:	jsr	traps_active
 ; trap_emit - one SATB entry: screen (ex + Y, cy), pattern ctmp, palette A.
 trap_emit:	pha
 		lda	<en_satb
-		cmp	#64 - EN_SATB_FIRST
+		cmp	<en_cap
 		bcc	!+
 		pla
 		rts

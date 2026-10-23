@@ -47,6 +47,7 @@ int main(int argc, char **argv)
         wav = fopen(getenv("TGRUN_WAV"), "wb");
         if (wav) { char hdr[44] = {0}; fwrite(hdr, 1, 44, wav); snd.enabled = 1; }
     }
+    FILE *satb = getenv("TGRUN_SATB") ? fopen(getenv("TGRUN_SATB"), "wb") : NULL;
     for (int f = 0; f < frames; f++) {
         input.pad[0] = 0;
         for (int i = 4; i + 2 < argc; i += 3)
@@ -65,6 +66,7 @@ int main(int argc, char **argv)
             }
             wav_samples += snd.buffer_size;
         }
+        if (satb) fwrite(objram, 1, 0x200, satb);  /* TGRUN_SATB=file : the sprite table shown, each frame */
         if (peek_len) {           /* TGRUN_PEEK=offset,len : dump RAM ($2000+offset) each frame */
             printf("%5d:", f);
             for (int i = 0; i < peek_len; i++) printf(" %02x", ram[peek_off + i]);
@@ -82,6 +84,7 @@ int main(int argc, char **argv)
         memcpy(h + 34, &bits, 2); memcpy(h + 36, "data", 4); memcpy(h + 40, &data, 4);
         fseek(wav, 0, SEEK_SET); fwrite(h, 1, 44, wav); fclose(wav);
     }
+    if (satb) fclose(satb);
     write_ppm(argv[3], pixels);
     if (getenv("TGRUN_VCE")) {         /* TGRUN_VCE=file : dump the 512 VCE colors (words) at the end */
         FILE *v = fopen(getenv("TGRUN_VCE"), "wb");
