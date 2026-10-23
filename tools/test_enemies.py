@@ -106,6 +106,12 @@ r = run(1500, args)
 kills = sum(1 for a, b in zip(r, r[1:]) for i in range(NE) if a['es'][i] != 4 and b['es'][i] == 4)
 check('swinging kills lizardmen', kills >= 10, f'{kills} kills')
 check('swinging keeps him unhurt', min(x['hp'] for x in r[20:]) == 48, f"min hp {min(x['hp'] for x in r[20:])}")
+# The arcade's boxes: his blade out (atk5) 24..56 px ahead, 3 px tall at the lizardman's
+# chest; its body box 12 px either side (sword_box, kind_half): kills from 68 px in.
+dist = [b['obj'][i]['x'] - b['x'] for a, b in zip(r, r[1:]) for i in range(NE)
+        if a['es'][i] != 4 and b['es'][i] == 4]
+check('the blade reaches a lizardman 68 px ahead and no farther (the arcade\'s boxes)',
+      dist and max(dist) <= 69 and max(dist) >= 60, f'kills at {sorted(dist)}')
 
 # 3. Blue club throwers (god build: the rope route with a jump every second up to
 # x 1500, then he stands): only lizardmen before x 1500, then the two take turns;

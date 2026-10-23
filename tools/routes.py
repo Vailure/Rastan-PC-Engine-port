@@ -50,7 +50,9 @@ ROUTE_B = [200, 830, '05'] + sum([[f, f + 3, I] for f in range(220, 830, 60)], [
     831, 1100, '04', 864, 867, I, 914, 917, I, 964, 967, I, 1101, 1103, '08', 1110, 1113, '41', 1114, 1470, '01',
     1480, 1483, '48', 1484, 1572, '08', 1590, 1593, '41', 1594, 1830, '01', 1840, 1843, '48', 1844, 1990, '08',
     1991, 1995, '04', 2010, 2013, '41', 2014, 2280, '01', 2290, 2293, '44', 2294, 2491, '04', 2510, 2513, '41',
-    2514, 2760, '01', 2770, 2773, '48', 2774, 3100, '08'] + sum([[f, f + 1, '80'] for f in range(3150, 3800, 25)], [])
+    2514, 2760, '01', 2770, 2773, '48', 2774, 3278, '08', 3283, 3285, '04'] + sum([[f, f + 1, '80'] for f in range(3298, 4150, 25)], [])
+# (In the boss room he walks left down the steps to the floor the boss walks, turns
+# and swings at it as it comes: from the top step his blade passes over its box.)
 
 ROUTE_B = shift(ROUTE_B, -228)          # (that build resumed at 228 from checkpoint 5)
 

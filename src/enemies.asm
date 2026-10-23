@@ -720,12 +720,13 @@ kind_ptab_h:	db	>grp_sect1_ptab, >grp_sect1_ptab, >grp_sect1_ptab, >grp_items_pt
 		db	>grp_chimera_ptab, >grp_chimera_ptab, >grp_rocks_ptab, >grp_gargoyle_ptab, >grp_gargoyle_ptab
 		db	>grp_woman_ptab, >grp_castle_ptab, >grp_castle_ptab, >grp_jets_ptab
 		db	>grp_boss_ptab, >grp_boss_ptab, >grp_boss_ptab, >grp_vine_ptab
-; Body box: x = anchor + cx +/- half, y = anchor - top .. anchor + bot
-; (the item and bat boxes from their sprites' extent).
-kind_top:	db	36, 48, 8, 2, 25, 30, 6, 20, 40, 32, 38, 40, 40, 16, 54, 0, 8, 0
-kind_bot:	db	16, 16, 16, 30, 7, 16, 6, 12, 47, 16, 16, 16, 16, 40, 34, 0, 8, 0
-kind_half:	db	16, 16, 8, 20, 16, 30, 6, 15, 23, 48, 15, 16, 16, 16, 24, 0, 8, 0
-kind_cx:	db	0, 0, 0, -8, -2, 0, 4, -3, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0
+; Body box: x = anchor + cx +/- half, y = anchor - top .. anchor + bot: the
+; arcade's ($0446BC: an index per object into the boxes at $044CE0), for all
+; but the item, its bat, the jets and the vines (from their sprites' extent).
+kind_top:	db	20, 20, 8, 2, 25, 5, 8, 8, 16, 8, 20, 20, 20, 16, 36, 0, 8, 0
+kind_bot:	db	16, 16, 8, 30, 7, 14, 8, 8, 24, 18, 16, 16, 16, 40, 30, 0, 8, 0
+kind_half:	db	12, 12, 3, 20, 16, 20, 3, 3, 12, 12, 12, 12, 12, 16, 16, 0, 3, 0
+kind_cx:	db	0, 0, 0, -8, -2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 
 ; ---------------------------------------------------------------------------
 ; throw_club - X = blue thrower: a club leaves its hand toward Rastan.
@@ -1102,36 +1103,32 @@ sword_vs_enemy:	phx
 		bcs	box_vs_enemy
 		rts
 
-; body_vs_enemy - carry set if Rastan's body (p_x +/- 12, p_y - 24 ..
-; p_y + 24) overlaps this object's body box.
-body_vs_enemy:	lda	<p_x
-		sec
-		sbc	#12
+; body_vs_enemy - carry set if Rastan's body box (body_box, the arcade's)
+; overlaps this object's body box. Against the arcade's later object slots
+; (18 on: clubs, fireballs, the boss's fire) his box is 8 px narrower each
+; side ($10D22C).
+body_vs_enemy:	phx
+		jsr	body_box		; (src/player.asm)
+		plx
+		lda	e_kind, x
+		cmp	#EK_CLUB
+		beq	.narrow
+		cmp	#EK_FIRE
+		beq	.narrow
+		cmp	#EK_FRAG
+		bne	box_vs_enemy
+.narrow:	lda	<sb_x0
+		clc
+		adc	#8
 		sta	<sb_x0
-		lda	<p_x + 1
-		sbc	#0
-		sta	<sb_x0 + 1
-		lda	<p_x
-		clc
-		adc	#12
-		sta	<sb_x1
-		lda	<p_x + 1
-		adc	#0
-		sta	<sb_x1 + 1
-		lda	<p_y
+		bcc	!+
+		inc	<sb_x0 + 1
+!:		lda	<sb_x1
 		sec
-		sbc	#24
-		sta	<sb_y0
-		lda	<p_y + 1
-		sbc	#0
-		sta	<sb_y0 + 1
-		lda	<p_y
-		clc
-		adc	#24
-		sta	<sb_y1
-		lda	<p_y + 1
-		adc	#0
-		sta	<sb_y1 + 1
+		sbc	#8
+		sta	<sb_x1
+		bcs	box_vs_enemy
+		dec	<sb_x1 + 1
 		; (fall through)
 
 ; box_vs_enemy - carry set if the box sb_* overlaps X's body box.

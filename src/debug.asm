@@ -59,6 +59,7 @@ dbg_now:	ds	1		; Open it at the next game frame (unused now).
 
 		.bss
 obj_b64:	ds	1		; The arcade's sprite colour bank is 64 (enemies_load).
+new_game:	ds	1		; The next checkpoint_start begins a game (title_screen).
 dbg_ttl:	ds	1		; The menu is the start screen's (title_menu).
 dbg_wpn:	ds	1		; Weapon for the game the start screen begins.
 dbg_save:	ds	MENU_W * MENU_H * 2	; The tile map under the menu.
@@ -166,9 +167,12 @@ checkpoint_start:
 		jsr	swarm_reset		; (src/swarm.asm)
 		jsr	column_reset		; (src/column.asm)
 		ldx	#0			; The arcade's sprite colour bank: 64 after a
-		lda	<cur_cp			; restart from segment 16 on (checkpoints 4
-		cmp	#4			; and 5: the castle soldiers turn green),
-		bcc	!+			; else 48.
+		lda	new_game		; restart from segment 16 on (checkpoints 4
+		stz	new_game		; and 5: the castle soldiers turn green),
+		bne	!+			; else 48 - and 48 for a game begun there
+		lda	<cur_cp			; (the start screen's menu: the arcade's
+		cmp	#4			; game started at segment $10 keeps 48,
+		bcc	!+			; its restart there after a death is 64).
 		inx
 !:		stx	obj_b64
 		jsr	enemies_load

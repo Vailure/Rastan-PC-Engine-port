@@ -87,7 +87,7 @@ check('SELECT goes back to the title', (shot(199, [60, 110, OPEN, 150, 150, '10'
 seq = [(130, '04'), (136, '04'), (142, '04'), (148, '04'), (154, '02'), (160, '04'), (166, '02'), (172, '02'),
        (178, '04'), (184, '04'), (190, '02'), (196, '02'), (202, '04'), (208, '02'), (214, '40')]
 keys = [60, 110, OPEN] + sum([[f, f, k] for f, k in seq], []) + [400, 460, OPEN]
-r = peek(rom, 520, keys, dict(VARS, dbg_god=1, p_weapon=1))
+r = peek(rom, 520, keys, dict(VARS, dbg_god=1, p_weapon=1, obj_b64=1))
 lc = [w16(x['loop_cnt']) for x in r]
 go = next((i for i in range(len(r)) if lc[i]), None)
 check("its new game starts where and as it says (checkpoint 4, invincible, 5 lives, the axe)",
@@ -95,6 +95,8 @@ check("its new game starts where and as it says (checkpoint 4, invincible, 5 liv
       and r[go + 30]['p_weapon'][0] == 2,
       f"at x {w16(r[go + 30]['p_x']) if go else None}, god {r[go + 30]['dbg_god'][0] if go else None}, "
       f"lives {r[go + 30]['lives'][0] if go else None}, weapon {r[go + 30]['p_weapon'][0] if go else None}")
+check("its castle soldiers are gold and blue (colour bank 48: a game the arcade begins at segment $10 keeps it; "
+      "only a restart there after a death turns them green)", go and r[go + 30]['obj_b64'][0] == 0)
 check('and in that game UP + SELECT held still opens nothing', lc[500] - lc[400] >= 99,
       f'{lc[500] - lc[400]} logic frames in 100')
 

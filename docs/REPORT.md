@@ -20,7 +20,7 @@ The demo ROM is `build/rastan.pce`:
 | **Round 1, outdoors** | The arcade's map from the start to the castle gate:<br>• the cave and its block, broken by a down thrust;<br>• ropes;<br>• the chasm vine;<br>• the waterfall, with its flowing colour cycle and deadly lip;<br>• the sky's 8 steps toward dusk (a restart shows its checkpoint's);<br>• rockfalls and rolling boulders. |
 | **Enemies outdoors** | • Lizardmen;<br>• blue club throwers and their clubs;<br>• chimeras and their fireballs;<br>• two gargoyle flights;<br>• the woman warrior;<br>• five weapon items, each with its bat. |
 | **The castle** | Laid out as the arcade lays it out, in the castle's own colours:<br>• the first room;<br>• shaft 1, scrolling up;<br>• the lava hall, with its animated fire and three vines;<br>• the jets' room;<br>• shaft 2;<br>• the boss room door. |
-| **Enemies in the castle** | • Sword and mace soldiers, gold and blue (green after a restart at the last two checkpoints, as in the arcade);<br>• floor spears;<br>• the first room's hanging column, which shuts the top corridor most of the time;<br>• the lava hall's sealing wall, which pushes a lingering Rastan into the fire;<br>• fire jets;<br>• shaft 2's three spiked weights, which come down on the corridor at its top and kill on touch. |
+| **Enemies in the castle** | • Sword and mace soldiers, gold and blue (green after a death's restart at the last two checkpoints, as in the arcade);<br>• floor spears;<br>• the first room's hanging column, which shuts the top corridor most of the time;<br>• the lava hall's sealing wall, which pushes a lingering Rastan into the fire;<br>• fire jets;<br>• shaft 2's three spiked weights, which come down on the corridor at its top and kill on touch. |
 | **Hurry-up swarm** | Anywhere but the boss room: dawdle 42 s in one pair of segments and nine small bats come for Rastan, faster with each wave. |
 | **Boss** | Drops in, walks, leaps, staff swing, a fan of fire from above. Ten hits kill it. |
 | **Round clear** | The arcade's screen (YOU ARE A BRAVE FIGHTER…) with its jingle for 7 s (RUN skips it after 2 s), then the title. |
@@ -143,7 +143,6 @@ All of these are fixed, and each now has a check:
 - **Parallax is gone.** The BG layer is flattened into the FG at 1:1 (see `docs/parallax-feasibility.md`).
 - **The lava hall's fire** is baked into the tile map, because there are too many sprites per line for the VDC. Its drifting sparks are not drawn.
 - **The lava hall's vines** swing in step. Their grab box is not measured.
-- **The standing up-swing's hitbox** is the up thrust's, which has not been measured for this attack.
 
 ---
 
@@ -214,9 +213,11 @@ The project spans 44 commits (2026-10-20 → 2026-10-23).
    - the bats' bite and the weights' kill read from the arcade's collision code (its box tables), no longer measured;
    - the lizardmen's, soldiers' and clubs' hits on Rastan from the same tables: crouching now ducks a lizardman's swing, as in the arcade, and clubs reach 7 px, not 19;
    - the soldiers' low swing (the arcade picks high or low at random), which does reach a crouching Rastan.
+   - Rastan's weapon and body boxes from the arcade's tables, per pose and weapon, with its rules for when the weapon hits (a swing's blade only while it is out; held up as he rises in a jump), and the objects' body boxes from its box index table: the blade now reaches a lizardman 68 px ahead, as in the arcade;
+   - parity fixes from comparing the arcade and the port checkpoint by checkpoint: the sky's 8 steps toward dusk, the floor spears appearing as the arcade's do, the camera after a restart at checkpoint 5, and gold soldiers in a game begun at a castle checkpoint.
 
 The next steps, in order, are in `docs/HANDOFF.md` §8:
-1. the remaining kinds' hits by the arcade's boxes (woman, gargoyle, chimera, boss), and Rastan's box per pose;
+1. the rest of the arcade's hit effects (which object hurts on touch, and by how much; the gargoyle's wings can be struck);
 2. the lava hall's vines and fire sparks;
 3. more compression, if needed;
 4. rounds 2–6;

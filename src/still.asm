@@ -282,7 +282,9 @@ title_screen:
 		lda	#START_LIVES
 		sta	<lives
 		stz	<cur_cp
-.new:		stz	<score
+.new:		lda	#1			; (a new game: checkpoint_start)
+		sta	new_game
+		stz	<score
 		stz	<score + 1
 		stz	<score + 2
 		jmp	hud_reset

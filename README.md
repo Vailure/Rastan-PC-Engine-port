@@ -208,14 +208,23 @@ Not done yet: slopes, waterfall currents, the other collision codes, rope attack
 - **Health:** Rastan has 12 units of health (the arcade's 12288 at `$10C13A`, 3072 per lizardman hit).
   Each hit knocks him back with the hurt animation and gives 90 frames of invulnerability.
   When health runs out, the stage restarts.
-- **Sword hitboxes:** standing, crouched and jump swings reach 56 px in front of him; the down
-  and up thrusts hit below and above him.
+- **Weapon and body boxes** (the arcade's tables, `tools/pce_player.py` `write_boxes`): per weapon frame
+  (`$10D244`) the weapon has a box (`$05C9EA`, `$05CAC6`, `$05CBA2`, `$05CC7E` for the four weapons, into
+  `$10D254`) and Rastan's body one (`$05C90E`: x −12..12, y −24 or 0 crouched .. 26; −8 behind him with the blade
+  out), mirrored when he faces right. The weapon hits (`$054982`: `$10D2F8` = 1) from a swing's 3rd frame
+  through its 11th (atk3-atk5, not drawn back), the up-swing's 2nd through 12th, all through a down thrust, all
+  through any attack with the fire sword, and, held up, while he rises in a jump; not in the up thrust's pose.
+  The sword's blade out is 24..56 px ahead and 3 px tall; the morning star's 48..92. Objects' body boxes are the
+  arcade's too (`$0446BC`: lizardmen, throwers, the woman and the soldiers x ±12, y −20..16; the chimera ±20,
+  −5..14; clubs, fireballs, boulders and the boss's fire ±3, −8..8; the gargoyle's body ±12, −16..24 and wings
+  −8..18; the boss ±16, −36..30), and against the arcade's later slots (clubs, fireballs, the boss's fire) his
+  box is 8 px narrower each side (`$10D22C`).
 - **Weapons** (arcade `$10D2FA`; timer `$10D326`): the sword, or an item's axe, morning star or fire sword for
   3000 frames, back to the sword at the end or on a death. Rastan's sprite in the arcade is three parts, each from
   its own ROM table: body, legs and weapon, with the weapon frame chosen by `$10D244`. The port keeps the body and
   legs as its composited poses and draws the weapon as up to 4 extra sprites behind them, taken straight from the
   weapon's ROM table for the pose's weapon frame (`tools/pce_player.py` checks every captured pose's weapon pieces
-  against that table). Only the morning star reaches further: 88 px, and 16 px more for the thrusts. The fire sword's
+  against that table). Each weapon hits by its own boxes (above). The fire sword's
   flame cycles its cells (+0/+2/+4/+6, 2 frames each); only its 2 cells are re-uploaded.
 - **Items and bats** (`src/items.asm`; `sim/scripts/item.txt`, `item_fire.txt`, `item_star.txt`): five items hang
   in round 1: axes at x 1004 (in the cave) and 3854, the fire sword at 2893, morning stars at 6829 and in the
@@ -328,7 +337,9 @@ Not done yet: slopes, waterfall currents, the other collision codes, rope attack
   so all sprites drawn with bank 48's palettes take bank 64's: the castle soldiers go from gold and blue to green.
   The converter takes the soldiers' (and the boss's) palettes from bank 48 (`GROUP_BANK` in
   `tools/object_specs.py`) and writes `objpal_b64.bin` for the castle's groups in bank 64; `checkpoint_start`
-  loads that set after a restart at checkpoint 4 or 5.
+  loads that set after a restart at checkpoint 4 or 5. Only a restart after a death: a game begun at segment `$10`
+  (the continue table patched) keeps bank 48 until Rastan dies there, so a game the start screen's menu begins at
+  checkpoint 4 or 5 has gold and blue soldiers too (`new_game`).
 - **The boss** (`src/boss.asm`; `sim/scripts/boss.txt`): drops in when Rastan enters the last room and lands
   (anchor y 446). It walks at him, leaps when he is far, and alternates fire (five fragments form at the top of the
   screen in front of it, then rain down at him in a fan) and a staff swing reaching about 80 px. Ten sword hits kill it
@@ -558,7 +569,7 @@ music gets the channel back, and that the voice shows in the audio.
 - [x] Title screen, GAME OVER, the round-clear screen and jingle (`tools/pce_still.py`, `src/still.asm`)
 - [x] RUN pauses
 - [x] The first room's hanging column (marker `$47`) and the lava hall's sealing wall (marker `$4D`)
-- [x] The sprite colour bank: gold and blue castle soldiers, green after a restart at checkpoint 4 or 5
+- [x] The sprite colour bank: gold and blue castle soldiers, green after a death's restart at checkpoint 4 or 5
 - [x] Shaft 2's three spiked weights (marker `$45`, `src/weights.asm`)
 
 (Checked and not needed: Rastan shows no score popups when anything dies, and the "small castle

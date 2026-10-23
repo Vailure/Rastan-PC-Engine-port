@@ -516,115 +516,131 @@ player_drain:
 		jmp	enter_dead
 .no:		rts
 
-; sword_box - carry set and sb_* set if Rastan's weapon is out this frame.
+; sword_box - carry set and sb_* set if Rastan's weapon hits this frame: the
+; arcade's rules ($054982: $10D2F8 = 1) and boxes (write_boxes in pce_player.py,
+; per pose and weapon). It hits
+;  - in a swing (standing, crouched, in the air) from its 3rd frame through
+;    the 11th (atk3, atk4, atk5: the blade out, not drawn back), and in the
+;    swing over his head from its 2nd frame through the 12th;
+;  - all through a down thrust, and all through any attack with the fire sword;
+;  - held up, as he rises in a jump (not in the up thrust's pose: the arcade
+;    gives that none).
 sword_box:	lda	<p_state
 		cmp	#ST_ATTACK
-		beq	.stand
+		beq	.swing
+		cmp	#ST_CATK
+		beq	.swing
 		cmp	#ST_UATK
 		beq	.uatk
-		cmp	#ST_CATK
-		beq	.crouch
 		cmp	#ST_AIR
 		bne	.none
 		lda	<p_jatk
-		beq	.none
+		beq	.rise
 		cmp	#2
-		beq	.down
+		beq	.on			; Down thrust: all through.
 		lda	<p_pose
 		cmp	#POSE_UTHR
-		beq	.up
-		cmp	#POSE_JATK4		; Jump swing: sword out in jatk4/jatk5.
+		beq	.none
+		jsr	.fire
+		bcs	.on
+		lda	<p_animi		; Jump swing: jatk3, jatk4, then 8 of
+		cmp	#4			; jatk5's 10 frames.
 		bcc	.none
-		cmp	#POSE_JATK5 + 1
-		bcs	.none
-		ldy	#0
-		bra	.front
-.stand:		lda	<p_pose			; Standing: atk4/atk5.
-		cmp	#POSE_ATK4
-		bcc	.none
-		cmp	#POSE_ATK5 + 1
-		bcs	.none
-		ldy	#0
-		bra	.front
-.uatk:		lda	<p_pose			; Over his head: sword out in uatk2/uatk3,
-		cmp	#POSE_UATK2		; where the arcade's sprite holds it up.
-		bcc	.none
-		ldy	#3
-		bra	.vert
-.crouch:	lda	<p_pose
-		cmp	#POSE_CATK4
-		bcc	.none
-		cmp	#POSE_CATK5 + 1
-		bcs	.none
-		ldy	#1
-		bra	.front
+		cmp	#8
+		bcc	.on
+		bne	.none
+		lda	<p_animt
+		cmp	#3
+		bcs	.on
 .none:		clc
 		rts
-.down:		lda	<p_pose			; Down thrust: below him once pointed down.
-		cmp	#POSE_DTHR2
+.rise:		lda	<p_jfall		; Rising: the sword held up.
+		bne	.none
+		bra	.on
+.swing:		jsr	.fire
+		bcs	.on
+		lda	<p_animi		; atk3, atk4, atk5 (entries 2-4).
+		cmp	#4
 		bcc	.none
-		ldy	#2
-		bra	.vert
-.up:		ldy	#3
-.vert:		lda	<p_weapon		; The morning star: rows 4, 5.
-		cmp	#WPN_STAR
-		bne	!+
-		iny
-		iny
-!:		lda	<p_x			; x: p_x - 10 .. p_x + 10
-		sec
-		sbc	#10
-		sta	<sb_x0
-		lda	<p_x + 1
-		sbc	#0
-		sta	<sb_x0 + 1
-		lda	<p_x
+		cmp	#10
+		bcs	.none
+		bra	.on
+.uatk:		jsr	.fire
+		bcs	.on
+		lda	<p_animi		; uatk1 from its 2nd frame, uatk2, uatk3
+		beq	.u1			; for 4 of its 8 frames.
+		cmp	#2
+		beq	.on
+		cmp	#4
+		bne	.none
+		lda	<p_animt
+		cmp	#5
+		bcs	.on
+		bra	.none
+.u1:		lda	<p_animt
+		cmp	#4
+		bcs	.none
+.on:		ldy	<p_pose			; The pose's weapon box.
+		lda	pose_wslot, y
+		beq	.none
+		dec	a
+		ldy	<p_weapon
 		clc
-		adc	#10
-		sta	<sb_x1
-		lda	<p_x + 1
-		adc	#0
-		sta	<sb_x1 + 1
-		bra	.yrange
-.front:		; Facing right: p_x .. p_x + reach; left: p_x - reach .. p_x.
-		lda	#56			; The weapon's reach.
-		ldx	<p_weapon
-		cpx	#WPN_STAR
-		bne	!+
-		lda	#88
-!:		sta	<ctmp
+		adc	wbox_base - 1, y
+		tay
 		lda	<p_face
 		bne	.left
-		lda	<p_x
+		lda	wbox_x0, y		; Facing right: p_x + x0 .. p_x + x1.
+		jsr	box_add_px
 		sta	<sb_x0
-		clc
-		adc	<ctmp
+		stx	<sb_x0 + 1
+		lda	wbox_x1, y
+		jsr	box_add_px
 		sta	<sb_x1
-		lda	<p_x + 1
-		sta	<sb_x0 + 1
-		adc	#0
-		sta	<sb_x1 + 1
-		bra	.yrange
-.left:		lda	<p_x
-		sta	<sb_x1
-		sec
-		sbc	<ctmp
+		stx	<sb_x1 + 1
+		bra	.y
+.left:		lda	wbox_x1, y		; Left: p_x - x1 .. p_x - x0.
+		eor	#$FF
+		inc	a
+		jsr	box_add_px
 		sta	<sb_x0
-		lda	<p_x + 1
-		sta	<sb_x1 + 1
-		sbc	#0
-		sta	<sb_x0 + 1
-.yrange:	lda	.y0, y			; y = p_y + y0 .. p_y + y1 (signed)
-		jsr	.add_py
+		stx	<sb_x0 + 1
+		lda	wbox_x0, y
+		eor	#$FF
+		inc	a
+		jsr	box_add_px
+		sta	<sb_x1
+		stx	<sb_x1 + 1
+.y:		lda	wbox_y0, y		; y = p_y + y0 .. p_y + y1 (signed)
+		jsr	box_add_py
 		sta	<sb_y0
 		stx	<sb_y0 + 1
-		lda	.y1, y
-		jsr	.add_py
+		lda	wbox_y1, y
+		jsr	box_add_py
 		sta	<sb_y1
 		stx	<sb_y1 + 1
 		sec
 		rts
-.add_py:	pha				; A (signed) + p_y -> A/X
+.fire:		lda	<p_weapon		; Carry set: the fire sword.
+		cmp	#WPN_FIRE
+		beq	!+
+		clc
+!:		rts
+box_add_px:	phy				; A (signed) + p_x -> A/X
+		pha
+		clc
+		adc	<p_x
+		tax
+		pla
+		and	#$80
+		beq	!+
+		lda	#$FF
+!:		adc	<p_x + 1
+		sax
+		ply
+		rts
+box_add_py:	phy				; A (signed) + p_y -> A/X
+		pha
 		clc
 		adc	<p_y
 		tax
@@ -634,10 +650,45 @@ sword_box:	lda	<p_state
 		lda	#$FF
 !:		adc	<p_y + 1
 		sax
+		ply
 		rts
-		;	stand, crouch, down thrust, up thrust, (morning star) down, up
-.y0:		db	-28, 0, 8, -64, 8, -80
-.y1:		db	8, 24, 44, -20, 60, -20
+wbox_base:	db	0, WBOX_SLOTS, 2 * WBOX_SLOTS, 3 * WBOX_SLOTS
+
+; body_box - sb_* = Rastan's body box (the arcade's, $10D248: per pose, x
+; mirrored facing left, y from y0 to 26 below the anchor).
+body_box:	ldy	<p_pose
+		lda	<p_face
+		bne	.left
+		lda	pbody_x0, y
+		jsr	box_add_px
+		sta	<sb_x0
+		stx	<sb_x0 + 1
+		lda	pbody_x1, y
+		jsr	box_add_px
+		sta	<sb_x1
+		stx	<sb_x1 + 1
+		bra	.y
+.left:		lda	pbody_x1, y
+		eor	#$FF
+		inc	a
+		jsr	box_add_px
+		sta	<sb_x0
+		stx	<sb_x0 + 1
+		lda	pbody_x0, y
+		eor	#$FF
+		inc	a
+		jsr	box_add_px
+		sta	<sb_x1
+		stx	<sb_x1 + 1
+.y:		lda	pbody_y0, y
+		jsr	box_add_py
+		sta	<sb_y0
+		stx	<sb_y0 + 1
+		lda	#PBODY_Y1
+		jsr	box_add_py
+		sta	<sb_y1
+		stx	<sb_y1 + 1
+		rts
 
 ; --- On a vine: LEFT/RIGHT turn; I lets go, on the side he faces only.
 st_swing:	bbr5	<pad, !+

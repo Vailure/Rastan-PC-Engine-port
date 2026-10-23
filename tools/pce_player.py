@@ -125,6 +125,44 @@ WTAB = {}
 BODY_CELLS = 20                 # of a 24-cell pose buffer; the weapon uses the last 4
 
 
+# Rastan's boxes, per weapon frame ($10D244) and facing ($10D114: 2 left, the tables'
+# own; else mirrored): his weapon's ($0548xx: tables per weapon $10D2FA, into $10D254),
+# which hits objects while $10D2F8 = 1, and his body's ($05C90E: x0, x1, y0 into
+# $10D248; y1 26 in all the poses here).
+WBOX_TABLES = {1: 0x5C9EA, 2: 0x5CAC6, 3: 0x5CBA2, 4: 0x5CC7E}
+BODY_TABLE = 0x5C90E
+
+
+def write_boxes(f, rom, names, caps):
+    """pose_wslot (a slot per pose with a weapon frame, 0 none), then per weapon and slot
+    the weapon box, and per pose the body box: x0, x1 (facing right), y0, y1."""
+    sb = lambda v: v - 256 if v > 127 else v
+    def box(base, fi, mirror):
+        x0, x1, y0, y1 = (sb(v) for v in rom[base + 4 * fi:base + 4 * fi + 4])
+        return (-x1, -x0, y0, y1) if mirror else (x0, x1, y0, y1)
+    slots, pose_slot, body = [], [], []
+    for n in names:
+        fi, mirror = caps[n][3:5]
+        if fi < 0:
+            pose_slot.append(0)
+            body.append((-12, 12, -24))
+            continue
+        k = (fi, bool(mirror))
+        if k not in slots:
+            slots.append(k)
+        pose_slot.append(slots.index(k) + 1)
+        body.append(box(BODY_TABLE, fi, mirror)[:3])
+    f.write('\n; Rastan\'s boxes (arcade tables, pce_player.py write_boxes): facing right, from the anchor.\n')
+    f.write(f'WBOX_SLOTS\t= {len(slots)}\n')
+    f.write('pose_wslot:\tdb\t' + ', '.join(str(v) for v in pose_slot) + '\n')
+    for k, nm in enumerate(('x0', 'x1', 'y0', 'y1')):
+        vals = [box(WBOX_TABLES[w], fi, m)[k] for w in (1, 2, 3, 4) for fi, m in slots]
+        f.write(f'wbox_{nm}:\tdb\t' + ', '.join(str(v) for v in vals) + '\t; per weapon 1-4, per slot\n')
+    for k, nm in enumerate(('x0', 'x1', 'y0')):
+        f.write(f'pbody_{nm}:\tdb\t' + ', '.join(str(b[k]) for b in body) + '\n')
+    f.write('PBODY_Y1\t= 26\n')
+
+
 def to9(rgb):
     return tuple(int(round(c * 7 / 255)) for c in rgb)
 
@@ -318,6 +356,7 @@ def main():
                 i += 2
             f.write('\t\tdb\t' + ', '.join(vals) + '\n')
             f.write(f'{tn.upper()}_LEN\t= {len(vals)}\n')
+        write_boxes(f, rom, names, caps)
     Image.fromarray(np.concatenate(preview, 1).astype(np.uint8)).save(f'{out}/poses.png')
     print(f'{len(names)} poses, {sum(r[0] for r in blob_records)} cells, player.bin {len(table) + len(blob)} bytes, '
           f'{len(pal9)} sprite colors')
