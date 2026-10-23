@@ -105,6 +105,9 @@ cp_cam_y:	dw	192, 160, 192, 192, 265, -247, 265
 cp_p_x:		dw	48, 2096, 4144, 6192, 8240, 9296, 11320
 cp_p_y:		dw	295, 263, 295, 295, 455, -57, 455
 cp_line:	dw	0, 0, 0, 0, 0, $12 * 64, STAGE_DOOR_LINE + 1
+; The sky's step a restart shows (src/dyncolor.asm; the arcade's restarts at
+; segments 5, 9 and 13 load steps 3, 5 and 7 of 8; the castle has none).
+cp_sky:		db	0, 2, 4, 6, 0, 0, 0
 
 ; checkpoint_track - once a frame: the checkpoint moves on when the camera
 ; reaches the next one's segment (the arcade picks it by segment).

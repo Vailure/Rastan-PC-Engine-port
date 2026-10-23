@@ -1,8 +1,8 @@
 """test_effects.py rom dyncolor.inc : waterfall and hazard checks (run on the no-enemy build).
 
 Compared with the arcade (see README): the waterfall colors cycle every 8 frames
-and nothing else changes; the sky switches once the column before segment 3 is
-streamed; the waterfall's lip (collision code 8) kills, with the arcade's death
+and nothing else changes; the sky darkens in 8 steps, the first once the column before segment 3 is
+streamed, and a restart shows its checkpoint's step; the waterfall's lip (collision code 8) kills, with the arcade's death
 animation, and the restart costs a life.
 """
 import os
@@ -28,6 +28,11 @@ def slots(label):
     return {int(a, 16) for a in re.findall(r'dw\s+\$([0-9A-F]{3}),', body)}
 
 
+def pairs(label):
+    body = inc.split(label + ':')[1].split(':')[0]
+    return {int(a, 16): int(c, 16) for a, c in re.findall(r'dw\s+\$([0-9A-F]{3}), \$([0-9A-F]{3})', body)}
+
+
 def vce_after(frames, args=()):
     out = os.path.join(tmp, f'vce_{os.getpid()}.bin')
     subprocess.run([TGRUN, rom, str(frames), '/dev/null'] + [str(a) for a in args], check=True,
@@ -36,7 +41,7 @@ def vce_after(frames, args=()):
 
 
 cyc = slots('dyn_cycle0')
-sky = slots('dyn_sky_a')
+sky = slots('dyn_sky0')
 v = [vce_after(n) for n in (200, 208, 216)]
 changed = [set(np.nonzero(a != b)[0].tolist()) for a, b in zip(v, v[1:])]
 check('waterfall cycle: only its slots change, every 8 frames', all(c and c <= cyc for c in changed),
@@ -53,6 +58,15 @@ for f in range(100, 1700, 60):
 start, later = vce_after(300, args), vce_after(1440, args)
 diff = set(np.nonzero(start != later)[0].tolist()) - cyc
 check('sky switches before segment 3', diff and diff <= sky, f'{len(diff & sky)} of {len(sky)} sky slots changed')
+
+# Restarts (debug-menu warps): checkpoints 1-3 show the sky's steps 3, 5, 7 (of 8), as
+# the arcade's restarts at segments 5, 9, 13 load (palette line 2, 15 colours).
+from routes import warp
+for cp in (1, 2, 3):
+    want = pairs(f'dyn_sky{2 * cp}')
+    v = vce_after(300, warp(cp))
+    bad = [a for a, c in want.items() if v[a] & 0x1FF != c]
+    check(f'a restart at checkpoint {cp} shows the sky\'s step {2 * cp + 1}', not bad, f'{len(bad)} of {len(want)} differ')
 
 r = trace(rom, 1700, args)
 dead = [x for x in r if x['state'] == 8]

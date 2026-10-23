@@ -786,6 +786,7 @@ debug_font:	incbin	"font.bin"		; HuC's 8x8 bold font, $20-$5F (build/debug).
 trap_palettes:	incbin	"trappal.bin"		; The floor spears (build/traps).
 trap_cells:	incbin	"traps.bin"
 column_data:	incbin	"column.bin"		; The hanging column (build/traps).
+		include	"dyncolor.inc"		; Run-time BG colours (build/stage1; dyncolor.asm).
 weights_data:	incbin	"weights.bin"		; Shaft 2's spiked weights (build/traps).
 
 ; The ROM uses the Street Fighter II mapper (pceas --sf2): banks $00-$3F are

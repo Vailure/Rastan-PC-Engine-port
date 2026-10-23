@@ -47,8 +47,8 @@ from the ROMs (`*.bin`, snapshots, renders, disassembly) is git-ignored.
 | `src/hud.asm`, `tools/pce_hud.py` | HUD from the arcade's HUD sprites |
 | `src/debug.asm` | Checkpoints (death restarts, warps) and the debug menu |
 | `tools/test_debug.py` | Checks the menu, warps, invincibility and checkpoint restarts |
-| `src/dyncolor.asm` | Waterfall color cycle and the sky change (VCE lists from `pce_stage.py`) |
-| `tools/test_effects.py` | Checks the waterfall cycle, sky switch, hazards and death |
+| `src/dyncolor.asm` | Waterfall color cycle and the sky's steps toward dusk (VCE lists from `pce_stage.py`) |
+| `tools/test_effects.py` | Checks the waterfall cycle, the sky's steps, hazards and death |
 | `tools/pce_objects.py`, `tools/object_specs.py` | Object poses (enemies, projectiles, items) from the arcade's object slots → PCE sprites |
 | `tools/census_all.py`, `tools/track.py` | Every arcade object of a run with its sprite pieces; one slot over time |
 | `tools/test_enemies.py` | Headless checks for hits, kills and frame budget |
@@ -362,10 +362,13 @@ takes SATB entries 0-11, so it draws in front of everything (12 sprites, most of
 
 **Waterfall and run-time colors** (`src/dyncolor.asm`; `tools/pce_stage.py` with `build/waterfall.snp`):
 the arcade cycles entries 14/15 of FG palettes 26-29 through three teal shades, 8 frames a step,
-with 4 phase patterns, so the water flows. It also changes 5 sky colors once, while streaming the column before
-segment 3 (the dusk sky). The converter finds both automatically from a bot run that reaches the waterfall. The
-changing colors get palette slots of their own: 6 slots for the cycle, 35 for the sky. It emits VCE update lists,
-and the engine applies them in vblank.
+with 4 phase patterns, so the water flows. The sky darkens toward dusk in 8 steps (palette line 2): the arcade
+moves to the next while it streams the column 2 before each odd segment (columns 190, 318, ... 958, every 128), and
+a restart loads its checkpoint's step (checkpoints 1-3: steps 3, 5, 7, counted from 1). The converter finds the
+cycle and the steps automatically from three bot runs (`waterfall.snp`, and `sky04.snp`/`sky0c.snp`, every frame
+from later restart segments, which reach the last steps). The changing colors get palette slots of their own. It
+emits VCE update lists (`dyncolor.inc`, in data bank `$08`), and the engine applies them in vblank. (`bgcheck.pce`
+keeps the colors as converted, so the audit can compare the screen with the preview.)
 
 **Hazards** (arcade `$054D84`): collision code 7 and 8 tiles kill Rastan (the waterfall's lip and its pool), and
 code 6 (water) drains 32/12288 health a frame. Health is now kept in bar units, 48 for 12288, so a lizardman hit is
@@ -521,7 +524,7 @@ music gets the channel back, and that the voice shows in the audio.
 - [x] Stage 1 scrolling ROM, verified pixel-exact against the converter in the headless emulator
 - [ ] Per-round palettes for rounds 2-6. Needs a full playthrough; the bot still dies in pits, and
       `$10D2A6` is only a *candidate* health counter.
-- [x] Run-time colors: waterfall cycle and the segment 3 sky change
+- [x] Run-time colors: waterfall cycle and the sky's 8 steps toward dusk
 - [x] Hazards: waterfall lip / deadly tiles (codes 7, 8), water drain (code 6), death animation
 - [x] Stage compression: pattern and quad dictionaries (513 KB → 206 KB)
 - [x] Street Fighter II mapper: fixed half for the game, a page per round's data

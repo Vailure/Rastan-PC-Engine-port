@@ -31,8 +31,22 @@ $(BUILD)/bot1.txt: tools/make_bot.py
 $(BUILD)/bot1.snp: sim/sim sim/maincpu.bin $(BUILD)/bot1.txt
 	sim/sim sim/maincpu.bin $(BUILD)/bot1.txt $@ 20
 
-$(STAGE)/stage.bin: tools/pce_stage.py tools/world.py tools/fgmap.py tools/bgmap.py sim/maincpu.bin $(BUILD)/bot1.snp $(BUILD)/waterfall.snp $(BUILD)/hall.snp
-	cd tools && python3 pce_stage.py ../sim/maincpu.bin ../$(BUILD)/bot1.snp $(PALFRAME) 0 0x16 ../$(STAGE) ../$(BUILD)/waterfall.snp ../$(BUILD)/hall.snp:4400
+$(STAGE)/stage.bin: tools/pce_stage.py tools/world.py tools/fgmap.py tools/bgmap.py sim/maincpu.bin $(BUILD)/bot1.snp $(BUILD)/waterfall.snp $(BUILD)/hall.snp $(BUILD)/sky04.snp $(BUILD)/sky0c.snp
+	cd tools && SKY_SNAPS=../$(BUILD)/sky04.snp,../$(BUILD)/sky0c.snp python3 pce_stage.py ../sim/maincpu.bin ../$(BUILD)/bot1.snp $(PALFRAME) 0 0x16 ../$(STAGE) ../$(BUILD)/waterfall.snp ../$(BUILD)/hall.snp:4400
+
+# The sky darkens toward dusk in eight steps along the outdoor stage. The same bot from
+# checkpoints 1 and 3 (the arcade's restart table byte: segments 4 and 12) sees the
+# later steps (the round-start bot dies before them).
+$(BUILD)/sky04.txt: tools/make_bot.py
+	@mkdir -p $(BUILD)
+	python3 tools/make_bot.py $@ 4000 04
+
+$(BUILD)/sky0c.txt: tools/make_bot.py
+	@mkdir -p $(BUILD)
+	python3 tools/make_bot.py $@ 2200 0c
+
+$(BUILD)/sky%.snp: sim/sim sim/maincpu.bin $(BUILD)/sky%.txt
+	sim/sim sim/maincpu.bin $(BUILD)/sky$*.txt $@ 1
 
 # Rastan's poses are captured from the arcade program running a scripted
 # sequence of actions (walk, crouch, attacks, jumps).

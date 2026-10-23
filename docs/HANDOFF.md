@@ -113,7 +113,7 @@ The captures that matter most:
 | Snapshot | Script | Used for |
 |---|---|---|
 | `play1.snp` | `play1.txt` | Round start palette |
-| `waterfall.snp` | (bot run) | Colour cycle, sky change |
+| `waterfall.snp`, `sky04.snp`, `sky0c.snp` | (bot runs; `make_bot.py`'s 3rd argument picks the restart segment) | Colour cycle, the sky's 8 steps |
 | `hall.snp` | `hall.txt` | The castle's colours at frame 4400 |
 | `actions.snp`, `upatk.snp` | `actions.txt`, `upatk.txt` | Rastan's poses |
 | `ending.snp` | `ending.txt` | Round-clear screen |
@@ -413,7 +413,7 @@ tgrun rom.pce frames out.ppm [from to padhex]...
 | `test_scroll.py` (3 runs) | Every sampled frame of the camera build matches the converter's `preview.png` pixel for pixel: horizontal, downward and the castle shafts |
 | `test_player.py` | Walk, crouch, jumps, attacks (including the standing up attack), ropes, collision, the frame budget |
 | `test_enemies.py` | Hits, kills, a crouching Rastan ducking the lizardmen, spawn lanes and timing, clubs, frame budget |
-| `test_effects.py` | Waterfall cycle, sky switch, hazards, death animation |
+| `test_effects.py` | Waterfall cycle, the sky's steps (and a restart's), hazards, death animation |
 | `test_debug.py` | The menu needs a hold; the screen comes back exactly; warps, invincibility, checkpoint restart |
 | `test_items.py` | Weapons, items, bats (weapon drawing is sampled over 4 frames: the fire sword's flame hides behind the blade on some) |
 | `test_monsters.py` | Chimeras, boulders, gargoyle, woman, boss; the round-clear screen and jingle; the hurry-up swarm (arrives after 40 counts, closes in, bites every 45 frames at most, dies to the sword for 100; in a crowd, drawn 85% of the time or more) |
@@ -487,6 +487,8 @@ tgrun rom.pce frames out.ppm [from to padhex]...
 15. **The debug menu once popped up at random, and drew over the stage.** SELECT alone opened it, and some pads and emulators send it spuriously; and opened in play, its font and colours overwrote the stage's (the sky showed through in the menu's colours). It is now a screen of its own on the title (`title_menu`, UP+SELECT held), which sets up a new game; title builds have no menu in play (`dbg_on` stays 0). Only `testdbg.pce` and the other test builds, which have no title, keep the in-play menu for their warps.
 16. **Arcade positions in the castle's later squares.** The census tools' camera x is `(segment - 1) × 512` plus the scroll register. In the jets' room and shaft 2 (the arcade's segments `$14`, `$15`) that counter is one ahead of the port's squares, so the port's x is that minus 512 (the restart point: 9808 → 9296; the jets: 10384 → 9870 was taken 2 px off). Take positions on frames where the scroll registers do not change: a moving camera puts 1-2 px of jitter in them. For the vertical, the same view is the port's `scroll_y` = the arcade's (Rastan's y − his screen y) + 8.
 17. **pceas packs the HuC library's procedures into the bank with the least free space that holds them** (`vdc_set_mode`, `read_joypads`, `init_screen`, `vdc_clear_vram`, `clear_vce`, about 500 bytes). Packed into a code bank (4 or 5, assembled after them), the bank's location counter is left at the procedure's end and the bank's own code lands on top: hundreds of "Symbol's bank or address changed in final pass" errors through that bank, with no hint of the cause. It happens as soon as bank 4's or 5's free space drops below the landing bank's. `main.asm` keeps a landing place: the title's second bank (7) is filled up to `PROC_ROOM` (512) bytes from its end. If a code bank's free space ever falls between about 120 and 512 bytes, the procedures can pick it again: shrink `PROC_ROOM`, or watch for the symptom.
+
+18. **`vce_list` once indexed its list with Y alone**, so a list over 63 colour pairs wrapped and rewrote the first ones. The sky's lists are longer: the pointer now moves on 4 bytes a pair. `dyncolor.inc` lives in data bank `$08` (bank 0 is full); `dyn_reset`/`dyn_update` map it into MPR3 themselves.
 
 ---
 

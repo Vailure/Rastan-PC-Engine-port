@@ -17,7 +17,7 @@ The demo ROM is `build/rastan.pce`:
 | Part | In the demo |
 |---|---|
 | **Title** | The arcade's title screen in its own font. PUSH RUN BUTTON blinks, and RUN starts the game. |
-| **Round 1, outdoors** | The arcade's map from the start to the castle gate:<br>• the cave and its block, broken by a down thrust;<br>• ropes;<br>• the chasm vine;<br>• the waterfall, with its flowing colour cycle and deadly lip;<br>• the dusk sky change;<br>• rockfalls and rolling boulders. |
+| **Round 1, outdoors** | The arcade's map from the start to the castle gate:<br>• the cave and its block, broken by a down thrust;<br>• ropes;<br>• the chasm vine;<br>• the waterfall, with its flowing colour cycle and deadly lip;<br>• the sky's 8 steps toward dusk (a restart shows its checkpoint's);<br>• rockfalls and rolling boulders. |
 | **Enemies outdoors** | • Lizardmen;<br>• blue club throwers and their clubs;<br>• chimeras and their fireballs;<br>• two gargoyle flights;<br>• the woman warrior;<br>• five weapon items, each with its bat. |
 | **The castle** | Laid out as the arcade lays it out, in the castle's own colours:<br>• the first room;<br>• shaft 1, scrolling up;<br>• the lava hall, with its animated fire and three vines;<br>• the jets' room;<br>• shaft 2;<br>• the boss room door. |
 | **Enemies in the castle** | • Sword and mace soldiers, gold and blue (green after a restart at the last two checkpoints, as in the arcade);<br>• floor spears;<br>• the first room's hanging column, which shuts the top corridor most of the time;<br>• the lava hall's sealing wall, which pushes a lingering Rastan into the fire;<br>• fire jets;<br>• shaft 2's three spiked weights, which come down on the corridor at its top and kill on touch. |
@@ -61,7 +61,7 @@ Every test drives the real ROM in a patched copy of HuC's `tgemu` emulator (`too
 | Background | 3 camera runs (horizontal, downward, the castle shafts). Every sampled frame must be pixel-identical to the converter's preview of the map. |
 | Rastan | Movement, jumps, attacks including the up-swing, ropes, collision, and that no frame overruns. |
 | Enemies | Hits, kills, spawn lanes and timing, projectiles, and the frame budget with crowds. |
-| Effects | Waterfall cycle, sky switch, hazards and the death animation. |
+| Effects | Waterfall cycle, the sky's steps, hazards and the death animation. |
 | Debug | The menu needs a hold; the screen is restored exactly; warps, invincibility and checkpoint restarts. |
 | Items | Weapons, items and bats. |
 | Later monsters | Chimeras, boulders, gargoyle, woman warrior, the boss; the round-clear screen and jingle. |
