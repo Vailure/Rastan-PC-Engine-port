@@ -14,6 +14,7 @@ up an octave.
 
 Stream format (one byte at a time, read once a frame):
   $FF              end: the music loops here, an effect stops
+  $FE              end of a tune that plays once (the round-clear jingle)
 Each byte of wait is one driver tick (about 54.6 Hz, the rate the arcade's sound
 driver sequences at), not a 60 Hz frame; src/sound.asm paces itself to match.
   $80 | mask       channels 0-5 in `mask` change; each one then has three bytes:
@@ -37,9 +38,10 @@ INIT = 0xef             # the main CPU's first command: the driver's own setup
 # Sound commands, from the main CPU's writes to the sound latch (sim's sndlog) while
 # the bot plays: tools/README notes which run showed each one.
 MUSIC = [
-    ('ROUND1', 0x1a, 7200),       # sent as round 1 starts
-    ('CASTLE', 0x1b, 7200),       # the castle checkpoint
-    ('BOSS', 0x1c, 7200),         # the boss room
+    ('ROUND1', 0x1a, 7200, True),     # sent as round 1 starts
+    ('CASTLE', 0x1b, 7200, True),     # the castle checkpoint
+    ('BOSS', 0x1c, 7200, True),       # the boss room
+    ('CLEAR', 0x27, 1200, False),     # the round is clear ($29 stops the music, then $27)
 ]
 EFFECTS = [
     ('SWING', 0x09, 60),          # sword swing (pressing attack)
@@ -166,15 +168,18 @@ def main():
 
     blob = bytearray()
     entries = []                          # (name, kind, offset, loop offset)
-    for name, cmd, nframes in MUSIC:
+    for name, cmd, nframes, loops in MUSIC:
         rows, notes = capture(snd, audio, adpcm, cmd, nframes, tmp)
-        loop = find_loop(notes)
-        if loop is None:
-            loop = find_loop(notes, window=300)
+        loop = (find_loop(notes) or find_loop(notes, window=300)) if loops else None
         st = states(rows)
         if loop:
             st = st[:loop[0] + loop[1]]   # the way in, then one pass of the loop
+        elif not loops:
+            while st and all(v == 0 for _, v, _ in st[-1]):
+                st.pop()                  # (a jingle: up to its last note)
         data, loop_at = encode(st, loop)
+        if not loops:
+            data = data[:-1] + b'\xfe'
         entries.append((name, 'M', len(blob), loop_at))
         blob += data
         print(f'{name}: command ${cmd:02x}, {len(st)} ticks, {len(data)} bytes'

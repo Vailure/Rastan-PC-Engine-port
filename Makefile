@@ -12,10 +12,10 @@ BUILD      := build
 STAGE      := $(BUILD)/stage1
 PLAYER     := $(BUILD)/player
 
-export PCE_INCLUDE := $(abspath $(STAGE)):$(abspath $(PLAYER)):$(abspath $(BUILD)/objects):$(abspath $(BUILD)/hud):$(abspath $(BUILD)/props):$(abspath $(BUILD)/traps):$(abspath $(BUILD)/sound):$(abspath $(BUILD)/voice):$(abspath $(BUILD)/debug):$(abspath src):$(abspath $(HUC))/include/hucc
+export PCE_INCLUDE := $(abspath $(STAGE)):$(abspath $(PLAYER)):$(abspath $(BUILD)/objects):$(abspath $(BUILD)/hud):$(abspath $(BUILD)/props):$(abspath $(BUILD)/traps):$(abspath $(BUILD)/sound):$(abspath $(BUILD)/voice):$(abspath $(BUILD)/still):$(abspath $(BUILD)/debug):$(abspath src):$(abspath $(HUC))/include/hucc
 export RASTAN_ROMS := $(abspath $(ROMS))
 
-all: $(BUILD)/rastan.pce
+all: $(BUILD)/rastan.pce $(BUILD)/rastan_debug.pce
 
 sim/maincpu.bin: tools/extract_roms.py tools/arcade_gfx.py
 	python3 tools/extract_roms.py $(ROMS) sim
@@ -137,6 +137,27 @@ $(BUILD)/sound/sound.bin: tools/pce_sound.py tools/ym2151.py sim/snd sim/audiocp
 	@mkdir -p $(BUILD)/sound
 	cd tools && python3 pce_sound.py ../sim/audiocpu.bin ../sim/adpcm.bin ../$(BUILD)/sound
 
+# The round-clear screen, from the arcade (the boss script, run on).
+$(BUILD)/ending.snp: sim/sim sim/maincpu.bin sim/scripts/ending.txt
+	@mkdir -p $(BUILD)
+	sim/sim sim/maincpu.bin sim/scripts/ending.txt $@ 1 2490
+
+$(BUILD)/still/ending.bin: tools/pce_still.py tools/pce_stage.py $(BUILD)/ending.snp
+	cd tools && python3 pce_still.py ending ../$(BUILD)/ending.snp 2500 60 8 0 0 ../$(BUILD)/still
+
+# The title screen and GAME OVER, from the arcade's power-on attract sequence.
+$(BUILD)/title.snp: sim/sim sim/maincpu.bin sim/scripts/attract_stills.txt
+	@mkdir -p $(BUILD)
+	sim/sim sim/maincpu.bin sim/scripts/attract_stills.txt $@ 1 155
+
+$(BUILD)/still/title.bin: tools/pce_still.py tools/pce_stage.py $(BUILD)/title.snp
+	cd tools && python3 pce_still.py title ../$(BUILD)/title.snp 160 24 16 01 0 ../$(BUILD)/still \
+		--text 96,232,"PUSH RUN BUTTON" --clear 216,232,320,240
+
+$(BUILD)/still/gameover.bin: tools/pce_still.py tools/pce_stage.py $(BUILD)/title.snp
+	cd tools && python3 pce_still.py gameover ../$(BUILD)/title.snp 2730 40 0 - 1 ../$(BUILD)/still \
+		--keep 95,100,237,124 --grey
+
 # Rastan's jump grunt and death cry: MSM5205 voice samples on the arcade.
 $(BUILD)/voice/voice.bin: tools/pce_voice.py sim/adpcm.bin
 	@mkdir -p $(BUILD)/voice
@@ -170,51 +191,60 @@ $(BUILD)/debug/font.bin: $(HUC)/examples/asm/elmer/font/font8x8-ascii-bold-short
 	@mkdir -p $(BUILD)/debug
 	dd if=$< of=$@ bs=8 skip=16 count=64 status=none
 
-GAME_DEPS  := $(wildcard src/*.asm) $(BUILD)/debug/font.bin $(STAGE)/stage.bin $(PLAYER)/player.bin $(OBJECTS)/objcells.bin $(BUILD)/hud/hud.bin $(BUILD)/props/props.bin $(BUILD)/traps/traps.bin $(BUILD)/sound/sound.bin $(BUILD)/voice/voice.bin
+GAME_DEPS  := $(wildcard src/*.asm) $(BUILD)/debug/font.bin $(STAGE)/stage.bin $(PLAYER)/player.bin $(OBJECTS)/objcells.bin $(BUILD)/hud/hud.bin $(BUILD)/props/props.bin $(BUILD)/traps/traps.bin $(BUILD)/sound/sound.bin $(BUILD)/voice/voice.bin $(BUILD)/still/ending.bin $(BUILD)/still/title.bin $(BUILD)/still/gameover.bin
 
 $(BUILD)/rastan.pce: $(GAME_DEPS)
 	@mkdir -p $(BUILD)/opt
-	printf "CAMERA_TEST = 0\nNO_ENEMIES = 0\nGOD_MODE = 0\nBG_CHECK = 0\n" > $(BUILD)/opt/options.inc
+	printf "CAMERA_TEST = 0\nNO_ENEMIES = 0\nGOD_MODE = 0\nBG_CHECK = 0\nTITLE = 1\nDEBUG_MENU = 0\n" > $(BUILD)/opt/options.inc
 	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt):$$PCE_INCLUDE $(PCEAS) --newproc --strip -m -l 2 -S -gA --raw ../src/main.asm -o rastan.pce
+
+# The development build: straight into the game, with the debug menu (UP +
+# SELECT held). The tests run on this one; rastan.pce is the demo (the title
+# screen, no debug menu).
+$(BUILD)/rastan_debug.pce: $(GAME_DEPS)
+	@mkdir -p $(BUILD)/opt_dbg
+	printf "CAMERA_TEST = 0\nNO_ENEMIES = 0\nGOD_MODE = 0\nBG_CHECK = 0\nTITLE = 0\nDEBUG_MENU = 1\n" > $(BUILD)/opt_dbg/options.inc
+	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_dbg):$$PCE_INCLUDE $(PCEAS) --newproc --strip -l 0 --raw ../src/main.asm -o rastan_debug.pce
 
 # Test build: the pad drives the camera directly and Rastan is not drawn.
 $(BUILD)/camtest.pce: $(GAME_DEPS)
 	@mkdir -p $(BUILD)/opt_test
-	printf "CAMERA_TEST = 1\nNO_ENEMIES = 1\nGOD_MODE = 0\nBG_CHECK = 0\n" > $(BUILD)/opt_test/options.inc
+	printf "CAMERA_TEST = 1\nNO_ENEMIES = 1\nGOD_MODE = 0\nBG_CHECK = 0\nTITLE = 0\nDEBUG_MENU = 1\n" > $(BUILD)/opt_test/options.inc
 	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_test):$$PCE_INCLUDE $(PCEAS) --newproc --strip -l 0 --raw ../src/main.asm -o camtest.pce
 
 # Scroll the ROM through the whole stage and compare with the converter preview.
 # Test build: no enemies, for the movement checks.
 $(BUILD)/noenemy.pce: $(GAME_DEPS)
 	@mkdir -p $(BUILD)/opt_noen
-	printf "CAMERA_TEST = 0\nNO_ENEMIES = 1\nGOD_MODE = 0\nBG_CHECK = 0\n" > $(BUILD)/opt_noen/options.inc
+	printf "CAMERA_TEST = 0\nNO_ENEMIES = 1\nGOD_MODE = 0\nBG_CHECK = 0\nTITLE = 0\nDEBUG_MENU = 1\n" > $(BUILD)/opt_noen/options.inc
 	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_noen):$$PCE_INCLUDE $(PCEAS) --newproc --strip -l 0 --raw ../src/main.asm -o noenemy.pce
 
 # Test build: enemies on, but they can't hurt Rastan (to reach later sections).
 $(BUILD)/god.pce: $(GAME_DEPS)
 	@mkdir -p $(BUILD)/opt_god
-	printf "CAMERA_TEST = 0\nNO_ENEMIES = 0\nGOD_MODE = 1\nBG_CHECK = 0\n" > $(BUILD)/opt_god/options.inc
+	printf "CAMERA_TEST = 0\nNO_ENEMIES = 0\nGOD_MODE = 1\nBG_CHECK = 0\nTITLE = 0\nDEBUG_MENU = 1\n" > $(BUILD)/opt_god/options.inc
 	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_god):$$PCE_INCLUDE $(PCEAS) --newproc --strip -l 0 --raw ../src/main.asm -o god.pce
 
 # Test build: god mode, and only the tile map is shown (no sprites, no colour
 # cycling), so a whole playthrough can be compared with the converter's preview.
 $(BUILD)/bgcheck.pce: $(GAME_DEPS)
 	@mkdir -p $(BUILD)/opt_bg
-	printf "CAMERA_TEST = 0\nNO_ENEMIES = 0\nGOD_MODE = 1\nBG_CHECK = 1\n" > $(BUILD)/opt_bg/options.inc
+	printf "CAMERA_TEST = 0\nNO_ENEMIES = 0\nGOD_MODE = 1\nBG_CHECK = 1\nTITLE = 0\nDEBUG_MENU = 1\n" > $(BUILD)/opt_bg/options.inc
 	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_bg):$$PCE_INCLUDE $(PCEAS) --newproc --strip -l 0 --raw ../src/main.asm -o bgcheck.pce
 
-test: $(BUILD)/camtest.pce $(BUILD)/noenemy.pce $(BUILD)/rastan.pce $(BUILD)/god.pce tools/tgrun/tgrun
+test: $(BUILD)/camtest.pce $(BUILD)/noenemy.pce $(BUILD)/rastan.pce $(BUILD)/rastan_debug.pce $(BUILD)/god.pce tools/tgrun/tgrun
 	python3 tools/test_scroll.py $(BUILD)/camtest.pce $(STAGE)/preview.png $(BUILD)/test $$(seq 62 37 2950)
 	PAD=46 python3 tools/test_scroll.py $(BUILD)/camtest.pce $(STAGE)/preview.png $(BUILD)/test_down 80 120 160 300
 	KEYS=61:2175:44,2176:2540:01,2541:2930:44,2931:3300:01 python3 tools/test_scroll.py $(BUILD)/camtest.pce $(STAGE)/preview.png $(BUILD)/test_castle $$(seq 2150 30 3300)
 	python3 tools/test_player.py $(BUILD)/noenemy.pce
-	python3 tools/test_enemies.py $(BUILD)/rastan.pce $(BUILD)/god.pce
+	python3 tools/test_enemies.py $(BUILD)/rastan_debug.pce $(BUILD)/god.pce
 	python3 tools/test_effects.py $(BUILD)/noenemy.pce $(STAGE)/dyncolor.inc
-	python3 tools/test_debug.py $(BUILD)/rastan.pce $(BUILD)/noenemy.pce
-	python3 tools/test_items.py $(BUILD)/rastan.pce $(BUILD)/god.pce $(BUILD)/noenemy.pce
-	python3 tools/test_monsters.py $(BUILD)/rastan.pce $(BUILD)/god.pce
-	python3 tools/test_castle.py $(BUILD)/rastan.pce $(BUILD)/god.pce $(BUILD)/noenemy.pce
-	python3 tools/test_sound.py $(BUILD)/rastan.pce $(BUILD)/god.pce $(BUILD)
+	python3 tools/test_debug.py $(BUILD)/rastan_debug.pce $(BUILD)/noenemy.pce
+	python3 tools/test_items.py $(BUILD)/rastan_debug.pce $(BUILD)/god.pce $(BUILD)/noenemy.pce
+	python3 tools/test_monsters.py $(BUILD)/rastan_debug.pce $(BUILD)/god.pce
+	python3 tools/test_castle.py $(BUILD)/rastan_debug.pce $(BUILD)/god.pce $(BUILD)/noenemy.pce
+	python3 tools/test_sound.py $(BUILD)/rastan_debug.pce $(BUILD)/god.pce $(BUILD)
+	python3 tools/test_demo.py $(BUILD)/rastan.pce $(BUILD)/still
 
 # A whole playthrough, checkpoint by checkpoint (slow: about 10 minutes): object
 # poses, slowdown, SATB use, and the tile map against the converter's preview.
@@ -241,4 +271,4 @@ lockstep: sim/sim sim/full.asm
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: all clean test lockstep
+.PHONY: all clean test lockstep audit

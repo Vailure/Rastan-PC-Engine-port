@@ -13,6 +13,7 @@
 ;
 ; Stream bytes (tools/pce_sound.py):
 ;   $FF        the music loops, an effect stops
+;   $FE        a tune that plays once ends
 ;   $80 | mask channels 0-5 in mask change; three bytes each: period low,
 ;              period high (bit 7: strike the note again), volume 0-31
 ;   n          wait n + 1 ticks
@@ -174,6 +175,11 @@ music_tick:	lda	<snd_wait
 		jsr	snd_next
 		cmp	#$FF
 		beq	.loop
+		cmp	#$FE			; A tune that plays once: the end.
+		bne	!+
+		stz	<snd_track
+		jmp	snd_silence
+!:
 		cmp	#$80
 		bcs	.chans
 		sta	<snd_wait		; Wait n + 1 ticks (this one included).

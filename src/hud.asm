@@ -95,32 +95,7 @@ hud_init:	php
 		cpy	#HUD_TOP_SLOT + 10
 		bne	!-
 
-		st0	#VDC_MAWR		; SATB entries 0..6.
-		st1	#<SATB_ADDR
-		st2	#>SATB_ADDR
-		st0	#VDC_VWR
-		clx
-.ent:		lda	hud_ty, x		; y
-		sta	VDC_DL
-		lda	hud_tyh, x
-		sta	VDC_DH
-		lda	hud_tx, x		; x
-		sta	VDC_DL
-		stz	VDC_DH
-		lda	hud_tpat, x		; pattern
-		clc
-		adc	#<HUD_PAT
-		sta	VDC_DL
-		lda	#>HUD_PAT
-		adc	#0
-		sta	VDC_DH
-		lda	#$80 + HUD_PALETTE	; In front; 16 or 32 wide.
-		sta	VDC_DL
-		lda	hud_twide, x
-		sta	VDC_DH
-		inx
-		cpx	#HUD_ENTRIES
-		bne	.ent
+		jsr	hud_satb		; SATB entries 0..11.
 		plp
 
 		lda	#START_LIVES
@@ -155,6 +130,35 @@ hud_tpat:	db	12 * 2, 6 * 2, 0, 2 * 2, 4 * 2, 8 * 2, 10 * 2
 		db	16 * 2, 18 * 2, 20 * 2, 22 * 2, 24 * 2
 hud_twide:	db	$00, $01, $01, $01, $01, $01, $01
 		db	$01, $01, $01, $01, $01
+
+; hud_satb - the HUD's SATB entries 0..11 (IRQ must be off).
+hud_satb:		st0	#VDC_MAWR
+		st1	#<SATB_ADDR
+		st2	#>SATB_ADDR
+		st0	#VDC_VWR
+		clx
+.ent:		lda	hud_ty, x		; y
+		sta	VDC_DL
+		lda	hud_tyh, x
+		sta	VDC_DH
+		lda	hud_tx, x		; x
+		sta	VDC_DL
+		stz	VDC_DH
+		lda	hud_tpat, x		; pattern
+		clc
+		adc	#<HUD_PAT
+		sta	VDC_DL
+		lda	#>HUD_PAT
+		adc	#0
+		sta	VDC_DH
+		lda	#$80 + HUD_PALETTE	; In front; 16 or 32 wide.
+		sta	VDC_DL
+		lda	hud_twide, x
+		sta	VDC_DH
+		inx
+		cpx	#HUD_ENTRIES
+		bne	.ent
+		rts
 
 ; hud_copy - copy hud.bin cell X to HUD VRAM slot Y (IRQ must be off).
 hud_copy:	phx
@@ -458,20 +462,14 @@ draw_chars:	sta	<hud_cell
 ; round_clear - the boss is dead: round 1 again from its start (the only round
 ; so far), with the score and lives kept.
 
-round_clear:	stz	<cur_cp
-		jsr	hud_reset
-		jmp	stage_start
+round_clear:	jmp	round_end		; (src/still.asm)
 
 ; ---------------------------------------------------------------------------
-; player_died - lose a life and restart the stage (no game over screen yet:
-; out of lives starts again with START_LIVES).
+; player_died - lose a life and restart the stage at the checkpoint; out of
+; lives, GAME OVER and the title.
 
 player_died:	dec	<lives
 		bne	!+
-		lda	#START_LIVES		; Out of lives: a new game (the high score stays).
-		sta	<lives
-		stz	<score
-		stz	<score + 1
-		stz	<score + 2
+		jmp	game_over		; (src/still.asm: then the title)
 !:		jsr	hud_reset
 		jmp	stage_start

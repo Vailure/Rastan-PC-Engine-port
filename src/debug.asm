@@ -260,7 +260,11 @@ door_enter:	stz	<p_door
 
 DBG_HOLD	=	45		; Three quarters of a second.
 
-debug_check:	lda	joynow
+debug_check:
+	.if	!DEBUG_MENU
+		rts				; (the demo build has no debug menu)
+	.endif
+		lda	joynow
 		and	#JOY_SEL | JOY_U
 		cmp	#JOY_SEL | JOY_U
 		beq	.held

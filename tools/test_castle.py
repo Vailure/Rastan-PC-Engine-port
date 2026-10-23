@@ -81,7 +81,7 @@ slow = min((lc[i + 60] - lc[i]) & 0xffff for i in range(300, len(r) - 60, 60))
 check('no slowdown on the way (60 logic frames a second)', slow >= 59, f'fewest {slow}')
 
 # B: shaft 2, the door, the boss.
-r = run(god, 3800, warp(5) + ROUTE_B, OBJ)
+r = run(god, 4400, warp(5) + ROUTE_B, OBJ)
 door = next((i for i, f in enumerate(r) if w16(f['p_x']) == 11728), None)
 check('the door at the top of shaft 2 drops him into the boss room at (11728, 98)',
       door is not None and s16(r[door - 1]['p_y']) < -800 and 98 <= s16(r[door]['p_y']) < 130,
@@ -89,9 +89,10 @@ check('the door at the top of shaft 2 drops him into the boss room at (11728, 98
 boss = next((i for i in range(door or 0, len(r)) if any(r[i]['e_kind'][k] == 14 and r[i]['e_state'][k]
                                                        for k in range(6, 9))), None) if door else None
 check('the boss comes', boss is not None and boss - door < 60, f'frame {boss}')
-clear = next((i for i in range(door or 0, len(r)) if w16(r[i]['p_x']) == 48), None) if door else None
-check('killing it clears the round (5000 points)', clear is not None and r[clear]['score'][0] == 0x50,
-      f"frame {clear}, score {r[clear]['score'] if clear else None}")
+won = next((i for i in range(door or 0, len(r)) if r[i]['score'][0] == 0x50), None) if door else None
+clear = next((i for i in range(won or 0, len(r)) if w16(r[i]['p_x']) == 48), None) if won else None
+check('killing it scores 5000, and the round is clear (then a new game: test build)',
+      won is not None and clear is not None, f"5000 at frame {won}, restart at {clear}")
 
 # V: the vine over the chasm.
 r = run(god, 1100, warp(1) + ROUTE_V)

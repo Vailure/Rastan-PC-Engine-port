@@ -15,7 +15,8 @@ Arcade values (round 1 census, sim/scripts/chimera.txt; see README):
   60 px away and swing; a swing that reaches costs 12 units.
 - Fire jets at 9870, 9966, 10062 (lava hall, arcade census 10382-10574) erupt when Rastan is 172 px left of them.
 - The boss drops in when Rastan enters the last room and lands at y 446; ten
-  hits kill it for 5000, and the round is clear (round 1 again, score kept).
+  hits kill it for 5000; the arcade's round-clear screen ("YOU ARE A BRAVE
+  FIGHTER..."), then the title (test builds: a new game at once).
 """
 import sys
 from peek import peek
@@ -183,8 +184,8 @@ check('fire jets erupt when Rastan is 172 px left of them', len(starts) == 3
 keys = [40, 90, OPEN] + sum([[100 + 6 * k, 100 + 6 * k, RIGHT] for k in range(6)], []) + [150, 150, I]
 for f in range(300, 1000, 25):
     keys += [f, f + 1, '80']
-r = run(god, 1000, keys)
-r3 = peek(god, 1000, keys, {'e_range': 17})
+r = run(god, 1600, keys)
+r3 = peek(god, 1600, keys, {'e_range': 17, 'st_n': 1, 'snd_track': 1})
 bo = [(i, f['e_yl'][6] | f['e_yh'][6] << 8) for i, f in enumerate(r) if f['e_state'][6] and f['e_kind'][6] == EK_BOSS]
 check('the boss drops in and lands at y 446', bo and bo[0][1] < 400 and any(y == 446 for _, y in bo), f'from y {bo[0][1] if bo else None}')
 dead = next((i for i, f in enumerate(r) if f['e_kind'][6] == EK_BOSS and f['e_state'][6] == ES_DYING), None)
@@ -194,7 +195,13 @@ gain = (bcd(r[min(dead + 2, len(r) - 1)]['score']) - bcd(r[max(dead - 2, 0)]['sc
 check('ten hits kill it, for 5000', dead and hits == 10 and gain == 5000,
       f'hits {hits}, {gain} points')
 back = next((i for i in range(dead or 0, len(r)) if w16(r[i]['p_x']) == 48), None) if dead else None
-check('then the round is clear: round 1 again, score kept', back and bcd(r[back]['score']) >= 5000,
+ending = [i for i in range(dead or 0, back or 0) if r3[i]['st_n'][0] == 0]
+check("then the arcade's round-clear screen, about 7 s", back and len(ending) >= 400,
+      f'{len(ending)} frames on it')
+SND_CLEAR = 3
+check('with its jingle (sound command $27)', any(r3[i]['snd_track'][0] == SND_CLEAR + 1 for i in ending),
+      f"tracks {sorted({r3[i]['snd_track'][0] for i in ending})}")
+check('then a new game from the start of round 1', back is not None and bcd(r[back]['score']) == 0,
       f'restart at frame {back}')
 
 print(f'{len(fails)} failure(s)')
