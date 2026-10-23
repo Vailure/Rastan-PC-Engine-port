@@ -209,14 +209,23 @@ $(BUILD)/rastan.pce: $(GAME_DEPS)
 	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt):$$PCE_INCLUDE $(PCEAS) --newproc --sf2 --strip -m -l 2 -S -gA --raw ../src/main.asm -o rastan.pce
 	$(SF2PAD) $(BUILD)/rastan.pce
 
-# The development build: straight into the game, with the debug menu (UP +
-# SELECT held). The tests run on this one; rastan.pce is the demo (the title
-# screen, no debug menu).
+# The debug build: the demo, but on the title SELECT alone opens the debug
+# menu (the demo: UP + SELECT held). The menu is a screen of its own before a
+# new game, never in play.
 $(BUILD)/rastan_debug.pce: $(GAME_DEPS)
 	@mkdir -p $(BUILD)/opt_dbg
-	printf "CAMERA_TEST = 0\nNO_ENEMIES = 0\nGOD_MODE = 0\nBG_CHECK = 0\nTITLE = 0\nDEBUG_MENU = 1\n" > $(BUILD)/opt_dbg/options.inc
+	printf "CAMERA_TEST = 0\nNO_ENEMIES = 0\nGOD_MODE = 0\nBG_CHECK = 0\nTITLE = 1\nDEBUG_MENU = 1\n" > $(BUILD)/opt_dbg/options.inc
 	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_dbg):$$PCE_INCLUDE $(PCEAS) --newproc --sf2 --strip -l 0 --raw ../src/main.asm -o rastan_debug.pce
 	$(SF2PAD) $(BUILD)/rastan_debug.pce
+
+# Test build: straight into the game, with the debug menu in play (UP + SELECT
+# held) for the tests' checkpoint warps. Not for playing: the menu draws over
+# the stage.
+$(BUILD)/testdbg.pce: $(GAME_DEPS)
+	@mkdir -p $(BUILD)/opt_tdbg
+	printf "CAMERA_TEST = 0\nNO_ENEMIES = 0\nGOD_MODE = 0\nBG_CHECK = 0\nTITLE = 0\nDEBUG_MENU = 1\n" > $(BUILD)/opt_tdbg/options.inc
+	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_tdbg):$$PCE_INCLUDE $(PCEAS) --newproc --sf2 --strip -l 0 --raw ../src/main.asm -o testdbg.pce
+	$(SF2PAD) $(BUILD)/testdbg.pce
 
 # Test build: the pad drives the camera directly and Rastan is not drawn.
 $(BUILD)/camtest.pce: $(GAME_DEPS)
@@ -248,18 +257,18 @@ $(BUILD)/bgcheck.pce: $(GAME_DEPS)
 	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_bg):$$PCE_INCLUDE $(PCEAS) --newproc --sf2 --strip -l 0 --raw ../src/main.asm -o bgcheck.pce
 	$(SF2PAD) $(BUILD)/bgcheck.pce
 
-test: $(BUILD)/camtest.pce $(BUILD)/noenemy.pce $(BUILD)/rastan.pce $(BUILD)/rastan_debug.pce $(BUILD)/god.pce tools/tgrun/tgrun
+test: $(BUILD)/camtest.pce $(BUILD)/noenemy.pce $(BUILD)/rastan.pce $(BUILD)/rastan_debug.pce $(BUILD)/testdbg.pce $(BUILD)/god.pce tools/tgrun/tgrun
 	python3 tools/test_scroll.py $(BUILD)/camtest.pce $(STAGE)/preview.png $(BUILD)/test $$(seq 62 37 2950)
 	PAD=46 python3 tools/test_scroll.py $(BUILD)/camtest.pce $(STAGE)/preview.png $(BUILD)/test_down 80 120 160 300
 	KEYS=61:2175:44,2176:2540:01,2541:2930:44,2931:3300:01 python3 tools/test_scroll.py $(BUILD)/camtest.pce $(STAGE)/preview.png $(BUILD)/test_castle $$(seq 2150 30 3300)
 	python3 tools/test_player.py $(BUILD)/noenemy.pce
-	python3 tools/test_enemies.py $(BUILD)/rastan_debug.pce $(BUILD)/god.pce
+	python3 tools/test_enemies.py $(BUILD)/testdbg.pce $(BUILD)/god.pce
 	python3 tools/test_effects.py $(BUILD)/noenemy.pce $(STAGE)/dyncolor.inc
-	python3 tools/test_debug.py $(BUILD)/rastan_debug.pce $(BUILD)/noenemy.pce
-	python3 tools/test_items.py $(BUILD)/rastan_debug.pce $(BUILD)/god.pce $(BUILD)/noenemy.pce
-	python3 tools/test_monsters.py $(BUILD)/rastan_debug.pce $(BUILD)/god.pce
-	python3 tools/test_castle.py $(BUILD)/rastan_debug.pce $(BUILD)/god.pce $(BUILD)/noenemy.pce
-	python3 tools/test_sound.py $(BUILD)/rastan_debug.pce $(BUILD)/god.pce $(BUILD)
+	python3 tools/test_debug.py $(BUILD)/testdbg.pce $(BUILD)/noenemy.pce
+	python3 tools/test_items.py $(BUILD)/testdbg.pce $(BUILD)/god.pce $(BUILD)/noenemy.pce
+	python3 tools/test_monsters.py $(BUILD)/testdbg.pce $(BUILD)/god.pce
+	python3 tools/test_castle.py $(BUILD)/testdbg.pce $(BUILD)/god.pce $(BUILD)/noenemy.pce
+	python3 tools/test_sound.py $(BUILD)/testdbg.pce $(BUILD)/god.pce $(BUILD)
 	python3 tools/test_demo.py $(BUILD)/rastan.pce $(BUILD)/still
 
 # A whole playthrough, checkpoint by checkpoint (about 2 minutes): object

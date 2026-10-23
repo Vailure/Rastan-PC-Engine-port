@@ -228,9 +228,11 @@ still_wait:	sta	<st_t + 1
 .r:		rts
 
 ; ---------------------------------------------------------------------------
-; title_screen - the arcade's title, "PUSH RUN BUTTON" blinking, until RUN
-; (or UP + SELECT held: the game starts with the debug menu open);
-; then a new game (3 lives, no score) from the start of round 1.
+; title_screen - the arcade's title, "PUSH RUN BUTTON" blinking, until RUN:
+; then a new game (3 lives, no score) from the start of round 1. UP + SELECT
+; held (the debug build: SELECT) opens the debug menu, a screen of its own
+; (title_menu): it starts the new game where and as it says, or comes back
+; here. There is no debug menu in play.
 
 title_screen:
 	.if	TITLE
@@ -246,8 +248,14 @@ title_screen:
 		lda	<st_t
 		and	#$20
 		jsr	title_blink
-.key:		lda	joynow			; UP + SELECT held: the game, with the
-		and	#JOY_SEL | JOY_U	; debug menu open (src/debug.asm).
+.key:
+	.if	DEBUG_MENU			; The debug build: SELECT alone opens
+		lda	joytrg			; the debug menu.
+		bit	#JOY_SEL
+		bne	.open
+	.endif
+		lda	joynow			; UP + SELECT held: the debug menu.
+		and	#JOY_SEL | JOY_U
 		cmp	#JOY_SEL | JOY_U
 		beq	.held
 		stz	<dbg_hold
@@ -259,18 +267,24 @@ title_screen:
 		lda	<dbg_hold
 		cmp	#DBG_HOLD
 		bcc	.loop
-		lda	#1
-		sta	<dbg_on
-		sta	<dbg_now
+.open:		stz	<dbg_hold		; The debug menu, a screen of its own
+		jsr	title_menu		; (src/debug.asm): it sets the checkpoint,
+		bcs	.chosen			; the lives and the weapon, or goes back.
+		ldx	#STILL_TITLE
+		jsr	still_show
+		stz	<st_t
+		bra	.loop
+.chosen:	jsr	still_end
+		bra	.new
 .start:		stz	<dbg_hold
 		jsr	still_end
 	.endif					; (test builds: straight into a new game)
 		lda	#START_LIVES
 		sta	<lives
-		stz	<score
+		stz	<cur_cp
+.new:		stz	<score
 		stz	<score + 1
 		stz	<score + 2
-		stz	<cur_cp
 		jmp	hud_reset
 
 ; title_blink - A = 0: "PUSH RUN BUTTON" shown, else hidden (its palette's
@@ -317,7 +331,8 @@ game_over:	jsr	sound_stop
 		lda	#60
 		jsr	still_wait
 		jsr	title_screen
-		jmp	stage_start
+		jsr	stage_start
+		jmp	start_weapon
 
 ; ---------------------------------------------------------------------------
 ; round_end - the boss is dead: the arcade's round-clear screen with its
@@ -335,4 +350,5 @@ round_end:	jsr	sound_stop
 		lda	#120
 		jsr	still_wait
 		jsr	title_screen
-		jmp	stage_start
+		jsr	stage_start
+		jmp	start_weapon

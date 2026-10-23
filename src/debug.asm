@@ -55,13 +55,44 @@ dbg_rebuilt:	ds	1		; A warp redrew the map: the menu box must not be put back.
 dbg_hold:	ds	1		; Frames UP + SELECT have been held together.
 dbg_on:		ds	1		; The menu can be opened (debug builds; the demo:
 					; once UP + SELECT is held on the title screen).
-dbg_now:	ds	1		; Open it at the next game frame (from the title).
+dbg_now:	ds	1		; Open it at the next game frame (unused now).
 
 		.bss
 obj_b64:	ds	1		; The arcade's sprite colour bank is 64 (enemies_load).
+dbg_ttl:	ds	1		; The menu is the start screen's (title_menu).
+dbg_wpn:	ds	1		; Weapon for the game the start screen begins.
 dbg_save:	ds	MENU_W * MENU_H * 2	; The tile map under the menu.
 
 		.code
+
+; Text, first in DEBUG_BANK (so at the start of a page: print_at_l takes a
+; string's low byte). Every string lives in this one 256-byte page.
+txt_page:
+txt_title:	db	"RASTAN DEBUG MENU", 0
+txt_pos:	db	"X       Y       CP", 0
+txt_on:		db	"ON ", 0
+txt_off:	db	"OFF", 0
+txt_help:	db	"SELECT CLOSE  I APPLY", 0
+txt_warp:	db	"WARP TO CHECKPOINT", 0
+txt_god:	db	"INVINCIBLE", 0
+txt_enemies:	db	"ENEMIES", 0
+txt_health:	db	"REFILL HEALTH", 0
+txt_lives:	db	"LIVES", 0
+txt_slow:	db	"SLOW MOTION", 0
+txt_weapon:	db	"WEAPON", 0
+txt_resume:	db	"RESUME", 0
+txt_title2:	db	"RASTAN DEBUG - NEW GAME", 0
+txt_help2:	db	"SELECT BACK  I/RUN START", 0
+txt_start:	db	"START AT CHECKPOINT", 0
+txt_go:		db	"START GAME", 0
+txt_end:
+
+	.if	(txt_end - txt_page) > 256
+	.fail	debug menu strings must fit in one page
+	.endif
+	.if	(txt_page & $FF) != 0
+	.fail	debug menu strings must start a page (debug.asm opens DEBUG_BANK)
+	.endif
 
 ; ---------------------------------------------------------------------------
 ; Checkpoints: camera x, camera y (port scroll_y), Rastan's x and y (world,
@@ -299,6 +330,110 @@ debug_check:
 !:		rts
 
 ; ---------------------------------------------------------------------------
+; title_menu - the debug menu as a screen of its own, from the title (UP +
+; SELECT held there): the new game's checkpoint, invincibility, enemies,
+; lives, slow motion and weapon. I on the checkpoint or START GAME, or RUN,
+; begins the game (carry set; cur_cp, lives and dbg_wpn set); SELECT or II
+; goes back to the title (carry clear). The game itself has no menu (but in
+; the test builds, which have no title).
+
+title_menu:	jsr	screen_cut		; (display off from the next VBLANK)
+		php
+		sei
+		st0	#VDC_MAWR		; The BAT: blank text tiles (box colour).
+		st1	#0
+		st2	#0
+		st0	#VDC_VWR
+		ldy	#16			; 64 x 64 words.
+		clx
+!:		st1	#<FONT_TILE
+		st2	#>FONT_TILE
+		dex
+		bne	!-
+		dey
+		bne	!-
+		st0	#VDC_BXR		; Scrolled to the corner.
+		st1	#0
+		st2	#0
+		st0	#VDC_BYR
+		st1	#0
+		st2	#0
+		jsr	font_upload
+		jsr	menu_colors
+		plp
+		lda	#$80
+		sta	dbg_ttl
+		stz	<dbg_col
+		stz	<dbg_row
+		stz	<dbg_sel
+		stz	<dbg_cp
+		lda	#START_LIVES
+		sta	<lives
+		lda	#WPN_SWORD
+		sta	<p_weapon
+		jsr	menu_body
+		call	wait_vsync
+		call	set_dspon
+
+.loop:		call	wait_vsync
+		lda	joytrg
+		bit	#JOY_SEL		; Back to the title.
+		bne	.back
+		bit	#JOY_B2
+		bne	.back
+		bit	#JOY_RUN		; Start.
+		bne	.go
+		bit	#JOY_U
+		beq	!+
+		lda	<dbg_sel
+		beq	.loop
+		dec	<dbg_sel
+		bra	.redraw
+!:		bit	#JOY_D
+		beq	!+
+		jsr	menu_lines
+		dec	a
+		cmp	<dbg_sel
+		beq	.loop
+		inc	<dbg_sel
+		bra	.redraw
+!:		bit	#JOY_L
+		beq	!+
+		lda	#$FF
+		jsr	menu_change
+		bra	.redraw
+!:		bit	#JOY_R
+		beq	!+
+		lda	#1
+		jsr	menu_change
+		bra	.redraw
+!:		bit	#JOY_B1
+		beq	.loop
+		jsr	menu_apply		; Carry set: start.
+		bcs	.go
+.redraw:	jsr	menu_body
+		bra	.loop
+.go:		lda	<dbg_cp
+		sta	<cur_cp
+		lda	<p_weapon
+		sta	dbg_wpn
+		stz	dbg_ttl
+		sec
+		rts
+.back:		stz	dbg_ttl
+		clc
+		rts
+
+; start_weapon - after a new game's stage_start: the start screen's weapon.
+start_weapon:	lda	dbg_wpn
+		beq	.r
+		stz	dbg_wpn
+		cmp	#WPN_SWORD
+		beq	.r
+		jmp	player_set_weapon
+.r:		rts
+
+; ---------------------------------------------------------------------------
 ; debug_menu - runs until closed.
 
 debug_menu:	php
@@ -363,9 +498,10 @@ debug_menu:	php
 		bra	.redraw
 !:		bit	#JOY_D
 		beq	!+
-		lda	<dbg_sel
-		cmp	#MENU_LINES - 1
-		bcs	.loop
+		jsr	menu_lines
+		dec	a
+		cmp	<dbg_sel
+		beq	.loop
 		inc	<dbg_sel
 		bra	.redraw
 !:		bit	#JOY_L
@@ -389,7 +525,11 @@ debug_menu:	php
 		rts
 
 ; menu_change - LEFT/RIGHT on the selected line (A = +1 or -1).
-menu_change:	ldx	<dbg_sel
+menu_change:	pha
+		lda	<dbg_sel
+		jsr	line_fn
+		tax
+		pla
 		cpx	#0			; Warp target.
 		bne	.god
 		clc
@@ -447,6 +587,20 @@ menu_change:	ldx	<dbg_sel
 
 ; menu_apply - I on the selected line. Carry set to close the menu.
 menu_apply:	lda	<dbg_sel
+		jsr	line_fn
+		ldx	dbg_ttl			; The start screen: I on the checkpoint or
+		beq	.game			; START begins the game; on the rest, as
+		cmp	#0			; RIGHT.
+		beq	.go
+		cmp	#7
+		beq	.go
+		lda	#1
+		jsr	menu_change
+		clc
+		rts
+.go:		sec
+		rts
+.game:		cmp	#0
 		bne	.health
 		lda	<dbg_cp			; Warp: restart at that checkpoint.
 		sta	<cur_cp
@@ -676,11 +830,17 @@ menu_body:	php
 		cmp	#MENU_ROW + MENU_H
 		bne	.clr
 
-		ldx	#0			; Title and position.
-		ldy	#1
+		ldx	#0			; Title and position (the start screen:
+		ldy	#1			; a title of its own, no position).
 		lda	#<txt_title
-		jsr	print_at_l
-		ldx	#0
+		bit	dbg_ttl
+		bpl	!+
+		lda	#<txt_title2
+!:		jsr	print_at_l
+		bit	dbg_ttl
+		bpl	!+
+		jmp	.lines
+!:		ldx	#0
 		ldy	#3
 		lda	#<txt_pos
 		jsr	print_at_l
@@ -703,7 +863,7 @@ menu_body:	php
 		lda	<cur_cp
 		jsr	print_digit
 
-		stz	<dbg_line		; The selectable lines, box rows 5, 7, ...
+.lines:		stz	<dbg_line		; The selectable lines, box rows 5, 7, ...
 .line:		stz	<dbg_pal
 		lda	<dbg_line
 		cmp	<dbg_sel
@@ -717,20 +877,28 @@ menu_body:	php
 		tay
 		ldx	<dbg_line
 		lda	menu_labels, x
-		ldx	#0
+		bit	dbg_ttl
+		bpl	!+
+		lda	title_labels, x
+!:		ldx	#0
 		jsr	print_at_l		; (leaves dbg_y on the line's row)
-		ldy	<dbg_line
+		lda	<dbg_line
+		jsr	line_fn
+		tay
 		jsr	menu_value
 		inc	<dbg_line
-		lda	<dbg_line
-		cmp	#MENU_LINES
+		jsr	menu_lines
+		cmp	<dbg_line
 		bne	.line
 
 		stz	<dbg_pal
 		ldx	#0
 		ldy	#21
 		lda	#<txt_help
-		jsr	print_at_l
+		bit	dbg_ttl
+		bpl	!+
+		lda	#<txt_help2
+!:		jsr	print_at_l
 		plp
 		rts
 
@@ -938,27 +1106,25 @@ bat_addr:	lda	<dbg_y
 ; ---------------------------------------------------------------------------
 ; Text. Every string lives in one 256-byte page (print_at_l takes the low byte).
 
-		.align	256
-txt_page:
-txt_title:	db	"RASTAN DEBUG MENU", 0
-txt_pos:	db	"X       Y       CP", 0
-txt_on:		db	"ON ", 0
-txt_off:	db	"OFF", 0
-txt_help:	db	"SELECT CLOSE  I APPLY", 0
-txt_warp:	db	"WARP TO CHECKPOINT", 0
-txt_god:	db	"INVINCIBLE", 0
-txt_enemies:	db	"ENEMIES", 0
-txt_health:	db	"REFILL HEALTH", 0
-txt_lives:	db	"LIVES", 0
-txt_slow:	db	"SLOW MOTION", 0
-txt_weapon:	db	"WEAPON", 0
-txt_resume:	db	"RESUME", 0
-txt_end:
-
-	.if	(txt_end - txt_page) > 256
-	.fail	debug menu strings must fit in one page
-	.endif
 
 ; Line labels (low bytes in txt_page).
 menu_labels:	db	<txt_warp, <txt_god, <txt_enemies, <txt_health
 		db	<txt_lives, <txt_slow, <txt_weapon, <txt_resume
+; The start screen's lines (title_menu) and their functions: no REFILL HEALTH.
+title_labels:	db	<txt_start, <txt_god, <txt_enemies, <txt_lives
+		db	<txt_slow, <txt_weapon, <txt_go
+title_fns:	db	0, 1, 2, 4, 5, 6, 7
+
+; line_fn - A = menu line: A = its function (menu_change's numbering). Uses X.
+line_fn:	ldx	dbg_ttl
+		beq	!+
+		tax
+		lda	title_fns, x
+!:		rts
+
+; menu_lines - A = the number of lines (the start screen has one fewer).
+menu_lines:	lda	#MENU_LINES
+		bit	dbg_ttl
+		bpl	!+
+		dec	a
+!:		rts

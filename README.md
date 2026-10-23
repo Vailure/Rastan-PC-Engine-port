@@ -67,17 +67,18 @@ Requirements: Python 3 with numpy and Pillow, gcc and zlib, and a built checkout
 make HUC=/path/to/huc          # -> build/rastan.pce (the demo) and build/rastan_debug.pce
 make HUC=/path/to/huc test     # the test scripts, headless (about 3 minutes)
 make HUC=/path/to/huc audit    # a whole playthrough checked frame by frame (about 2 minutes)
-python3 tools/trace_player.py build/rastan_debug.pce 600 60 300 04   # walk right, print Rastan's state
+python3 tools/trace_player.py build/testdbg.pce 600 60 300 04   # walk right, print Rastan's state
 ```
 
 Two ROMs:
 - **`rastan.pce`, the demo:** the arcade's title screen (PUSH RUN BUTTON), round 1, the arcade's
   round-clear screen and jingle after the boss, GAME OVER when the last life goes, and back to the
-  title. The debug menu is hidden: hold UP + SELECT on the title screen (about ¾ s) and the game
-  starts with it open; after that it opens in the game too (until power-off). A game started with RUN
-  has no menu.
-- **`rastan_debug.pce`:** straight into the game, with the debug menu. The tests run on this one (and
-  on `god.pce`, `noenemy.pce`, `camtest.pce`, `bgcheck.pce`, test builds the Makefile also makes).
+  title. The debug menu is on the start screen only: hold UP + SELECT on the title (about ¾ s).
+  There is none in play.
+- **`rastan_debug.pce`:** the same, but SELECT alone on the title opens the debug menu.
+
+The tests run on test builds the Makefile also makes: `testdbg.pce` (straight into the game, with the
+debug menu in play for their checkpoint warps), `god.pce`, `noenemy.pce`, `camtest.pce`, `bgcheck.pce`.
 
 The build:
 1. Extracts the ROM regions.
@@ -96,23 +97,24 @@ The build:
 
 The camera only scrolls forward. A death restarts at the last checkpoint reached, as in the arcade.
 
-**Debug menu** (`rastan_debug.pce`; in `rastan.pce` once unlocked on the title screen): hold UP + SELECT together for about ¾ s to open it (a press, or a stray SELECT bit
-from a pad or emulator mapping, is not enough); it freezes the game (RUN held + SELECT is still the
-core's soft reset).
-UP/DOWN pick a line, LEFT/RIGHT change a value, I applies, SELECT or II closes.
+**Debug menu** (the start screen only): on the title, hold UP + SELECT together for about ¾ s
+(`rastan_debug.pce`: SELECT). It is a screen of its own that sets up a new game; there is no menu in
+play (it used to open over the stage, and its colours and tiles showed through it).
+UP/DOWN pick a line, LEFT/RIGHT change a value; I on the checkpoint or on START GAME, or RUN, starts
+the game; SELECT or II goes back to the title.
 
 | Line | What it does |
 |---|---|
-| Warp to checkpoint 0-6 | Restart at one of the arcade's round 1 checkpoints (segments 0, 4, 8, 12, 16, 19), or 6: the boss room |
+| Start at checkpoint 0-6 | Start at one of the arcade's round 1 checkpoints (segments 0, 4, 8, 12, 16, 19), or 6: the boss room |
 | Invincible | Enemies, water and deadly tiles do no harm (falling off the map still kills) |
 | Enemies | Walkers on/off (items and their bats still come) |
-| Refill health | Full health bar |
 | Lives | 1-9 |
 | Slow motion | Game logic at 1/2, 1/4 or 1/8 speed |
 | Weapon | 1 sword, 2 axe, 3 morning star, 4 fire sword (for 3000 frames) |
-| Resume | Close the menu |
+| Start game | Start it |
 
-The header shows Rastan's world position and the current checkpoint.
+(The test build `testdbg.pce` keeps the menu in play, opened by UP + SELECT held, for the tests'
+warps: there it also has Refill health and Resume, and shows Rastan's position.)
 
 ## Simulator quick start
 

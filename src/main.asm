@@ -80,8 +80,14 @@ core_main:	lda	#GAME_BANK		; (the boot mapping already has it there)
 		stz	<dbg_noenemy
 		stz	<dbg_slow
 		stz	<dbg_now
-		lda	#DEBUG_MENU		; Debug builds: the menu from the start.
-		sta	<dbg_on
+		stz	dbg_wpn
+		stz	dbg_ttl
+	.if	TITLE
+		stz	<dbg_on			; A title: its debug menu is on the start
+	.else					; screen only, never in the game.
+		lda	#DEBUG_MENU		; Test builds (no title): the menu in the
+		sta	<dbg_on			; game (UP + SELECT held), for their warps.
+	.endif
 		jsr	sf2_round		; (the page the mapper starts with is not known)
 		call	init_screen
 
@@ -102,6 +108,7 @@ core_main:	lda	#GAME_BANK		; (the boot mapping already has it there)
 		jsr	title_screen		; (src/still.asm)
 	.endif
 		jsr	stage_start
+		jsr	start_weapon		; (the start screen's choice)
 
 ; Main loop: one iteration per frame, starting right after VBLANK.
 .frame:		call	wait_vsync
@@ -843,6 +850,19 @@ collision_data:	incbin	"collision.bin"
 		.bank	$06			; (free: the code banks are 0, 4, 5)
 		.page	3
 still_title:	incbin	"title.bin"		; The title screen (two banks).
+
+; A landing place for the HuC library's procedures (vdc_set_mode, read_joypads,
+; init_screen, vdc_clear_vram, clear_vce: about 500 bytes). pceas packs each
+; into the bank with the least free space that holds it; packed into a code
+; bank (4 or 5, assembled after them) it leaves that bank's location counter
+; at the procedure's end, and the bank's code lands on top of it ("Symbol's
+; bank or address changed in final pass" all through the bank). So the rest
+; of the title's second bank is filled up to PROC_ROOM bytes from its end:
+; the procedures fit there with less to spare than in any code bank.
+PROC_ROOM	=	512
+		.bank	$07
+		.page	3
+proc_pad:	ds	$8000 - PROC_ROOM - *
 
 		.bank	$02
 		.page	3

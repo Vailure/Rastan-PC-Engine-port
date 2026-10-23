@@ -2,7 +2,8 @@
 
 The demo ROM (TITLE = 1, DEBUG_MENU = 0) starts on the arcade's title screen and
 waits for RUN; RUN pauses a game; losing the last life shows the arcade's GAME OVER
-and goes back to the title; there is no debug menu. (The round-clear screen is
+and goes back to the title. The debug menu is a screen of its own, opened from the
+title (UP + SELECT held), never in play. (The round-clear screen is
 checked on the test builds, which can warp to the boss: tools/test_monsters.py.)
 """
 import os
@@ -65,29 +66,37 @@ check('RUN starts a new game at the start of round 1 (3 lives)', start is not No
 check('RUN pauses (the game logic stops) and RUN resumes', lc[390] == lc[310] and lc[450] > lc[410],
       f'loop count {lc[310]} {lc[390]} {lc[410]} {lc[450]}')
 
-# 3. The debug menu is locked in a game started with RUN: UP + SELECT held does not
-# stop the game.
+# 3. There is no debug menu in play: UP + SELECT held does not stop the game.
 r = peek(rom, 500, [120, 121, RUN, 250, 400, OPEN], VARS)
 lc = [w16(x['loop_cnt']) for x in r]
-check('started with RUN, there is no debug menu (UP + SELECT held: the game goes on)', lc[450] - lc[250] >= 199,
+check('in play there is no debug menu (UP + SELECT held: the game goes on)', lc[450] - lc[250] >= 199,
       f'{lc[450] - lc[250]} logic frames in 200')
 
-# 3b. UP + SELECT held on the title: the game starts with the debug menu open (the game
-# frozen under it); its warp works (checkpoint 4: RIGHT x4, I); and from then on UP +
-# SELECT held opens it in the game too.
-RIGHT4 = sum([[200 + 6 * k, 200 + 6 * k, '04'] for k in range(4)], [])
-keys = [60, 110, OPEN] + RIGHT4 + [240, 240, '40', 500, 560, OPEN]
-r = peek(rom, 650, keys, VARS)
+# 3b. UP + SELECT held on the title: the debug menu, a screen of its own (no game runs
+# under it). SELECT goes back to the title; its lines set the new game: here
+# checkpoint 4 (RIGHT x4), invincible (DOWN, RIGHT), 5 lives (DOWN x2, RIGHT x2), the
+# axe (DOWN x2, RIGHT); I on START GAME (DOWN) starts it.
+r = peek(rom, 200, [60, 110, OPEN, 150, 150, '10'], VARS)
 lc = [w16(x['loop_cnt']) for x in r]
-check('UP + SELECT held on the title starts the game with the debug menu open',
-      r[100]['st_n'][0] == 1 and lc[115] == lc[235] <= 2, f'loop count {lc[115]} .. {lc[235]}')
-m = shot(180, [60, 110, OPEN])
-g = shot(180, [60, 61, RUN])
-diff = (m != g).any(-1).mean() * 100
-check('the menu is on screen', diff > 30, f'{diff:.0f}% of the screen differs from a game started with RUN')
-check("the menu's warp works (checkpoint 4)", w16(r[300]['p_x']) == 8240, f"at x {w16(r[300]['p_x'])}")
-check('then UP + SELECT held opens it in the game too', lc[640] == lc[560] and lc[499] > lc[300],
-      f'loop count {lc[300]} {lc[499]} {lc[560]} {lc[640]}')
+m = shot(140, [60, 110, OPEN])
+t = shot(80, [])
+check('UP + SELECT held on the title opens the debug menu, with no game under it',
+      lc[140] == 0 and (m != t).any(-1).mean() > 0.5, f'loop count {lc[140]}')
+check('SELECT goes back to the title', (shot(199, [60, 110, OPEN, 150, 150, '10'])[:216] != still('title')[:216])
+      .any(-1).mean() * 100 < 1 and lc[199] == 0)
+seq = [(130, '04'), (136, '04'), (142, '04'), (148, '04'), (154, '02'), (160, '04'), (166, '02'), (172, '02'),
+       (178, '04'), (184, '04'), (190, '02'), (196, '02'), (202, '04'), (208, '02'), (214, '40')]
+keys = [60, 110, OPEN] + sum([[f, f, k] for f, k in seq], []) + [400, 460, OPEN]
+r = peek(rom, 520, keys, dict(VARS, dbg_god=1, p_weapon=1))
+lc = [w16(x['loop_cnt']) for x in r]
+go = next((i for i in range(len(r)) if lc[i]), None)
+check("its new game starts where and as it says (checkpoint 4, invincible, 5 lives, the axe)",
+      go and w16(r[go + 30]['p_x']) == 8240 and r[go + 30]['dbg_god'][0] == 1 and r[go + 30]['lives'][0] == 5
+      and r[go + 30]['p_weapon'][0] == 2,
+      f"at x {w16(r[go + 30]['p_x']) if go else None}, god {r[go + 30]['dbg_god'][0] if go else None}, "
+      f"lives {r[go + 30]['lives'][0] if go else None}, weapon {r[go + 30]['p_weapon'][0] if go else None}")
+check('and in that game UP + SELECT held still opens nothing', lc[500] - lc[400] >= 99,
+      f'{lc[500] - lc[400]} logic frames in 100')
 
 # 4. Idle until the last life goes: GAME OVER, then the title, then a new game.
 r = peek(rom, 3400, [120, 121, RUN, 3100, 3101, RUN], VARS)

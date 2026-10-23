@@ -68,8 +68,9 @@ Branch: `section1-parity` on `github.com/Vailure/Rastan-PC-Engine-port`. Last up
 
 | ROM | Options (`build/opt*/options.inc`) | Use |
 |---|---|---|
-| `rastan.pce` | `TITLE=1 DEBUG_MENU=0` | **The demo.** Title → round 1 → round-clear → title; GAME OVER → title. The debug menu is locked until UP+SELECT is held on the title. |
-| `rastan_debug.pce` | `TITLE=0 DEBUG_MENU=1` | Straight into play, with the debug menu (hold UP+SELECT). Most tests run on it. |
+| `rastan.pce` | `TITLE=1 DEBUG_MENU=0` | **The demo.** Title → round 1 → round-clear → title; GAME OVER → title. The debug menu is a screen of its own from the title (UP+SELECT held), never in play. |
+| `rastan_debug.pce` | `TITLE=1 DEBUG_MENU=1` | The same; SELECT alone on the title opens the menu. |
+| `testdbg.pce` | `TITLE=0 DEBUG_MENU=1` | Test build: straight into play, with the old in-play debug menu (hold UP+SELECT) for checkpoint warps. Most tests run on it. Not for playing. |
 | `god.pce` | `GOD_MODE=1` | Rastan takes no damage; for bots that must reach the end of a section. |
 | `noenemy.pce` | `NO_ENEMIES=1` | Rastan alone (player and effects tests). |
 | `camtest.pce` | `CAMERA_TEST=1` | The pad moves the camera; BG only. Used by `test_scroll.py`. |
@@ -418,7 +419,7 @@ tgrun rom.pce frames out.ppm [from to padhex]...
 | `test_monsters.py` | Chimeras, boulders, gargoyle, woman, boss; the round-clear screen and jingle; the hurry-up swarm (arrives after 40 counts, closes in, bites every 45 frames at most, dies to the sword for 100; in a crowd, drawn 85% of the time or more) |
 | `test_castle.py` | Soldiers, spears, jets, vines, doors, camera walls; the round is cleared within 4400 frames; the hanging column's cycle and its blocking; the sealing wall's timing and push; shaft 2's weights: when they appear, their 147-frame cycle, the kill standing and the crouch under them; the soldiers' high and low swings against a crouching and a standing Rastan; colour bank 48 / 64 (VCE) |
 | `test_sound.py` | PSG writes match the streams; notes are in the audio spectrum; the voices' levels in order on channel 5 |
-| `test_demo.py` | The image is a 2.5 MB SF2 card; title, blink, RUN starts, pause; no debug menu after RUN; UP+SELECT on the title opens it (on screen, warp works) and unlocks it in the game; GAME OVER → title → new game |
+| `test_demo.py` | The image is a 2.5 MB SF2 card; title, blink, RUN starts, pause; no debug menu in play; UP+SELECT on the title opens it as a screen of its own (no game under it; SELECT back to the title; its new game starts at checkpoint 4, invincible, 5 lives, the axe), and still none in that game; GAME OVER → title → new game |
 
 ### The audit
 
@@ -483,8 +484,9 @@ tgrun rom.pce frames out.ppm [from to padhex]...
 12. **Zero page is full.** The HuC core and System Card variables start at `$20DC`; the core's own (`_bp`, `_si`, `vdc_crl`, `irq_vec`, `_ax`…) from `$20EC`. PCEAS does not stop a `.zp` variable from landing on them. Six bytes of swarm variables did, `irq_vec` was overwritten, and the game hung in `wait_vsync` the moment the first bat appeared. New variables go in `.bss`. Check the top of the zero page in `src/main.lst` (`F8:20xx`); it now ends at `$20E1`. `TGRUN_PC=1` prints where a hang sits.
 13. **`pb_*` is one solid box shared by the cave block, the hanging column and the sealing wall.** They never meet: outside, the first room's row 0, below row 0. The swarm borrows `pb_*` for its hit tests and restores it.
 14. **Frame-timed routes and fixed-cycle objects.** The hanging column shuts route A's corridor for most of its 540-frame cycle, so route A waits there 540 frames (three vine periods too). A new periodic object on a route needs the same care. Shaft 2's weights (147 frames) kill even in the god build (traps check only the debug menu's invincibility, not `GOD_MODE`); route B passes between them, but a change in its timing before the corridor can put Rastan under one.
-15. **The debug menu once popped up at random.** SELECT alone was enough to open it, and some pads and emulators send it spuriously. It now needs UP+SELECT held, and in the demo build it stays locked until unlocked on the title screen.
+15. **The debug menu once popped up at random, and drew over the stage.** SELECT alone opened it, and some pads and emulators send it spuriously; and opened in play, its font and colours overwrote the stage's (the sky showed through in the menu's colours). It is now a screen of its own on the title (`title_menu`, UP+SELECT held), which sets up a new game; title builds have no menu in play (`dbg_on` stays 0). Only `testdbg.pce` and the other test builds, which have no title, keep the in-play menu for their warps.
 16. **Arcade positions in the castle's later squares.** The census tools' camera x is `(segment - 1) × 512` plus the scroll register. In the jets' room and shaft 2 (the arcade's segments `$14`, `$15`) that counter is one ahead of the port's squares, so the port's x is that minus 512 (the restart point: 9808 → 9296; the jets: 10384 → 9870 was taken 2 px off). Take positions on frames where the scroll registers do not change: a moving camera puts 1-2 px of jitter in them. For the vertical, the same view is the port's `scroll_y` = the arcade's (Rastan's y − his screen y) + 8.
+17. **pceas packs the HuC library's procedures into the bank with the least free space that holds them** (`vdc_set_mode`, `read_joypads`, `init_screen`, `vdc_clear_vram`, `clear_vce`, about 500 bytes). Packed into a code bank (4 or 5, assembled after them), the bank's location counter is left at the procedure's end and the bank's own code lands on top: hundreds of "Symbol's bank or address changed in final pass" errors through that bank, with no hint of the cause. It happens as soon as bank 4's or 5's free space drops below the landing bank's. `main.asm` keeps a landing place: the title's second bank (7) is filled up to `PROC_ROOM` (512) bytes from its end. If a code bank's free space ever falls between about 120 and 512 bytes, the procedures can pick it again: shrink `PROC_ROOM`, or watch for the symptom.
 
 ---
 
