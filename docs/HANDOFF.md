@@ -554,9 +554,17 @@ The order is roughly by the value it adds to the demo for the effort.
      `stage.inc`) switches the round's tables in `src/` (checkpoints in `debug.asm`, spawn kinds in
      `enemies.asm`) and turns off round 1's own objects (props, traps, fire, column, wall, weights,
      items, boulders, gargoyle, woman, jets, vines, boss).
-   - Colours come from the arcade started at the round's checkpoints (`patch 5073a 17`, `2a`, `2d`:
-     `sim/scripts/round2*.txt`, hazards NOP'd, health held): the forest, the castle's line `$2x` and the
-     boss room's own line `$2x`.
+   - **Start the arcade in the round itself.** The ROM word `$5FF9E` is a start switch (`$045282`,
+     `$04529C`): the game starts in round (~`$5FF9F` & 7) + 1 at its first segment, + `$16` (the boss
+     room) with bit 3 clear, + `$10` (the castle) with bit 5 clear: `patch 5ff9f fe` round 2's start,
+     `de` its castle (`$27`), `f6` its boss room (`$2D`, where the boss is created: `$04449E`, type
+     `$13` from the table at `$0444E0`). For a mid-round checkpoint patch the restart table byte for
+     the round's first segment too (`patch 50751 19`). Patching `$5073A` alone (as the first round 2
+     captures did) moves the start but leaves the game in round 1: round 1's colours, no boss.
+   - Colours come from those starts (`sim/scripts/round2*.txt`, hazards NOP'd, health held, frame
+     420). Round 2 has one BG palette for the forest, the castle and the boss room. Its sprite
+     colours differ from round 1's in a few palettes: `pce_objects.py` writes `objpal_r2.bin` and
+     `objpal_r2_b64.bin` (`ROUND_PAL_SNAPS` in `object_specs.py`), which round 2's build loads.
    - Round 2 needs 960 resident tiles at its peak, so it also streams into `$4B00-$4FFF` (slots
      `$4B0-$4FF`), which round 1's spears, props and fire use; their uploads are off in round 2.
    - **Snakes** (`src/snake.asm`, `EK_SNAKE`; `sim/scripts/snake.txt`; the arcade's code at `$0473B8`
@@ -572,12 +580,17 @@ The order is roughly by the value it adds to the demo for the effort.
      props, traps, fire, column, wall, weights, items, boulders) out of round 2's build.
    - **Vines:** round 2's two (markers `$4F` at (5632, 208) and (8416, 240)) use round 1's code,
      placed from the marker as round 1's chasm vine is; their phases are not measured.
-   - **Map markers still to port** (high byte of the collision map, by round x): `$59`-`$60` (y 336,
-     x 1824-2880): blue throwers that drop in from the trees (arcade type 23); `$61`-`$63` (6464-6592):
-     the golden women (cells `$420`, anims 201-204), who pace 7/9 px a frame between turning points
-     (6778-6910 seen); `$45` weights (8896), `$47` the hanging column (10752), `$48` (8800), `$49`
-     (8128), `$4C`, `$52`-`$55` fire (9312-10144), `$64`, `$65`, `$6A`, `$6B` (8960-9200, new).
-     Then the castle wizard (`$1C0`), the round's items, its boss and music.
+   - **Still to port** (the census of round 2 started properly, `patch 5ff9f fe` + `patch 50751 <cp>`;
+     kinds as first cell / palette): dragonflies (`$410`/14) and small flyers (`$260`/14), horned club
+     demons (`$140`/5), leaping piranhas (`$540`/15) over the water, the golden women (`$420`/7, map
+     markers `$61`-`$63` at x 6464-6592, pacing between turning points), blue throwers that drop from
+     the trees (markers `$59`-`$60`, y 336, x 1824-2880), the round's items (`$9F0`/12 and the orb
+     chains `$540`/14, `$290`/10), the castle's soldiers in round 2's colours (`$330`/5 axe, `$260`/4
+     sword, `$340`/1 mace) and its fire (`$220`/0; markers `$4C`, `$52`-`$55` at 9312-10144), weights
+     (`$45`, 8896), hanging column (`$47`, 10752) and other markers (`$48`, `$49`, `$64`, `$65`, `$6A`,
+     `$6B`), the boss (a caped blue knight that walks out of the room's door) and the music. The
+     castle route needs Rastan to climb: from the stairs' foot at the castle checkpoint the way on is
+     above (the arcade bot gets stuck there).
    - One ROM for every round needs `sf2_round` and the `^stage_*` bank references per round: a small
      table of page, banks and line count, indexed by the round.
 5. **The exact port of the player.**

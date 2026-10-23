@@ -1,7 +1,7 @@
-# Round 2's snakes: the arcade restarted at map segment $17 (health held, hazards NOP'd), Rastan
+# Round 2's snakes: the arcade started in round 2 ($5FF9F = $FE; health held, hazards NOP'd), Rastan
 # untouchable ($10D30E). He walks right from 700, then crouches and swings every 20 frames from 780:
-# the snake in slot 6 crawls in (511-743), strikes (744-789: 181, 184, 185 for 3, 6, 9 frames, its
-# box $5F/$60 armed in 185's first 3) and dies at 790 (200 points); slot 4's dies at 835.
+# the snake in slot 5 crawls in (511-743), strikes (744-789: 181, 184, 185 for 3, 6, 9 frames, its
+# box $5F/$60 armed in 185's first 3) and dies at 790 (200 points); slot 3's dies at 835.
 patch 53e0c 4e
 patch 53e0d 71
 patch 53e0e 4e
@@ -20,7 +20,7 @@ patch 553e8 4e
 patch 553e9 71
 patch 553ea 4e
 patch 553eb 71
-patch 5073a 17
+patch 5ff9f fe
 poke 300 30000 10c13a w 3000
 poke 400 30000 10d30e b 1
 in 100 ff 3f

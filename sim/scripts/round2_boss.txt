@@ -1,4 +1,4 @@
-# Round 2 from its boss room (segment $2D): the room's colours (frame 420).
+# Round 2 from its boss room ($5FF9F = $F6: round 2, + $16, segment $2D): the room's colours (frame 420).
 patch 53e0c 4e
 patch 53e0d 71
 patch 53e0e 4e
@@ -17,7 +17,7 @@ patch 553e8 4e
 patch 553e9 71
 patch 553ea 4e
 patch 553eb 71
-patch 5073a 2d
+patch 5ff9f f6
 in 100 ff 3f
 in 106 ff 1f
 in 200 ff 17

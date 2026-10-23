@@ -80,8 +80,9 @@ Two ROMs:
   from x 8192 and the boss room (map segments `$17`-`$2D`, all scrolled to the right), with their
   collision and the arcade's nine restart checkpoints in the debug menu (it starts straight in the
   game; hold UP + SELECT for the menu). Its walkers: lizardmen and round 2's snakes, then throwers and
-  chimeras, and the castle's soldiers; its two swinging vines. Still to come: the throwers that drop
-  from the trees, the golden women, the castle's traps and wizard, the round's items, boss and music.
+  chimeras, and the castle's soldiers; its two swinging vines; its own colours. Still to come: its
+  dragonflies, demons, piranhas, golden women and tree-dropping throwers, the castle's traps, the
+  round's items, boss and music.
 
 The tests run on test builds the Makefile also makes: `testdbg.pce` (straight into the game, with the
 debug menu in play for their checkpoint warps), `god.pce`, `noenemy.pce`, `camtest.pce`, `bgcheck.pce`.

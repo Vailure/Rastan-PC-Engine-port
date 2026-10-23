@@ -781,8 +781,13 @@ DEBUG_BANK	=	$05
 palette_data:	incbin	"palette.bin"
 palette_castle:	incbin	"palette_castle.bin"	; The castle's own set (build/stage1).
 sprite_palette:	incbin	"sprpal.bin"
+	.if	STAGE_ROUND = 1
 obj_palettes:	incbin	"objpal.bin"
 obj_palettes_b64: incbin	"objpal_b64.bin"	; (the same, colour bank 64)
+	.else
+obj_palettes:	incbin	"objpal_r2.bin"		; (round 2's sprite colours: build/objects)
+obj_palettes_b64: incbin	"objpal_r2_b64.bin"
+	.endif
 hud_palette:	incbin	"hudpal.bin"
 prop_palette:	incbin	"proppal.bin"
 debug_font:	incbin	"font.bin"		; HuC's 8x8 bold font, $20-$5F (build/debug).

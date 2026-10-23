@@ -23,7 +23,7 @@ FILES = {
     'boss': 'boss.snp',          # sim/scripts/boss.txt: the boss (slot 17), its fire (slots 18-22)
     'vine': 'vine.snp',          # the bot run (build/vine.txt): the vine at x 2750, slot 0
     'swarm': 'swarm.snp',        # sim/scripts/swarm.txt: the hurry-up swarm at the round start
-    'snake': 'snake.snp',        # sim/scripts/snake.txt: round 2's snakes (slot 6 crawls, strikes, dies)
+    'snake': 'snake.snp',        # sim/scripts/snake.txt: round 2's snakes (slot 5 crawls, strikes, dies)
 }
 
 GROUPS = {
@@ -108,12 +108,12 @@ GROUPS = {
     'vine': [
         ('vine_swing', 'vine', 0, 10755, 10934),
     ],
-    # Round 2's snakes (arcade slot 6): crawl (anims 181-183, 4 frames each), one strike of the three
+    # Round 2's snakes (arcade slot 5): crawl (anims 181-183, 4 frames each), one strike of the three
     # in a row (181, 184, 185 for 3, 6, 9 frames), death (the walkers' burst).
     'snake': [
-        ('snake_crawl', 'snake', 6, 523, 538),
-        ('snake_strike', 'snake', 6, 744, 761),
-        ('snake_death', 'snake', 6, 791, 820),
+        ('snake_crawl', 'snake', 5, 523, 538),
+        ('snake_strike', 'snake', 5, 744, 761),
+        ('snake_death', 'snake', 5, 791, 820),
     ],
     # The hurry-up swarm's small bats (arcade slots 20-28): flapping (cells $268-$26A,
     # all bats on one global clock) and the cell a sword hit leaves ($276). src/swarm.asm
@@ -134,6 +134,9 @@ GROUPS = {
 # (The boss capture also ran in bank 64.) B64_GROUPS: the groups a restart at checkpoint
 # 4 or 5 can show, whose colours objpal_b64.bin changes.
 GROUP_BANK = {'castle': 48, 'boss': 48}
+# Rounds after the first: snapshots (file in the build directory, frame) with the round's
+# sprite colours in bank 48 and in bank 64 (pce_objects writes objpal_r<n>[_b64].bin).
+ROUND_PAL_SNAPS = {2: (('round2.snp', 420), ('round2_castle.snp', 420))}
 BANK64_SNAP = ('castle', 2600)
 B64_GROUPS = ('castle', 'jets', 'vine', 'swarm', 'items', 'boss')
 

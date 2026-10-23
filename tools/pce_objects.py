@@ -26,7 +26,7 @@ import numpy as np
 from PIL import Image
 from arcade_gfx import load_region, decode_packed
 from snap import read_snaps, palette_rgb
-from object_specs import B64_GROUPS, BANK64_SNAP, GROUP_BANK, CELL_SYMBOLS, FILES, GROUPS, POSE_SYMBOLS, GROUP_MAX, PATHS
+from object_specs import B64_GROUPS, BANK64_SNAP, ROUND_PAL_SNAPS, GROUP_BANK, CELL_SYMBOLS, FILES, GROUPS, POSE_SYMBOLS, GROUP_MAX, PATHS
 import census_all
 
 ROMDIR = os.environ.get('RASTAN_ROMS', os.path.join(os.path.dirname(__file__), '..', 'roms', 'rastan'))
@@ -212,6 +212,27 @@ def main():
     open(f'{out}/objpal.bin', 'wb').write(vce)
     open(f'{out}/objpal_b64.bin', 'wb').write(vce64)
     print(f'bank 64 changes sprite palette slots {changed}')
+
+    # Later rounds load sprite colours of their own (some of colour banks 48 and 64):
+    # objpal_r<n>.bin and objpal_r<n>_b64.bin, the same slots with the colours of a
+    # snapshot in that round (ROUND_PAL_SNAPS: bank 48's, bank 64's). Arcade palettes
+    # that share a slot must agree there too.
+    for rnd, ((c48, f48), (c64, f64)) in ROUND_PAL_SNAPS.items():
+        r48 = palette_rgb(next(s for s in read_snaps(os.path.join(build, c48)) if s.frame == f48).pal)
+        r64 = palette_rgb(next(s for s in read_snaps(os.path.join(build, c64)) if s.frame == f64).pal)
+        v48, v64 = bytearray(), bytearray()
+        for (key, alt), ps in sorted(pal9.items(), key=lambda kv: kv[1]):
+            aps = sorted(ap for ap, sl in slot_of.items() if sl == ps)
+            for vb, src, d in ((v48, r48, 0), (v64, r64, 16)):
+                cols = {tuple(to9(c) for c in src[(ap + d) * 16:(ap + d) * 16 + 16]) for ap in aps}
+                if len(cols) > 1:
+                    print(f'round {rnd}: slot {ps} (arcade palettes {aps}) differs between them; first kept')
+                for r, g_, b in tuple(to9(c) for c in src[(aps[0] + d) * 16:(aps[0] + d) * 16 + 16]):
+                    vb += ((g_ << 6) | (r << 3) | b).to_bytes(2, 'little')
+        open(f'{out}/objpal_r{rnd}.bin', 'wb').write(v48)
+        open(f'{out}/objpal_r{rnd}_b64.bin', 'wb').write(v64)
+        print(f'round {rnd}: sprite slots changed {[PAL_SLOTS[i] for i in range(len(pal9)) if v48[i * 32:i * 32 + 32] != vce[i * 32:i * 32 + 32]]}'
+              f' (bank 64: {[PAL_SLOTS[i] for i in range(len(pal9)) if v64[i * 32:i * 32 + 32] != vce64[i * 32:i * 32 + 32]]})')
 
     # Data banks: cells first, then one bank per group.
     with open(f'{out}/objects_data.inc', 'w') as f:

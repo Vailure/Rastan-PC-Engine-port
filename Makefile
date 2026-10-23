@@ -35,9 +35,9 @@ $(STAGE)/stage.bin: tools/pce_stage.py tools/pce_coll.py tools/world.py tools/fg
 	cd tools && SKY_SNAPS=../$(BUILD)/sky04.snp,../$(BUILD)/sky0c.snp python3 pce_stage.py ../sim/maincpu.bin ../$(BUILD)/bot1.snp $(PALFRAME) 0 0x16 ../$(STAGE) ../$(BUILD)/waterfall.snp ../$(BUILD)/hall.snp:4400
 	cd tools && python3 pce_coll.py ../sim/maincpu.bin ../$(STAGE)
 
-# Round 2 (the forest, then a castle; map segments $17-$2D): the arcade started at the
-# round's first segment, at its castle checkpoint and in its boss room (the restart
-# table byte $5073A: $17, $2A, $2D), its palette at frame 420 of each. The stage and collision go to $(STAGE2),
+# Round 2 (the forest, then a castle; map segments $17-$2D): the arcade started in round 2
+# at its first segment, its castle ($27) and its boss room ($2D) (the start switch $5FF9F:
+# sim/scripts/round2.txt), its palette at frame 420 of each. The stage and collision go to $(STAGE2),
 # which the round 2 build puts ahead of $(STAGE) in its include path.
 STAGE2     := $(BUILD)/stage2
 $(BUILD)/round2.snp: sim/sim sim/maincpu.bin sim/scripts/round2.txt
@@ -161,7 +161,7 @@ $(BUILD)/item_%.snp: sim/sim sim/maincpu.bin sim/scripts/item_%.txt
 # Object (enemy, projectile, item) poses: groups and captures in tools/object_specs.py.
 # Cells start at bank $60; each group's poses and anims get the next banks.
 OBJECTS    := $(BUILD)/objects
-$(OBJECTS)/objcells.bin: tools/pce_objects.py tools/object_specs.py tools/census_all.py $(BUILD)/lizard.snp $(BUILD)/blue.snp $(BUILD)/item.snp $(BUILD)/item_fire.snp $(BUILD)/item_star.snp $(BUILD)/chimera.snp $(BUILD)/gargoyle.snp $(BUILD)/gargkill.snp $(BUILD)/woman.snp $(BUILD)/castle.snp $(BUILD)/boss.snp $(BUILD)/vine.snp $(BUILD)/hall.snp $(BUILD)/swarm.snp $(BUILD)/snake.snp
+$(OBJECTS)/objcells.bin: tools/pce_objects.py tools/object_specs.py tools/census_all.py $(BUILD)/lizard.snp $(BUILD)/blue.snp $(BUILD)/item.snp $(BUILD)/item_fire.snp $(BUILD)/item_star.snp $(BUILD)/chimera.snp $(BUILD)/gargoyle.snp $(BUILD)/gargkill.snp $(BUILD)/woman.snp $(BUILD)/castle.snp $(BUILD)/boss.snp $(BUILD)/vine.snp $(BUILD)/hall.snp $(BUILD)/swarm.snp $(BUILD)/snake.snp $(BUILD)/round2.snp $(BUILD)/round2_castle.snp
 	cd tools && python3 pce_objects.py ../$(BUILD) ../$(OBJECTS) 0x13
 
 # HUD cells (lives, icon, health bar, ROUND) from the arcade's HUD sprites.

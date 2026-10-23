@@ -1,4 +1,4 @@
-# Round 2 from its castle checkpoint (segment $2A): the castle's colours (frame 420).
+# Round 2 from its castle ($5FF9F = $DE: round 2, + $10, segment $27): the castle's colours (frame 420).
 patch 53e0c 4e
 patch 53e0d 71
 patch 53e0e 4e
@@ -17,7 +17,7 @@ patch 553e8 4e
 patch 553e9 71
 patch 553ea 4e
 patch 553eb 71
-patch 5073a 2a
+patch 5ff9f de
 in 100 ff 3f
 in 106 ff 1f
 in 200 ff 17
