@@ -208,7 +208,8 @@ Not done yet: slopes, waterfall currents, the other collision codes, rope attack
 - **Health:** Rastan has 12 units of health (the arcade's 12288 at `$10C13A`, 3072 per lizardman hit).
   The arcade's hit effects (`$0550A8`, by the hitter's type): a swing, a club, a fireball, a boulder or the
   boss costs 12 units and knocks him back (hurt 23 frames); a touch drains 4 (lizardmen, throwers) or 8
-  (chimeras, gargoyles, soldiers) and hurts him 11 frames where he stands, and the next drain waits 80 frames;
+  (chimeras, gargoyles, soldiers) and hurts him 11 frames where he stands, and the next drain waits 40 frames (`$10D366`; its counter `$10D368`
+  steps 2 a frame to 80);
   the woman warrior's touch does nothing. After a hurt he is untouchable 33 frames more (16 if he was hit in an
   attack, which he keeps on with). He does not flicker meanwhile (the arcade draws him every frame); the HUD's
   icon flashes. When health runs out, the stage restarts. His hits take 1 off an enemy's hit points, 3 in the
@@ -237,7 +238,8 @@ Not done yet: slopes, waterfall currents, the other collision codes, rope attack
   castle's first shaft at (8384, -178) (found by the shaft capture of `sim/scripts/hall.txt`, frame 3432). Each
   appears when Rastan is 164 px left of it (and on the same side of world y 0), with a bat 20 px below. Touching an item, or hitting it with the weapon, takes it.
   The bat flies off away from Rastan (about 75 frames), hovers over him, dives onto him and clings: 1024 health
-  (4 bar units) when it brushes him in flight, 2048 (8 units) every 45 frames while clinging, no knockback.
+  (4 bar units) when it brushes him in flight, 2048 (8 units) every 45 frames while clinging, no knockback: the
+  arcade's drains (hurt 11 frames, then 33 untouchable, so 45 frames a bite), as are the swarm's bites.
   One hit kills it. A death brings the items back.
 - **Lizardmen** (`src/enemies.asm`): measured in the arcade from `sim/scripts/lizard.txt`. They enter at
   the right edge, walk at 7/8 px/frame, swing twice when about 52 px away, back off, and come again.

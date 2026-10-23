@@ -106,7 +106,7 @@ r = peek(rom, 900, [100, 900, '04'], {'p_hp': 1, 'p_state': 1, 'p_x': 2})
 hits = []
 for i in range(101, 870):
     d = r[i - 1]['p_hp'][0] - r[i]['p_hp'][0]
-    if d > 0:
+    if d > 0 and r[i]['p_hp'][0]:          # (not the last, capped at 0: he dies)
         hurt = sum(1 for j in range(i, i + 30) if r[j]['p_state'][0] == 7)
         moved = (r[i + 8]['p_x'][0] | r[i + 8]['p_x'][1] << 8) != (r[i]['p_x'][0] | r[i]['p_x'][1] << 8)
         hits.append((i, d, hurt, moved))

@@ -52,11 +52,11 @@ HIT_DAMAGE	=	12		; A lizardman hit: arcade 3072.
 WATER_DRAIN	=	7		; Water (code 6): a unit every 8 frames (arcade 32/frame).
 ; After a hit (the arcade's $0550A8 handlers): hurt 23 frames knocked back, or
 ; 11 not (a touch that drains), then 33 untouchable ($10D30E); in an attack
-; neither: 16 untouchable. A drain also blocks the next one for 80 ($10D366).
+; neither: 16 untouchable. A drain also blocks the next one for 40 ($10D366).
 INVULN_FRAMES	=	23 + 33
 INVULN_DRAIN	=	11 + 33
 INVULN_ATTACK	=	16
-DRAIN_LATCH	=	80
+DRAIN_LATCH	=	40		; ($10D368 counts 2 a frame to 80)
 
 START_X		=	48		; Arcade x 32 + 16 (stage 1 start).
 START_Y		=	295		; Arcade y 112 + 183.
@@ -617,22 +617,6 @@ player_attacking:
 		rts
 .no:		clc
 		rts
-
-; player_drain - A = health units lost without being knocked back (a bat).
-player_drain:
-	.if	GOD_MODE
-		rts
-	.endif
-		ldx	<dbg_god
-		bne	.no
-		ldx	<p_state
-		cpx	#ST_DEAD
-		beq	.no
-		jsr	hp_sub
-		lda	<p_hp
-		bne	.no
-		jmp	enter_dead
-.no:		rts
 
 ; sword_box - carry set and sb_* set if Rastan's weapon hits this frame: the
 ; arcade's rules ($054982: $10D2F8 = 1) and boxes (write_boxes in pce_player.py,

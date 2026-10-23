@@ -23,8 +23,6 @@ BAT_FLEE	=	72		; Frames flying off.
 BAT_HOVER	=	255		; Frames hovering before the dive.
 BAT_HEIGHT	=	64		; Hovers this far above Rastan's anchor.
 BAT_BITE	=	45		; Frames between bites.
-BAT_BRUSH_HP	=	4
-BAT_BITE_HP	=	8
 
 BP_FLEE		=	0		; Bat phases (e_range).
 BP_HOVER	=	1
@@ -254,9 +252,9 @@ bat_think:	jsr	sword_vs_enemy		; One hit kills it: 200 points.
 		cmp	#BAT_BITE
 		bcc	.r
 		stz	e_timer, x
-		lda	#BAT_BITE_HP
-		phx
-		jsr	player_drain
+		lda	#2			; (the arcade's touch type 2: 8 units,
+		phx				; player_touch)
+		jsr	player_touch
 		plx
 		rts
 
@@ -267,9 +265,9 @@ bat_brush:	lda	e_struck, x
 		bcc	.r
 		lda	#BAT_BITE
 		sta	e_struck, x
-		lda	#BAT_BRUSH_HP
+		lda	#1			; (4 units: touch type 1)
 		phx
-		jsr	player_drain
+		jsr	player_touch
 		plx
 .r:		rts
 

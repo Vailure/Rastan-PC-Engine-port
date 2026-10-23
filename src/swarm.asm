@@ -42,7 +42,6 @@ SW_SPAWN	=	3			; sw_st: entering (flies from the next frame),
 SW_DYING	=	$0F			; killed; 4-9 flying (the script chosen).
 SW_DEAD_FRAMES	=	4
 SW_BITE		=	45			; Frames between bites.
-SW_BITE_HP	=	4			; Bar units a bite (1024 of 12288).
 SW_FIRST	=	40			; Counts of 64 frames before the first wave.
 
 SWC0_SRC	=	$6000 + (SWARM_CELL0 & 63) * 128
@@ -705,9 +704,9 @@ sw_hits:	lda	sw_xl, x		; pb_*: the bat, 16 x 16 around (x, y).
 		bcc	.r
 		lda	#SW_BITE
 		sta	sw_bite
-		lda	#SW_BITE_HP
-		phx
-		jsr	player_drain
+		lda	#1			; (the arcade's touch type 1: 4 units,
+		phx				; player_touch)
+		jsr	player_touch
 		plx
 .r:		rts
 
