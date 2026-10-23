@@ -84,10 +84,10 @@ The results below are from the run on 2026-10-23, with the swarm, the hanging co
 
 | Section (start) | Distance covered (world x) | Slow frames | Bad poses | Tile-map frames wrong | SATB full¹ | Frames with a sprite lost to the 16-a-line limit¹ |
 |---|---|---|---|---|---|---|
-| cp0: round start | 49 → 1830 | 0 | 0 | 0 / 240 | 0 | 174 |
-| cp1: segment 4 | 2097 → 4708 | 0 | 0 | 0 / 240 | 114 | 288 |
-| cp2: segment 8 (waterfall) | 4145 → 5638 | 0 | 0 | 0 / 240 | 120 | 157 |
-| cp3: segment 12 → castle | 6193 → 8662 | 0 | 0 | 0 / 240 | 0 | 242 |
+| cp0: round start | 49 → 1830 | 0 | 0 | 0 / 240 | 0 | 191 |
+| cp1: segment 4 | 2097 → 4708 | 0 | 0 | 0 / 240 | 114 | 322 |
+| cp2: segment 8 (waterfall) | 4145 → 5638 | 0 | 0 | 0 / 240 | 120 | 176 |
+| cp3: segment 12 → castle | 6193 → 8662 | 0 | 0 | 0 / 240 | 0 | 246 |
 | cp4: segment 16 (castle) | 8253 → 9300 | 0 | 0 | 0 / 411 | 0 | 273 |
 | cp5: lava hall → boss | 9306 → 11728 | 0 | 0 | 0 / 377 | 0 | 704² |
 | **Problems** | | | | | | **0 (both runs)** |
@@ -153,7 +153,8 @@ All of these are fixed, and each now has a check:
 
 | Gap | Effect on the demo | Notes |
 |---|---|---|
-| Rastan's hurt box by pose | Two forms only | The arcade's (`$10D248`) is set per pose; the port uses its standing and crouched forms (the weights, the bats), and for the walkers' hits its older measured box |
+| Rastan's hurt box by pose | Two forms only | The arcade's (`$10D248`) is set per pose (x −18/−12/−8 .. 6/12); the port uses its standing and crouched forms |
+| The soldiers' low swing | Not shown | The arcade alternates a high and a low swing (box `$3C`/`$B0`, which reaches a crouching Rastan); the port has the high one only |
 | Sprite flicker in crowds | Visible when 3–4 walkers share a line, or with the swarm | Hardware limit; mitigated by rotation (walkers and the swarm take turns, and the bats among themselves) |
 | Fire sparks | Not drawn | Cosmetic |
 
@@ -179,7 +180,7 @@ All of these are fixed, and each now has a check:
 
 ## 6. Phase history
 
-The project spans 41 commits (2026-10-20 → 2026-10-23).
+The project spans 42 commits (2026-10-20 → 2026-10-23).
 
 1. **Tools:**
    - arcade graphics decoder;
@@ -213,10 +214,11 @@ The project spans 41 commits (2026-10-20 → 2026-10-23).
    - the hurry-up swarm, the sprite colour bank (soldiers' colours), the hanging column and the sealing wall;
    - shaft 2's spiked weights (marker `$45`), from an arcade bot that now climbs shaft 2;
    - the swarm's share of the sprites: it takes turns with the walkers, so its bats no longer vanish behind a crowd;
-   - the bats' bite and the weights' kill read from the arcade's collision code (its box tables), no longer measured.
+   - the bats' bite and the weights' kill read from the arcade's collision code (its box tables), no longer measured;
+   - the lizardmen's, soldiers' and clubs' hits on Rastan from the same tables: crouching now ducks a lizardman's swing, as in the arcade, and clubs reach 7 px, not 19.
 
 The next steps, in order, are in `docs/HANDOFF.md` §8:
-1. Rastan's hurt box per pose (the arcade's table), for the walkers too;
+1. the remaining kinds' hits by the arcade's boxes (woman, gargoyle, chimera, boss), Rastan's box per pose, the soldiers' low swing;
 2. the lava hall's vines and fire sparks;
 3. more compression, if needed;
 4. rounds 2–6;

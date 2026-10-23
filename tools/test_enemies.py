@@ -66,6 +66,13 @@ check('passive Rastan is hit for 12 units (arcade 3072) each time', len(drops) >
 restart = next((i for i in range(11, len(hps)) if hps[i] == 48 and min(hps[10:i]) == 0), None)
 check('fourth hit kills him and the stage restarts', restart is not None, f'restart at frame {restart}')
 
+# Crouched, he ducks them: their clubs' box (the arcade's $38, y -20 .. -12 of the
+# lizardman) passes over his crouched body (from his anchor down). The arcade, crouched
+# from frame 400 of lizard.txt: no hit in 1,000 frames.
+rc = run(1500, [60, 1500, '02'])
+check('crouched, he is never hit by a lizardman', min(x['hp'] for x in rc[10:]) == 48
+      and max(sum(1 for s in x['es'] if s) for x in rc) >= 2, f"min hp {min(x['hp'] for x in rc[10:])}")
+
 # HUD: the bar drains a unit every 2 frames to 4 units per health point (arcade:
 # 48 units for 12288); a death costs a life and refills the bar.
 hp_all = [x['hp'] for x in r]

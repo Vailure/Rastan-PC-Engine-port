@@ -411,7 +411,7 @@ tgrun rom.pce frames out.ppm [from to padhex]...
 |---|---|
 | `test_scroll.py` (3 runs) | Every sampled frame of the camera build matches the converter's `preview.png` pixel for pixel: horizontal, downward and the castle shafts |
 | `test_player.py` | Walk, crouch, jumps, attacks (including the standing up attack), ropes, collision, the frame budget |
-| `test_enemies.py` | Hits, kills, spawn lanes and timing, clubs, frame budget |
+| `test_enemies.py` | Hits, kills, a crouching Rastan ducking the lizardmen, spawn lanes and timing, clubs, frame budget |
 | `test_effects.py` | Waterfall cycle, sky switch, hazards, death animation |
 | `test_debug.py` | The menu needs a hold; the screen comes back exactly; warps, invincibility, checkpoint restart |
 | `test_items.py` | Weapons, items, bats (weapon drawing is sampled over 4 frames: the fire sword's flame hides behind the blade on some) |
@@ -527,7 +527,10 @@ Then:
 
 The order is roughly by the value it adds to the demo for the effort.
 
-1. **Rastan's hurt box per pose.** The arcade's collision code is now known (below); the bats' bite and the weights' kill use it. The walkers' hits on Rastan (`enemies.asm`: p_x ± 12, p_y − 24, crouched − 6) and the clubs still use older measured boxes. Read each kind's box index and port them, with Rastan's box per pose from `$10D248` (the captures show only x −12/−8 .. 12, y −24 or 0 .. 26).
+1. **The rest of the hits by the arcade's boxes.** The arcade's collision code is now known (below). The bats' bite, the weights' kill, the lizardmen's and soldiers' swings (`weapon_hit`) and the clubs use it. Still on older measured boxes: the woman warrior, the gargoyle, the chimera and its fireballs, the boss, the fire jets, the item bat. Also:
+   - Rastan's box is set per pose (`$10D248`; seen: x −18/−12/−8 .. 6/12, y −24 or 0 .. 26); the port uses the standing and crouched forms.
+   - The arcade's soldiers alternate a high and a low swing (`($21,A4)` bit 2: boxes `$3A`/`$3C`, `$AE`/`$B0`, poses from the tables at `$042FBC` and `$042FD4`); the low one reaches a crouching Rastan. The port captured only the high one.
+   - **How a swing hits:** the walker's attack step table (`$042F92`: per 3-frame step a pose and an armed box index at `($22,A4)`; `$38` the lizardman's) arms the weapon; `$044B2C` tests armed boxes (index + 1 facing left) against Rastan's and disarms on a hit, so a swing hits at most once. `($38,A4)` picks the reach: below 3 as listed, 3 adds `$70`, above 3 adds `$74` (the mace).
    - **How the arcade tests a touch:** `$0449B4` clears the hit lists (`$10D2A8`, `$10D2C8`, 4 entries of 8 bytes), then for each object slot takes a box index (`$0446BC`, or for map objects with `+$0B` set, `$044548` and its table at `$044582`: `$47` the column `$13` + length / 2, `$45` the weights `$27` + length / 2, `$4D` the wall `$43` + length / 2 − 1) and tests it (`$044CBA`, inclusive) against Rastan's box: `$10D248` for slots below 18, `$10D22C` (8 px narrower each side) from 18 on. Box entries are 4 signed bytes (x0, x1, y0, y1) at `$044CE0` + 4 × index, relative to the object's (x, y). A hit is processed the next frame (`$054A2C`): the entry's type picks the effect through the table at `$0550A8` (damage `$800`-`$1800`, or `$0553D6`: death).
    - The column's box (8 px either side, Rastan's 12) gives the measured 21 px push. The wall's box (x 16 .. 20 + 4 n) is relative to its object, whose x was not tied to the port's; its push stays measured.
 2. **The lava hall's vines and the fire's sparks.** The three vines swing together, and their grab box is a guess. Measure them like the chasm vine (`vine.snp`).

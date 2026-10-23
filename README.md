@@ -225,6 +225,10 @@ Not done yet: slopes, waterfall currents, the other collision codes, rope attack
 - **Lizardmen** (`src/enemies.asm`): measured in the arcade from `sim/scripts/lizard.txt`. They enter at
   the right edge, walk at 7/8 px/frame, swing twice when about 52 px away, back off, and come again.
   One sword hit kills them. Up to 4 at once (the arcade's limit); their 83 sprite cells stay resident in VRAM at `$5C00`.
+  A swing hits by the arcade's boxes (`$042F92` arms the club's box `$38` for the first 3 frames of the pose with
+  the club out; `$044B2C` tests it against Rastan's, once a swing): x 4 to 48 px in front, 12 to 20 above the
+  lizardman's anchor, against Rastan's 12 px either side and 24 above to 26 below his (from his anchor when
+  crouched). On flat ground the swing passes over a crouching Rastan, as in the arcade (lizard.txt crouched: no hit).
 - **Spawns:** the arcade marks enemy lanes in the map: spawn marker `$3A` in the high byte of a cell's collision
   code, at an enemy's anchor height (16 px above its floor). A lizardman enters at the right edge on the lane nearest
   Rastan's height, 65 frames into the round and then at gaps of 49, 81 and 65 frames in turn (measured with a
@@ -234,7 +238,10 @@ Not done yet: slopes, waterfall currents, the other collision codes, rope attack
   x 1500 they take turns with lizardmen. They walk up the same way, stop 88-143 px from Rastan and throw two clubs
   (8 and 27 frames into a 36-frame throw), back off and come again. Clubs are projectile objects (arcade slots at
   `$10C740`): 1.5 px/frame, spinning through 8 cells; a high pair (20 px above the thrower's anchor) then a low pair
-  (13 px above, sinking to 6). A club costs 3072 like a lizardman's hit; the sword knocks clubs away; one hit kills
+  (13 px above, sinking to 6). A club hits by the arcade's boxes (its `$03`, 3 px either side and 8 up and down,
+  against Rastan's for slots 18 on, 4 px either side): within 7 px across, 32 above to 34 below his anchor (8 above
+  when crouched), which matches the arcade's hit list on all 772 club-frames of `blue.snp`. It costs 3072 like a
+  lizardman's hit; the sword knocks clubs away; one hit kills
   the thrower, with the shared explosion.
 - **Chimeras** (`src/chimera.asm`; `sim/scripts/chimera.txt`): from x 2400 throwers, chimeras and lizardmen come
   in turn. A chimera walks left at 1/2 px/frame whatever Rastan does, stops once to breathe fire (about 113 frames;
@@ -264,7 +271,8 @@ Not done yet: slopes, waterfall currents, the other collision codes, rope attack
 - **Castle soldiers** (`sim/scripts/castle.txt`): from x 8200 sword and mace soldiers come in turn on the lanes.
   The arcade's two share a body and differ by weapon; both walk in, stand about 60 px away and swing (3-frame steps),
   then walk on. They use the lizardmen's loop (walk in, two swings, back off, come again) with their own hit pose
-  and reach; a swing that reaches costs 12 units. The arcade gave 900 for a sword and a mace soldier dying together;
+  and the arcade's weapon boxes (the high swing the port shows: the sword's `$3A`, 4 to 52 px in front, the mace's
+  `$AE`, 4 to 60, both 13 to 19 above the anchor; crouching ducks it); a swing that reaches costs 12 units. The arcade gave 900 for a sword and a mace soldier dying together;
   the port splits it 300 / 600.
 - **Fire jets** (`src/jets.asm`): over the lava pits at world x 9870, 9966 and 10062 (the arcade's census:
   10382-10574 in segment `$14`, now the jets' room at square ($13, -1)). Each erupts when Rastan is 172 px

@@ -533,23 +533,18 @@ enemy_think:	lda	e_kind, x
 .throw:		jsr	throw_club
 		bra	.wait
 
-.club_swing:	; The weapon is out in the kind's hit pose: hit Rastan once per
-		lda	e_pose, x		; swing if in range (its attack range + 8).
-		cmp	kind_hitpose, y
-		bne	.armed
+.club_swing:	; The weapon is out in the kind's hit pose: the arcade arms its box
+		lda	e_pose, x		; for the pose's first 3 frames ($042F92) and
+		cmp	kind_hitpose, y		; tests it each frame until it hits, once a
+		bne	.armed			; swing.
 		lda	e_struck, x
 		bne	.wait
+		lda	e_animt, x
+		cmp	#4
+		bcc	.wait
+		jsr	weapon_hit
+		bcc	.wait
 		inc	e_struck, x
-		jsr	player_dist
-		bcc	.wait
-		lda	<etmp + 1
-		bne	.wait
-		lda	e_range, x
-		clc
-		adc	#8
-		cmp	<etmp
-		bcc	.wait
-		beq	.wait
 		phx
 		lda	e_face, x		; Knock Rastan the way the club swings.
 		beq	!+
@@ -798,9 +793,12 @@ club_think:	jsr	sword_vs_enemy
 		inc	e_yl, x
 		bne	.hit
 		inc	e_yh, x
-.hit:		; Rastan's body: p_x +/- 12, p_y - 24 (crouched: - 6) .. p_y + 24.
-		; The club (16x16, centred) hits if it overlaps.
-		lda	e_xl, x			; |e_x - p_x| < 20
+.hit:		; The arcade's boxes (inclusive, $044CBA): the club's ($03: x -3 ..
+		; 3, y -8 .. 8) against Rastan's for slots 18 on ($10D22C: x - 4 ..
+		; x + 4, y - 24 .. y + 26; crouched from y): |e_x - p_x| <= 7 and
+		; e_y - p_y in -32 .. 34 (crouched -8 .. 34). (Checked against the
+		; arcade's hit list on all 772 club-frames of blue.snp.)
+		lda	e_xl, x			; |e_x - p_x| < 8
 		sec
 		sbc	<p_x
 		sta	<ex
@@ -818,10 +816,10 @@ club_think:	jsr	sword_vs_enemy
 		adc	#0
 !:		bne	.r
 		lda	<ex
-		cmp	#20
+		cmp	#8
 		bcs	.r
-		lda	e_yl, x			; dy = e_y - p_y + 32 must be 0 .. 63
-		sec				; (crouched: 18 .. 63)
+		lda	e_yl, x			; dy = e_y - p_y + 32 must be 0 .. 66
+		sec				; (crouched: 24 .. 66)
 		sbc	<p_y
 		sta	<ey
 		lda	e_yh, x
@@ -835,14 +833,14 @@ club_think:	jsr	sword_vs_enemy
 		adc	#0
 		bne	.r
 		lda	<ey
-		cmp	#64
+		cmp	#67
 		bcs	.r
 		ldy	<p_state
 		cpy	#ST_CROUCH
 		beq	.low
 		cpy	#ST_CATK
 		bne	.hurt
-.low:		cmp	#18
+.low:		cmp	#24
 		bcc	.r
 .hurt:		phx
 		lda	e_face, x
@@ -854,6 +852,82 @@ club_think:	jsr	sword_vs_enemy
 		plx
 .gone:		stz	e_state, x
 .r:		rts
+
+; weapon_hit - X = slot, Y = its kind: carry set if the weapon's box overlaps
+; Rastan's body. The arcade's boxes (inclusive; $044CBA): the weapon's at
+; $044CE0 + 4 * index, mirrored facing left (lizardman $38: x 4 .. 48, y -20
+; .. -12; sword soldier $3A: 4 .. 52, -19 .. -13; mace soldier $AE: 4 .. 60,
+; -19 .. -13); Rastan's x - 12 .. x + 12, y - 24 .. y + 26, crouched y ..
+; y + 26 ($10D248). As ranges of dx = p_x - e_x (facing right; mirrored
+; facing left) and dy = p_y - e_y: lo .. lo + width. On flat ground dy is
+; about -8, so crouching ducks all three (the arcade: a crouching Rastan
+; is never hit by a lizardman).
+weapon_hit:	lda	<p_x
+		sec
+		sbc	e_xl, x
+		sta	<etmp
+		lda	<p_x + 1
+		sbc	e_xh, x
+		sta	<etmp + 1
+		lda	e_face, x		; Facing left: dx = -dx.
+		bne	!+
+		cla
+		sec
+		sbc	<etmp
+		sta	<etmp
+		cla
+		sbc	<etmp + 1
+		sta	<etmp + 1
+!:		lda	kind_hx_lo, y		; dx - lo in 0 .. width?
+		jsr	.sub
+		bne	.no
+		lda	kind_hx_w, y
+		cmp	<etmp
+		bcc	.no
+		lda	<p_y			; dy = p_y - e_y
+		sec
+		sbc	e_yl, x
+		sta	<etmp
+		lda	<p_y + 1
+		sbc	e_yh, x
+		sta	<etmp + 1
+		lda	kind_hy_lo, y		; dy - lo in 0 .. width (crouched: less)?
+		jsr	.sub
+		bne	.no
+		lda	<p_state
+		cmp	#ST_CROUCH
+		beq	.low
+		cmp	#ST_CATK
+		beq	.low
+		lda	kind_hy_w, y
+		bra	.cmp
+.low:		lda	kind_hy_wc, y
+.cmp:		cmp	<etmp
+		bcc	.no
+		sec
+		rts
+.no:		clc
+		rts
+.sub:		sta	<ey			; etmp -= A (signed); A = high byte.
+		stz	<ey + 1
+		bit	<ey
+		bpl	!+
+		dec	<ey + 1
+!:		lda	<etmp
+		sec
+		sbc	<ey
+		sta	<etmp
+		lda	<etmp + 1
+		sbc	<ey + 1
+		sta	<etmp + 1
+		rts
+
+; (lizardman, ..., sword soldier, mace soldier; the others do not swing)
+kind_hx_lo:	db	-8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -8, -8
+kind_hx_w:	db	68, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 72, 80
+kind_hy_lo:	db	-46, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -45, -45
+kind_hy_w:	db	58, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56, 56
+kind_hy_wc:	db	34, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32, 32
 
 ; face_player - e_face = Rastan is to the right.
 face_player:	lda	<p_x
