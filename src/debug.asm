@@ -122,11 +122,16 @@ checkpoint_start:
 		sta	<p_y + 1
 		jsr	enemies_reset
 		jsr	props_reset
-		jsr	dyn_reset
+		jsr	bg_palettes_here	; (the castle has palettes of its own)
+		jsr	bg_black0
 		jsr	music_here		; The tune for where he restarts.
+		lda	<bg_set
+		bne	!+
+		jsr	dyn_reset
 	.if	!BG_CHECK
 		jsr	dyn_update		; (sky for this column, before showing it)
 	.endif
+!:
 		jsr	camera_update
 		jsr	set_scroll_regs
 		jsr	player_draw
@@ -160,18 +165,7 @@ screen_show:	call	wait_vsync		; SATB DMA of the new frame,
 		sta	<vdc_crl
 	.endif
 		call	wait_vsync
-		php				; and colour 0 back before it shows.
-		sei
-		lda	#^palette_data
-		tam3
-		stz	VCE_CTA + 0
-		stz	VCE_CTA + 1
-		lda	palette_data + 0
-		sta	VCE_CTW + 0
-		lda	palette_data + 1
-		sta	VCE_CTW + 1
-		plp
-		rts
+		jmp	bg_color0		; and colour 0 back before it shows.
 
 ; ---------------------------------------------------------------------------
 ; music_here - the tune for where Rastan is: the castle from x 8192, the boss
@@ -211,6 +205,8 @@ door_enter:	stz	<p_door
 		lda	#>384
 		sta	<p_y + 1
 		jsr	start_fall
+		jsr	bg_palettes_here	; (the castle's)
+		jsr	bg_black0
 		jsr	music_here		; (the castle's tune)
 		jsr	camera_update		; (it keeps inside the castle's wall)
 		jsr	stream_ahead
@@ -469,14 +465,13 @@ menu_close:	php
 menu_close_quiet:
 		php
 		sei
-		lda	#^palette_data		; BG colors from ROM, then the run-time
-		tam3				; ones (the sky follows next_col).
-		stz	VCE_CTA + 0
-		stz	VCE_CTA + 1
-		tia	palette_data, VCE_CTW, 512
-	.if	!BG_CHECK			; (bgcheck: the colours as converted)
+		jsr	bg_palettes_here	; BG colors from ROM, then the run-time
+	.if	!BG_CHECK			; ones (the sky follows next_col; bgcheck:
+		lda	<bg_set			; the colours as converted).
+		bne	!+
 		jsr	dyn_reset
 		jsr	dyn_update
+!:
 	.endif
 		jsr	enemies_load
 	.if	!BG_CHECK

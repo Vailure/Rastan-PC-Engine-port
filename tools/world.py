@@ -56,6 +56,13 @@ BOXES[0x15] = (0x13 * 512, 0x13 * 512 + 512 - SCREEN_W, -1024, -SCREEN_H)
 BOX_END = (0x16 * 512, 0x16 * 512 + 512 - SCREEN_W, 0, 512 - SCREEN_H)   # the boss room: square $16
 BOXES[0x16] = BOX_END
 ORDER = sorted(LAYOUT)
+# Where the arcade holds the camera lower than following Rastan would: the lava
+# hall (squares $12, $13), whose fire fills the bottom of its screen. Its camera
+# stays at world y -457 there (hall.snp, census camy 55), so the 240 lines it shows
+# (from line 8) are -449..-210; the PC Engine's 224 centred on the same middle start
+# at -441. While Rastan is in x0..x1, the camera sinks toward that y as far as his
+# head (8 px below the top) allows. (x0, x1, scroll_y)
+CAMERA_REST = (0x11 * 512, 0x13 * 512, -441)
 # Segments whose camera follows Rastan both ways (the shafts, and the boss room the
 # arcade's camera pans across).
 FREE = {s for s, v in LAYOUT.items() if v[2] == UP} | {0x16}

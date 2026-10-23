@@ -1,6 +1,12 @@
 """Build PC Engine stage data: one composited BG layer with streamed tile patterns.
 
-usage: pce_stage.py maincpu.bin snapfile palframe seg_first seg_last outdir [dynsnap]
+usage: pce_stage.py maincpu.bin snapfile palframe seg_first seg_last outdir [dynsnap [castlesnap:frame]]
+
+The castle (segments from CASTLE_SEG) has colours of its own in the arcade's palette
+line $2x (its stone), and the lava hall (HALL_SEG) in line $14x too (its fire),
+which the arcade loads as Rastan enters them; they are taken from castlesnap at
+that frame, a frame in the hall. (sim/scripts/castle.txt, from checkpoint $13 on,
+shows line $14x back to its round-start colours past the hall.)
 
 The arcade FG layer is composited over the BG layer locked at 1:1 scroll
 (the round's BG strips repeat to cover the FG width). Colors are quantized to
@@ -37,6 +43,8 @@ import world
 
 ROMDIR = os.environ.get('RASTAN_ROMS', os.path.join(os.path.dirname(__file__), '..', 'roms', 'rastan'))
 FIRST_SLOT = 0x100     # tile # of first streamed slot (VRAM $1000)
+CASTLE_SEG = 0x10      # the castle's first room (the gate loads its colours: line $2x)
+HALL_SEG = 0x12        # the lava hall, whose fire takes line $14x as well
 NUM_SLOTS = 944       # $1000-$4AFF; $4B00-$4BFF the floor spears' cells, $4C00-$4FFF stage props
 ROWS = 64
 
@@ -193,6 +201,20 @@ def main():
     idx = arcade_pixels(rom, tiles, seg0, seg1)           # [64, W, 8, 8]
     W = idx.shape[1]
     px = rgb[idx]                                         # [64, W, 8, 8, 3]
+    castle = np.array([ln['seg'] >= CASTLE_SEG for ln in world.lines()])
+    cpal = pal
+    hall = np.array([ln['seg'] == HALL_SEG for ln in world.lines()])
+    hpal = pal
+    if len(sys.argv) > 8:                                 # the castle's own colours
+        cf, cfr = sys.argv[8].rsplit(':', 1)
+        hpal = np.array(next(s.pal for s in read_snaps(cf) if s.frame == int(cfr)))
+        cpal = hpal.copy()
+        cpal[0x140:0x150] = np.array(pal)[0x140:0x150]  # (the fire's line: the hall only)
+        crgb, hrgb = to_pce_rgb(np.array(cpal)), to_pce_rgb(hpal)
+        px[:, castle] = crgb[idx[:, castle]]
+        px[:, hall] = hrgb[idx[:, hall]]
+        print(f'castle colours from {os.path.basename(cf)} frame {cfr}: '
+              f'{int((rgb != crgb).any(1).sum())} palette entries differ, {int((crgb != hrgb).any(1).sum())} more in the hall')
     code = (px[..., 0] << 6) | (px[..., 1] << 3) | px[..., 2]   # r<<6|g<<3|b packed key
 
     # Dynamic colors become virtual colors with slots of their own.
@@ -209,18 +231,26 @@ def main():
     for i, st in enumerate(dyn_states):
         DYN_REP[i] = st[0] if len(st) == 2 else st[0]
     for x, i in dyn_ids.items():
-        code[idx == x] = 512 + i
+        code[(idx == x) & ~castle[None, :, None, None]] = 512 + i   # (outdoors only)
     print(f'dynamic colors: {len(cycle)} cycling entries, {len(sky)} sky entries (at column {sky_col}), '
           f'{len(dyn_states)} virtual colors')
-    # shared color 0 = most frequent color
-    vals, counts = np.unique(code, return_counts=True)
-    color0 = int(vals[np.argmax(counts)])
-    print(f'{W} tile columns, {len(vals)} distinct 9-bit colors, color0={color0:03o}')
+    # Two sets of 16 palettes: outdoors and the castle. The camera never shows both
+    # (it stops at the castle gate outside and keeps inside the castle wall), and the
+    # game loads the set for where Rastan is. Colour 0 of each: its most frequent.
+    pset = np.broadcast_to(castle[None, :], (ROWS, W)).astype(np.int64)
+    color0s = []
+    for k in (0, 1):
+        vals, counts = np.unique(code[:, castle == bool(k)], return_counts=True)
+        color0s.append(int(vals[np.argmax(counts)]))
+        print(f'palette set {k}: {len(vals)} distinct 9-bit colors, color0={color0s[k]:03o}')
+    print(f'{W} tile columns')
 
-    # unique composited tiles
-    flat = code.reshape(-1, 64)
+    # unique composited tiles (per palette set)
+    flat = np.concatenate([code.reshape(-1, 64), pset.reshape(-1, 1)], 1)
     uniq, inv = np.unique(flat, axis=0, return_inverse=True)
     inv = inv.reshape(ROWS, W)
+    uset = uniq[:, 64]
+    uniq = uniq[:, :64]
     print('unique composited tiles', len(uniq))
 
     def reduce(cols, n=15):
@@ -231,17 +261,26 @@ def main():
             a, b = np.unravel_index(np.argmin(d), d.shape)
             cols.pop(max(a, b))
         return cols
-    sets = [frozenset(reduce(sorted(set(int(v) for v in t) - {color0}))) for t in uniq]
-    over = sum(1 for t in uniq if len(set(t.tolist()) - {color0}) > 15)
-    pals, assign = pack_palettes(sets, color0)
-    print(f'{len(pals)} palettes, sizes {[len(p) for p in pals]}, tiles needing >15 colors: {over}')
+    psets = []                    # per set: (color0, pals, rgb of each palette)
+    assign = [0] * len(uniq)
+    for k in (0, 1):
+        c0 = color0s[k]
+        ti = [i for i in range(len(uniq)) if uset[i] == k]
+        sets = [frozenset(reduce(sorted(set(int(v) for v in uniq[i]) - {c0}))) for i in ti]
+        over = sum(1 for i in ti if len(set(uniq[i].tolist()) - {c0}) > 15)
+        pals_k, asg = pack_palettes(sets, c0)
+        for i, a in zip(ti, asg):
+            assign[i] = a
+        psets.append((c0, pals_k, [np.array([unpack(c0)] + [unpack(c) for c in p]) for p in pals_k]))
+        print(f'set {k}: {len(pals_k)} palettes, sizes {[len(p) for p in pals_k]}, tiles needing >15 colors: {over}')
+    color0, pals, pal_rgb = psets[0]           # (outdoors: the dynamic colours' set)
 
     # remap each unique tile to (palette, 4bpp pattern)
-    pal_rgb = [np.array([unpack(color0)] + [unpack(c) for c in p]) for p in pals]
     pat_of = []
-    for t, pi in zip(uniq, assign):
-        cols = pal_rgb[pi]
-        keys = [color0] + list(pals[pi])
+    for t, pi, k in zip(uniq, assign, uset):
+        c0, pals_k, rgb_k = psets[k]
+        cols = rgb_k[pi]
+        keys = [c0] + list(pals_k[pi])
         c = np.array([unpack(int(v)) for v in t])
         d = cdist(c, cols)
         virt = np.array([k >= 512 for k in keys])
@@ -353,13 +392,15 @@ def main():
     open(f'{out}/stage.bin', 'wb').write(blob)
     print(f'stage.bin {len(blob)} bytes ({(len(blob) + 8191) // 8192} banks)')
 
-    vce = bytearray()
-    for i in range(16):
-        cols = [unpack(color0)] + ([unpack(c) for c in pals[i]] if i < len(pals) else [])
-        cols += [(0, 0, 0)] * (16 - len(cols))
-        for r, g, b in cols:
-            vce += ((g << 6) | (r << 3) | b).to_bytes(2, 'little')
-    open(f'{out}/palette.bin', 'wb').write(vce)
+    for k, name in ((0, 'palette.bin'), (1, 'palette_castle.bin')):
+        c0, pals_k, _ = psets[k]
+        vce = bytearray()
+        for i in range(16):
+            cols = [unpack(c0)] + ([unpack(c) for c in pals_k[i]] if i < len(pals_k) else [])
+            cols += [(0, 0, 0)] * (16 - len(cols))
+            for r, g, b in cols:
+                vce += ((g << 6) | (r << 3) | b).to_bytes(2, 'little')
+        open(f'{out}/{name}', 'wb').write(vce)
 
     # VCE update lists: entries (address, color) for every slot holding a virtual color.
     slots = {}
@@ -392,6 +433,9 @@ def main():
         f.write(f'STAGE_REGION_END = {len(regions) - 1}\n')
         f.write(f'STAGE_ROW_REACH = {world.ROW_REACH}\t; scroll_y <= last row streamed + this\n')
         f.write(f'STAGE_COL_REACH = {world.COL_REACH}\t; scroll_x >= last column streamed - this\n')
+        x0, x1, y = world.CAMERA_REST
+        f.write(f'CAM_REST_X0 = {x0}\nCAM_REST_X1 = {x1}\nCAM_REST_Y = {y}\t; the lava hall (world.CAMERA_REST)\n')
+        f.write(f'CASTLE_X = {world.square_origin(CASTLE_SEG)[0]}\t; from here on the castle\'s palettes\n')
         f.write(f'STAGE_DOOR_LINE = {next(i for i, ln in enumerate(lines) if ln["stop"])}\t; the boss room door\'s line\n')
     with open(f'{out}/stage_regions.inc', 'w') as f:
         f.write('; Generated by tools/pce_stage.py.\n')
@@ -412,17 +456,20 @@ def main():
     PH = max(y0s) + 512 - PY0
     prev = np.zeros((PH, PW, 3), np.uint8)
     arc = np.zeros((PH, PW, 3), np.uint8)
-    ref = np.array(pal, dtype=np.int32)
-    rr, gg, bb = ref & 31, (ref >> 5) & 31, (ref >> 10) & 31
-    ref8 = (np.stack([rr, gg, bb], 1) * 255 // 31).astype(np.uint8)
+    def to8(pw):
+        ref = np.array(pw, dtype=np.int32)
+        rr, gg, bb = ref & 31, (ref >> 5) & 31, (ref >> 10) & 31
+        return (np.stack([rr, gg, bb], 1) * 255 // 31).astype(np.uint8)
+    ref8s = (to8(pal), to8(cpal), to8(hpal))
     for c, ln in enumerate(lines):
         ox, oy = world.square_origin(ln['seg'])
         for r in range(ROWS):
             ty, tx = (ln['i'], r) if ln['row'] else (r, ln['i'])
             y, x = oy - PY0 + ty * 8, ox + tx * 8
             p = pat_list[colpat[r, c]]
-            prev[y:y + 8, x:x + 8] = (pal_rgb[colpal[r, c]][p] * 255 // 7)
-            arc[y:y + 8, x:x + 8] = ref8[idx[r, c]]
+            k = int(castle[c])
+            prev[y:y + 8, x:x + 8] = (psets[k][2][colpal[r, c]][p] * 255 // 7)
+            arc[y:y + 8, x:x + 8] = ref8s[2 if hall[c] else k][idx[r, c]]
     Image.fromarray(prev).save(f'{out}/preview.png')
     Image.fromarray(arc).save(f'{out}/arcade.png')
     with open(f'{out}/stage.inc', 'a') as f:

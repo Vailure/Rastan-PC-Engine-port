@@ -31,8 +31,8 @@ $(BUILD)/bot1.txt: tools/make_bot.py
 $(BUILD)/bot1.snp: sim/sim sim/maincpu.bin $(BUILD)/bot1.txt
 	sim/sim sim/maincpu.bin $(BUILD)/bot1.txt $@ 20
 
-$(STAGE)/stage.bin: tools/pce_stage.py tools/world.py tools/fgmap.py tools/bgmap.py sim/maincpu.bin $(BUILD)/bot1.snp $(BUILD)/waterfall.snp
-	cd tools && python3 pce_stage.py ../sim/maincpu.bin ../$(BUILD)/bot1.snp $(PALFRAME) 0 0x16 ../$(STAGE) ../$(BUILD)/waterfall.snp
+$(STAGE)/stage.bin: tools/pce_stage.py tools/world.py tools/fgmap.py tools/bgmap.py sim/maincpu.bin $(BUILD)/bot1.snp $(BUILD)/waterfall.snp $(BUILD)/hall.snp
+	cd tools && python3 pce_stage.py ../sim/maincpu.bin ../$(BUILD)/bot1.snp $(PALFRAME) 0 0x16 ../$(STAGE) ../$(BUILD)/waterfall.snp ../$(BUILD)/hall.snp:4400
 
 # Rastan's poses are captured from the arcade program running a scripted
 # sequence of actions (walk, crouch, attacks, jumps).

@@ -192,14 +192,9 @@ still_copy:	cly
 
 ; still_end - back from a still: the stage's colours and the HUD's sprites
 ; (the caller then restarts the stage, which streams its tiles in again).
-still_end:	jsr	screen_cut
+still_end:	jsr	screen_cut		; (stage_start loads the palettes)
 		php
 		sei
-		lda	#^palette_data
-		tam3
-		stz	VCE_CTA + 0
-		stz	VCE_CTA + 1
-		tia	palette_data, VCE_CTW, 512
 		jsr	hud_satb
 		plp
 		rts

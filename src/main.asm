@@ -60,6 +60,7 @@ stream_min:	ds	2		; Lines below this stream whatever the camera.
 row_top:	ds	2		; World y of the last row streamed ($7FFF: none).
 col_last:	ds	2		; World x of the last column streamed ($8000: none).
 cv:		ds	2		; smin/smax operands.
+bg_set:		ds	1		; BG palettes loaded: 0 outdoors, 1 the castle's.
 cl:		ds	2
 
 ; ---------------------------------------------------------------------------
@@ -77,12 +78,8 @@ core_main:	lda	#GAME_BANK		; (the boot mapping already has it there)
 		stz	<dbg_slow
 		call	init_screen
 
-		; Load all 16 BG palettes.
-		lda	#^palette_data
-		tam3
-		stz	VCE_CTA + 0
-		stz	VCE_CTA + 1
-		tia	palette_data, VCE_CTW, 512
+		cla				; The 16 BG palettes (outdoors).
+		jsr	bg_palettes
 
 		jsr	player_init
 		jsr	sound_init
@@ -112,7 +109,10 @@ core_main:	lda	#GAME_BANK		; (the boot mapping already has it there)
 		and	#$BF			; sprites, no colour cycling).
 		sta	<vdc_crl
 	.else
+		lda	<bg_set			; (outdoors only: the castle's palettes
+		bne	!+			; have no such colours)
 		jsr	dyn_update		; Waterfall cycle, sky change (VBLANK).
+!:
 	.endif
 		jsr	objects_upload		; Changed object poses' cells (VBLANK).
 		jsr	sound_update		; Music and effects (the PSG).
@@ -129,6 +129,20 @@ core_main:	lda	#GAME_BANK		; (the boot mapping already has it there)
 	.if	CAMERA_TEST
 		jsr	read_input		; Test build: the pad moves the camera.
 		jsr	stream_ahead
+		lda	<scroll_x		; The palettes of what the middle of the
+		clc				; screen shows (it straddles the castle
+		adc	#128			; wall here, which the game never shows).
+		lda	<scroll_x + 1
+		adc	#0
+		ldx	#0
+		cmp	#>CASTLE_X
+		bcc	!+
+		inx
+!:		cpx	<bg_set
+		beq	!+
+		txa
+		jsr	bg_palettes
+!:
 	.else
 		jsr	player_update		; Compute the next frame.
 		lda	<p_door			; Walked into a door.
@@ -148,6 +162,66 @@ core_main:	lda	#GAME_BANK		; (the boot mapping already has it there)
 		jsr	checkpoint_track
 	.endif
 		jmp	.frame
+
+; ---------------------------------------------------------------------------
+; bg_palettes - A = 0 (outdoors) or 1 (the castle): load that set of 16 BG
+; palettes. The castle has a set of its own (tools/pce_stage.py): the camera
+; never shows both, stopping at the gate outside and keeping inside the castle
+; wall. bg_palettes_here: the set for where Rastan is. bg_black0 / bg_color0:
+; colour 0 black (a cut) / back to the set's.
+
+bg_palettes_here:
+		ldx	#0
+		lda	<p_x + 1
+		cmp	#>CASTLE_X		; (CASTLE_X: low byte 0)
+		bcc	!+
+		inx
+!:		txa
+bg_palettes:	sta	<bg_set
+		php
+		sei
+		lda	#^palette_data
+		tam3
+		stz	VCE_CTA + 0
+		stz	VCE_CTA + 1
+		lda	<bg_set
+		bne	.castle
+		tia	palette_data, VCE_CTW, 512
+		plp
+		rts
+.castle:	tia	palette_castle, VCE_CTW, 512
+		plp
+		rts
+
+bg_black0:	php
+		sei
+		stz	VCE_CTA + 0
+		stz	VCE_CTA + 1
+		stz	VCE_CTW + 0
+		stz	VCE_CTW + 1
+		plp
+		rts
+
+bg_color0:	php
+		sei
+		lda	#^palette_data
+		tam3
+		stz	VCE_CTA + 0
+		stz	VCE_CTA + 1
+		lda	<bg_set
+		bne	.castle
+		lda	palette_data + 0
+		sta	VCE_CTW + 0
+		lda	palette_data + 1
+		sta	VCE_CTW + 1
+		plp
+		rts
+.castle:	lda	palette_castle + 0
+		sta	VCE_CTW + 0
+		lda	palette_castle + 1
+		sta	VCE_CTW + 1
+		plp
+		rts
 
 ; ---------------------------------------------------------------------------
 ; game_pause - RUN pressed: everything stops, sound too, until RUN again.
@@ -602,6 +676,7 @@ DEBUG_BANK	=	$05
 		.bank	$08
 		.page	3
 palette_data:	incbin	"palette.bin"
+palette_castle:	incbin	"palette_castle.bin"	; The castle's own set (build/stage1).
 sprite_palette:	incbin	"sprpal.bin"
 obj_palettes:	incbin	"objpal.bin"
 hud_palette:	incbin	"hudpal.bin"
