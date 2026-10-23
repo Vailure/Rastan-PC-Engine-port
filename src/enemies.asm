@@ -723,9 +723,8 @@ kind_keep:	db	0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 0, 1	; No off-scre
 kind_score:	db	$03, $02, 0, 0, $02, $03, 0, 0, $05, $05, $03, $04, $05, 0, 0, 0, 0, 0
 ; Touching Rastan (the arcade's ($29,A4), player_touch): 1, 2 drain 4, 8 units;
 ; 3 knocks him back, 12 units; 0 nothing (the woman warrior: only her sword).
-; (The item and its bat, the boss's second half and the vines: their own code;
-; the jets' type is not measured.)
-kind_touch:	db	1, 1, 3, 0, 0, 2, 3, 3, 2, 2, 0, 2, 2, 3, 3, 0, 3, 0
+; (The item and its bat, the boss's second half and the vines: their own code.)
+kind_touch:	db	1, 1, 3, 0, 0, 2, 3, 3, 2, 2, 0, 2, 2, 2, 3, 0, 3, 0
 ; Hit points (the arcade's ($3A,A4)): the gargoyle and the soldiers take two of
 ; the sword's hits (one of the stronger blows: weapon_power), the boss ten.
 kind_hp:	db	1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 1, 2, 2, 1, 10, 1, 1, 1
@@ -743,9 +742,11 @@ kind_ptab_h:	db	>grp_sect1_ptab, >grp_sect1_ptab, >grp_sect1_ptab, >grp_items_pt
 		db	>grp_boss_ptab, >grp_boss_ptab, >grp_boss_ptab, >grp_vine_ptab
 ; Body box: x = anchor + cx +/- half, y = anchor - top .. anchor + bot: the
 ; arcade's ($0446BC: an index per object into the boxes at $044CE0), for all
-; but the item, its bat, the jets and the vines (from their sprites' extent).
-kind_top:	db	20, 20, 8, 2, 25, 5, 8, 8, 16, 8, 20, 20, 20, 16, 36, 0, 8, 0
-kind_bot:	db	16, 16, 8, 30, 7, 14, 8, 8, 24, 18, 16, 16, 16, 40, 30, 0, 8, 0
+; but the item, its bat and the vines (from their sprites' extent); the jets'
+; ($37: x +/-16, y from 16 above to 64 below the column's height, 16..52) as
+; the span it sweeps.
+kind_top:	db	20, 20, 8, 2, 25, 5, 8, 8, 16, 8, 20, 20, 20, 0, 36, 0, 8, 0
+kind_bot:	db	16, 16, 8, 30, 7, 14, 8, 8, 24, 18, 16, 16, 16, 116, 30, 0, 8, 0
 kind_half:	db	12, 12, 3, 20, 16, 20, 3, 3, 12, 12, 12, 12, 12, 16, 16, 0, 3, 0
 kind_cx:	db	0, 0, 0, -8, -2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 

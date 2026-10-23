@@ -7,7 +7,8 @@
 ; erupts when Rastan is 172 px left of it: the flame rises in the pit (17
 ; frames), dies down for 18, then a column of fire flickers for 57 frames.
 ; It erupts again about 220 frames after the last start while Rastan is
-; still near. Touching the flame hurts.
+; still near. The column hurts as it shoots up (its first 11 frames: the
+; arcade's state 2, a touch of type 2: 8 units drained).
 ;
 ; ***************************************************************************
 
@@ -18,6 +19,7 @@ JET_PERIOD	=	220
 JET_RISE	=	17
 JET_PAUSE	=	18
 JET_COLUMN	=	57
+JET_SHOOT	=	11
 
 JP_RISE		=	0		; e_alt
 JP_PAUSE	=	1
@@ -93,10 +95,13 @@ jets_spawn:	cly
 !:		rts
 
 ; jet_think - X = jet.
-jet_think:	lda	e_alt, x
-		cmp	#JP_PAUSE
-		beq	!+
-		jsr	touch_hurts		; The flame hurts (rising or column).
+jet_think:	lda	e_alt, x		; The flame hurts only as the column
+		cmp	#JP_COLUMN		; shoots up, its first JET_SHOOT frames
+		bne	!+			; (the arcade's state 2: castle.snp,
+		lda	e_timer, x		; markers $4B and $57, 1475-1485; its
+		cmp	#JET_COLUMN - JET_SHOOT + 1	; box $37 then, a touch type 2).
+		bcc	!+
+		jsr	touch_hurts
 !:		dec	e_timer, x
 		bne	.r
 		lda	e_alt, x

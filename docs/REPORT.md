@@ -220,7 +220,7 @@ The project spans 44 commits (2026-10-20 → 2026-10-23).
    - parity fixes from comparing the arcade and the port checkpoint by checkpoint: the sky's 8 steps toward dusk, the floor spears appearing as the arcade's do, the camera after a restart at checkpoint 5, and gold soldiers in a game begun at a castle checkpoint.
 
 The next steps, in order, are in `docs/HANDOFF.md` §8:
-1. the fire jets' touch and the item bat's box;
+1. the item bat's box and touch;
 2. the lava hall's vines and fire sparks;
 3. more compression, if needed;
 4. rounds 2–6;

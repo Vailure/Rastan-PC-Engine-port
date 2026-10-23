@@ -300,7 +300,8 @@ Not done yet: slopes, waterfall currents, the other collision codes, rope attack
 - **Fire jets** (`src/jets.asm`): over the lava pits at world x 9870, 9966 and 10062 (the arcade's census:
   10382-10574 in segment `$14`, now the jets' room at square ($13, -1)). Each erupts when Rastan is 172 px
   left of it (the flame rises for 17 frames, dies down for 18, then a column flickers for 57) and again about 220
-  frames later while he is near; touching the flame hurts.
+  frames later while he is near. The flame hurts only in the 11 frames its column shoots up (the arcade's state 2,
+  markers `$4B`/`$57` in `castle.snp`), draining 8 units: its box then spans x ±16 and from the anchor to 116 below.
 - **The floor spears** (`src/traps.asm`, markers `$46`; `sim/scripts/spikes.txt`): two traps of two spears in
   the middle room's floor (y 320, at x 8320 and 8480). They rise 2 px a frame for 31 frames, stay 3, sink in 31,
   163 frames a cycle, the second trap 32 behind the first; standing out of the floor they kill on touch. Like the
