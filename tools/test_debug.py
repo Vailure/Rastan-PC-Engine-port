@@ -16,7 +16,8 @@ rom, noen = sys.argv[1], sys.argv[2]
 tmp = os.environ.get('TMPDIR', '/tmp')
 fails = []
 SEL, I, RIGHT, DOWN = '10', '40', '04', '02'
-CP = [(48, 295), (2096, 263), (4144, 295), (6192, 295), (8240, 455), (9808, 455)]
+# Checkpoint 5 is in the lava hall, square ($12, -1) of the world (tools/world.py): y -57.
+CP = [(48, 295), (2096, 263), (4144, 295), (6192, 295), (8240, 455), (9296, 65536 - 57)]
 
 
 def check(name, ok, detail=''):

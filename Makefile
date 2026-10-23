@@ -31,7 +31,7 @@ $(BUILD)/bot1.txt: tools/make_bot.py
 $(BUILD)/bot1.snp: sim/sim sim/maincpu.bin $(BUILD)/bot1.txt
 	sim/sim sim/maincpu.bin $(BUILD)/bot1.txt $@ 20
 
-$(STAGE)/stage.bin: tools/pce_stage.py tools/fgmap.py tools/bgmap.py sim/maincpu.bin $(BUILD)/bot1.snp $(BUILD)/waterfall.snp
+$(STAGE)/stage.bin: tools/pce_stage.py tools/world.py tools/fgmap.py tools/bgmap.py sim/maincpu.bin $(BUILD)/bot1.snp $(BUILD)/waterfall.snp
 	cd tools && python3 pce_stage.py ../sim/maincpu.bin ../$(BUILD)/bot1.snp $(PALFRAME) 0 0x16 ../$(STAGE) ../$(BUILD)/waterfall.snp
 
 # Rastan's poses are captured from the arcade program running a scripted
@@ -64,8 +64,17 @@ $(BUILD)/waterfall.txt: tools/make_bot.py
 $(BUILD)/waterfall.snp: sim/sim sim/maincpu.bin $(BUILD)/waterfall.txt
 	sim/sim sim/maincpu.bin $(BUILD)/waterfall.txt $@ 1
 
-$(PLAYER)/player.bin: tools/pce_player.py tools/player_frames.py tools/fgmap.py sim/maincpu.bin $(BUILD)/actions.snp $(BUILD)/attract.snp $(BUILD)/thrusts.snp $(BUILD)/lizard.snp $(BUILD)/waterfall.snp
-	cd tools && python3 pce_player.py ../sim/maincpu.bin ../$(BUILD)/actions.snp ../$(BUILD)/attract.snp ../$(BUILD)/thrusts.snp ../$(BUILD)/lizard.snp ../$(BUILD)/waterfall.snp ../$(PLAYER)
+# The bot swings across the chasm on the vine at x 2750 (its frames 10755-11214):
+# the vine's swing and Rastan's hanging pose, recorded every frame from 10700.
+$(BUILD)/vine.txt: $(BUILD)/bot1.txt
+	grep -v '^end' $< > $@
+	echo 'end 11400' >> $@
+
+$(BUILD)/vine.snp: sim/sim sim/maincpu.bin $(BUILD)/vine.txt
+	sim/sim sim/maincpu.bin $(BUILD)/vine.txt $@ 1 10700
+
+$(PLAYER)/player.bin: tools/pce_player.py tools/player_frames.py tools/fgmap.py tools/world.py sim/maincpu.bin $(BUILD)/actions.snp $(BUILD)/attract.snp $(BUILD)/thrusts.snp $(BUILD)/lizard.snp $(BUILD)/waterfall.snp $(BUILD)/vine.snp
+	cd tools && python3 pce_player.py ../sim/maincpu.bin ../$(BUILD)/actions.snp ../$(BUILD)/attract.snp ../$(BUILD)/thrusts.snp ../$(BUILD)/lizard.snp ../$(BUILD)/waterfall.snp ../$(BUILD)/vine.snp ../$(PLAYER)
 
 # Blue club throwers at checkpoint 2: they throw at a passive Rastan, then he
 # walks into them swinging.
@@ -106,8 +115,8 @@ $(BUILD)/item_%.snp: sim/sim sim/maincpu.bin sim/scripts/item_%.txt
 # Object (enemy, projectile, item) poses: groups and captures in tools/object_specs.py.
 # Cells start at bank $60; each group's poses and anims get the next banks.
 OBJECTS    := $(BUILD)/objects
-$(OBJECTS)/objcells.bin: tools/pce_objects.py tools/object_specs.py tools/census_all.py $(BUILD)/lizard.snp $(BUILD)/blue.snp $(BUILD)/item.snp $(BUILD)/item_fire.snp $(BUILD)/item_star.snp $(BUILD)/chimera.snp $(BUILD)/gargoyle.snp $(BUILD)/woman.snp $(BUILD)/castle.snp $(BUILD)/boss.snp
-	cd tools && python3 pce_objects.py ../$(BUILD) ../$(OBJECTS) 0x60
+$(OBJECTS)/objcells.bin: tools/pce_objects.py tools/object_specs.py tools/census_all.py $(BUILD)/lizard.snp $(BUILD)/blue.snp $(BUILD)/item.snp $(BUILD)/item_fire.snp $(BUILD)/item_star.snp $(BUILD)/chimera.snp $(BUILD)/gargoyle.snp $(BUILD)/woman.snp $(BUILD)/castle.snp $(BUILD)/boss.snp $(BUILD)/vine.snp
+	cd tools && python3 pce_objects.py ../$(BUILD) ../$(OBJECTS) 0x61
 
 # HUD cells (lives, icon, health bar, ROUND) from the arcade's HUD sprites.
 $(BUILD)/hud/hud.bin: tools/pce_hud.py $(BUILD)/actions.snp
@@ -126,7 +135,7 @@ $(BUILD)/debug/font.bin: $(HUC)/examples/asm/elmer/font/font8x8-ascii-bold-short
 	@mkdir -p $(BUILD)/debug
 	dd if=$< of=$@ bs=8 skip=16 count=64 status=none
 
-GAME_DEPS  := src/main.asm src/player.asm src/enemies.asm src/items.asm src/chimera.asm src/boulder.asm src/gargoyle.asm src/woman.asm src/jets.asm src/boss.asm src/props.asm src/hud.asm src/dyncolor.asm src/debug.asm $(BUILD)/debug/font.bin $(STAGE)/stage.bin $(PLAYER)/player.bin $(OBJECTS)/objcells.bin $(BUILD)/hud/hud.bin $(BUILD)/props/props.bin
+GAME_DEPS  := $(wildcard src/*.asm) $(BUILD)/debug/font.bin $(STAGE)/stage.bin $(PLAYER)/player.bin $(OBJECTS)/objcells.bin $(BUILD)/hud/hud.bin $(BUILD)/props/props.bin
 
 $(BUILD)/rastan.pce: $(GAME_DEPS)
 	@mkdir -p $(BUILD)/opt
@@ -155,12 +164,14 @@ $(BUILD)/god.pce: $(GAME_DEPS)
 test: $(BUILD)/camtest.pce $(BUILD)/noenemy.pce $(BUILD)/rastan.pce $(BUILD)/god.pce tools/tgrun/tgrun
 	python3 tools/test_scroll.py $(BUILD)/camtest.pce $(STAGE)/preview.png $(BUILD)/test $$(seq 62 37 2950)
 	PAD=46 python3 tools/test_scroll.py $(BUILD)/camtest.pce $(STAGE)/preview.png $(BUILD)/test_down 80 120 160 300
+	KEYS=61:2175:44,2176:2540:01,2541:2930:44,2931:3300:01 python3 tools/test_scroll.py $(BUILD)/camtest.pce $(STAGE)/preview.png $(BUILD)/test_castle $$(seq 2150 30 3300)
 	python3 tools/test_player.py $(BUILD)/noenemy.pce
 	python3 tools/test_enemies.py $(BUILD)/rastan.pce $(BUILD)/god.pce
 	python3 tools/test_effects.py $(BUILD)/noenemy.pce $(STAGE)/dyncolor.inc
 	python3 tools/test_debug.py $(BUILD)/rastan.pce $(BUILD)/noenemy.pce
 	python3 tools/test_items.py $(BUILD)/rastan.pce $(BUILD)/god.pce $(BUILD)/noenemy.pce
 	python3 tools/test_monsters.py $(BUILD)/rastan.pce $(BUILD)/god.pce
+	python3 tools/test_castle.py $(BUILD)/rastan.pce $(BUILD)/god.pce
 
 tools/tgrun/tgrun: tools/tgrun/tgrun.c
 	HUC=$(abspath $(HUC)) tools/tgrun/build.sh

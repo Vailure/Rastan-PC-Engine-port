@@ -346,7 +346,7 @@ prop_anim:	dec	<pr_animt
 ; ---------------------------------------------------------------------------
 ; props_draw - SATB entries PROP_SATB .. +3 (hidden when nothing is shown).
 
-props_draw:	php				; VDC writes: IRQ held off (see stream_column).
+props_draw:	php				; VDC writes: IRQ held off (see stream_line).
 		sei
 		st0	#VDC_MAWR
 		lda	#<(SATB_ADDR + PROP_SATB * 4)

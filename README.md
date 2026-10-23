@@ -35,6 +35,7 @@ from the ROMs (`*.bin`, snapshots, renders, disassembly) is git-ignored.
 | `src/gargoyle.asm` | The gargoyle (replays the arcade's flight path) |
 | `src/woman.asm` | The woman warrior |
 | `src/jets.asm` | Fire jets over the castle's lava |
+| `src/vines.asm` | Swinging vines |
 | `src/boss.asm` | The round 1 boss and its fire; the round clear |
 | `src/hud.asm`, `tools/pce_hud.py` | HUD from the arcade's HUD sprites |
 | `src/debug.asm` | Checkpoints (death restarts, warps) and the debug menu |
@@ -107,12 +108,23 @@ cd tools && python3 contact.py ../out/play1.snp ../out/play1.png 700 900 1100
   Parallax is lost for now and can come back later with raster splits.
 - **Colors:** quantized to 9-bit RGB, with one shared color 0 (the most common color).
   Tiles are greedily packed into 16 palettes of 15 colors. Round 1 has 71 distinct colors after quantization.
-- **VRAM streaming:** round 1 has 3,343 unique 8x8 patterns, but VRAM holds 1,024.
-  Since the stage scrolls forward only, the converter simulates a cache offline.
-  The resident window is 35 columns (33 visible, 1 preloaded, 1 lagging so that tiles still on screen
-  are never overwritten). Peak use is 928 of 1,024 slots.
-  Each column record carries the patterns it needs uploaded, plus its 64 BAT words.
-- **Size:** round 1 is 488 KB. Compressing the BAT columns and patterns is a later task,
+- **A 2-D world** (`tools/world.py`): the arcade streams its map one 512 px segment at a time. A byte per
+  segment (`$50F6C` + segment, read at `$0558E0` into `$10D0A8`) picks how: 0 streams block columns to the
+  right, 1 streams block *rows* upwards (map column k of the segment becomes the k-th row above, map row r
+  becomes block column r), 4 and 6 are transitions (the castle gate, the boss room door: the next room is
+  loaded whole). So the castle climbs: segment `$11` is a shaft above the first castle room, `$12-$14` run
+  right from its top (the lava hall, the jets' room), `$15` is a second shaft, and its door leads to the
+  boss room (`$16`). The port lays these out as 512 px squares of one world (y negative above row 0) and
+  streams it as lines of 64 tiles, columns and rows, in play order, into its 64x64 BAT. A column at x streams
+  once `scroll_x + 264 >= x`, a row at y once `scroll_y - 32 <= y`. The camera stays in a box chosen by the
+  next line to stream: it only scrolls forward in a horizontal stretch, moves freely in a shaft and in the
+  boss room, and never shows the rows a shaft took over from the room below it. Passages a shaft climbs
+  through (collision `$80`) seal behind the camera, as in the arcade (`$05A2B0`).
+- **VRAM streaming:** round 1 has about 4,000 unique 8x8 patterns, but VRAM holds 960 for the stage.
+  The converter models the BAT offline: a pattern stays resident while a BAT cell that can still be seen
+  shows it (the camera rules above say which can), and each line record carries the patterns it needs
+  uploaded, plus its 64 BAT words. Peak use is 929 of 960 slots.
+- **Size:** round 1 is 547 KB. Compressing the BAT columns and patterns is a later task,
   because six rounds at this rate would not fit in 8 Mbit.
 
 VRAM layout: BAT `$0000`, streamed tiles `$1000-$4BFF`, props `$4C00`, Rastan's two sprite pattern
@@ -188,15 +200,24 @@ Not done yet: slopes, waterfall currents, the other collision codes, rope attack
 - **Woman warrior** (`src/woman.asm`; `sim/scripts/woman.txt`): at x 4523, appearing when Rastan reaches 4355. In the
   arcade she doesn't stop to fight: she runs left at 1 px/frame hopping down the 32 px steps, turns about 50 px past
   Rastan, runs back right at 1.5 px/frame hopping up, and leaves. Touching her hurts; one hit kills her (300).
+- **Swinging vines** (`src/vines.asm`, marker `$4F`; measured on the bot's swing over the chasm at x 2750,
+  `build/vine.snp`): a vine swings through 45 poses, a step every 2 frames, 180 frames a swing. Rastan caught
+  in the air near its end hangs there (about 2 px per step right of the anchor, 93-107 px below it); jump lets
+  go, only on the side he faces (the arcade ignored a jump on the far side). The lava hall's three vines
+  (`$4F`, `$50`, `$51`) are not measured: here they swing together, and the grab distance (40 x 24 px) is a guess.
+  Its markers `$4C`, `$52-$55` just above the lava are not done.
+- **Doors** (collision `$7E`): the door at the top of the second shaft drops Rastan into the boss room at
+  (11728, 98), as in the arcade. The castle gate (also `$7E`) puts him inside the castle where the arcade does.
+- **Ceilings**: a jump that meets a ceiling stops rising but goes on (the arcade glides along under it).
 - **Castle soldiers** (`sim/scripts/castle.txt`): from x 8200 sword and mace soldiers come in turn on the lanes.
   The arcade's two share a body and differ by weapon; both walk in, stand about 60 px away and swing (3-frame steps),
   then walk on. They use the lizardmen's loop (walk in, two swings, back off, come again) with their own hit pose
   and reach; a swing that reaches costs 12 units. The arcade gave 900 for a sword and a mace soldier dying together;
   the port splits it 300 / 600.
-- **Fire jets** (`src/jets.asm`): over the lava pits at 10382, 10478 and 10574. Each erupts when Rastan is 172 px
+- **Fire jets** (`src/jets.asm`): over the lava pits at world x 9870, 9966 and 10062 (the arcade's census:
+  10382-10574 in segment `$14`, now the jets' room at square ($13, -1)). Each erupts when Rastan is 172 px
   left of it (the flame rises for 17 frames, dies down for 18, then a column flickers for 57) and again about 220
-  frames later while he is near; touching the flame hurts. They stay low at the lava surface, which in the port's
-  224-line view is below the screen while Rastan crosses at the upper level. Not done: the castle's ceiling spikes
+  frames later while he is near; touching the flame hurts. Not done: the castle's ceiling spikes
   (x 8328, 8488), whose bot captures show too little to model.
 - **The boss** (`src/boss.asm`; `sim/scripts/boss.txt`): drops in when Rastan enters the last room and lands
   (anchor y 446). It walks at him, leaps when he is far, and alternates fire (five fragments form at the top of the
@@ -249,11 +270,11 @@ captured from the bot's death on the waterfall), then cost a life.
 
 **Checkpoints and the debug menu** (`src/debug.asm`, bank 5 mapped in MPR2): the arcade's continue table
 (`$5073A`) restarts round 1 at segments 0, 4, 8, 12, 16 and 19. The arcade's camera and Rastan's position at each
-were measured by starting the arcade there. A restart fast-forwards the column stream from column 0 with the display
-off (about 1.6 s for the last checkpoint), so the VRAM tile cache ends up exactly as if the stage had been played that
-far, with no extra data. The menu draws into the tile map under the screen, with a font in the enemy sprite cells.
-Closing it re-streams the 35 resident columns: every pattern a resident column uses is still in VRAM, so this rewrites
-the tile map exactly. `tools/test_debug.py` checks that the screen comes back pixel for pixel, the warps, invincibility,
+were measured by starting the arcade there (checkpoint 5 is in the castle's lava hall row, y -57). A restart
+fast-forwards the line stream from line 0 with the display off (every line before the checkpoint's segment, then those
+the camera has reached), so the VRAM tile cache ends up exactly as if the stage had been played that far, with no extra
+data. The menu draws into the tile map under the screen, with a font in the enemy sprite cells; the tile map under its
+box is saved on opening and put back on closing. `tools/test_debug.py` checks that the screen comes back pixel for pixel, the warps, invincibility,
 and that a death at the second waterfall restarts at checkpoint 2.
 
 All VDC register sequences now run with interrupts held off. The core library's vblank handler
@@ -319,7 +340,9 @@ The headless runner is built with `tools/tgrun/build.sh`, after running `make` i
 - [x] Weapons (axe, morning star, fire sword) and round 1's weapon items, with their bats
 - [x] The rest of stage 1's enemies (approximate): chimeras, boulders, gargoyles, the woman warrior, castle soldiers, fire jets
 - [x] The round 1 boss; round clear
-- [ ] Castle ceiling spikes; score popups; the small castle flyers
+- [x] The castle as the arcade lays it out: two shafts that scroll up, the lava hall, the boss room door
+- [x] Swinging vines (the chasm at x 2750, the lava hall)
+- [ ] Castle ceiling spikes; the lava hall's `$4C`/`$52-$55` objects; score popups; the small castle flyers
 - [x] Restart at the arcade's checkpoints after a death (stream fast-forward, no preload data)
 - [x] Debug menu (SELECT): checkpoint warp, invincible, enemies on/off, health, lives, slow motion, weapon
 

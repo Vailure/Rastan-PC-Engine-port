@@ -12,7 +12,7 @@ Outputs:
                u8 ncells; ncells * (s8 dx, s8 dy); ncells * 128 bytes cell patterns
   player.inc   pose numbers, animation tables, hitbox constants
   sprpal.bin   16 colors (VCE format) for sprite palette 0
-  collision.bin 368*16 block-collision indexes (column-major) + 16-byte 4x4 patterns
+  collision.bin square table, per-square block-collision indexes, 16-byte 4x4 patterns
   poses.png    preview of the converted poses
 """
 import os
@@ -45,6 +45,8 @@ POSES_THRUSTS = {'dthr1': 532, 'dthr2': 536, 'dthr3': 540, 'uthr': 731}
 # Being hit by a lizardman (sim/scripts/lizard.txt, passive Rastan): 3 poses, 23 frames.
 POSES_HURT = {'hurt1': 667, 'hurt2': 674, 'hurt3': 682}
 # Dying (arcade state 8), from the bot's death on the first waterfall's lip: 9 poses, 57 frames.
+# Hanging from a swinging vine (bot1 run, build/vine.snp): one pose, the arcade's body 15, legs 13.
+POSES_SWING = {'swing': 11100}
 POSES_DEATH = {'die1': 1658, 'die2': 1662, 'die3': 1666, 'die4': 1674, 'die5': 1682,
                'die6': 1690, 'die7': 1698, 'die8': 1706, 'die9': 1714}
 
@@ -66,6 +68,7 @@ ANIMS = {
     'hurt': [('hurt1', 7), ('hurt2', 8), ('hurt3', 8)],
     'death': [('die1', 4), ('die2', 4), ('die3', 8), ('die4', 8), ('die5', 8), ('die6', 8),
               ('die7', 8), ('die8', 8), ('die9', 1)],
+    'swing': [('swing', 0)],
     'jatk': [('jatk1', 1), ('jatk2', 1), ('jatk3', 1), ('jatk4', 2), ('jatk5', 10),
              ('jatk4', 2), ('jatk3', 2), ('jatk2', 2), ('jatk1', 2)],
 }
@@ -124,7 +127,7 @@ def to9(rgb):
 
 def main():
     rom = open(sys.argv[1], 'rb').read()
-    snapf, attractf, thrustf, lizardf, waterf, out = sys.argv[2:8]
+    snapf, attractf, thrustf, lizardf, waterf, vinef, out = sys.argv[2:9]
     os.makedirs(out, exist_ok=True)
     for w, n in WEAPON_PARTS.items():
         WTAB[w] = part_frames(rom, PARTS[n])
@@ -139,7 +142,10 @@ def main():
     caps.update({n: hurt[f] for n, f in POSES_HURT.items()})
     die = capture(waterf, POSES_DEATH)
     caps.update({n: die[f] for n, f in POSES_DEATH.items()})
-    all_poses = list(POSES) + list(POSES_ATTRACT) + list(POSES_THRUSTS) + list(POSES_HURT) + list(POSES_DEATH)
+    sw = capture(vinef, POSES_SWING)
+    caps.update({n: sw[f] for n, f in POSES_SWING.items()})
+    all_poses = (list(POSES) + list(POSES_ATTRACT) + list(POSES_THRUSTS) + list(POSES_HURT) + list(POSES_DEATH)
+                 + list(POSES_SWING))
 
     # Compose each pose into an RGB image around the anchor (anchor at (64, 96)).
     AX, AY, W, H = 96, 112, 192, 176    # canvas around the anchor (death sparkles spread wide)
@@ -310,23 +316,34 @@ def main():
     print(f'{len(names)} poses, {sum(r[0] for r in blob_records)} cells, player.bin {len(table) + len(blob)} bytes, '
           f'{len(pal9)} sprite colors')
 
-    # ---- collision for round 1 (segments 0..$16 = 368 block columns)
-    attr, blk = fg_blocks(rom)
-    pats, colmap = {}, bytearray()
-    for c in range(368):
-        for r in range(16):
-            p = block_collision(rom, int(blk[r, c]))
-            # Engine byte: the collision code's low nibble (1 solid, 2 rope, 3/4/7
-            # floors, 6 water, 8 deadly; $7E/$80/$82 reduce to $E/0/2) and bit 4 for
-            # an enemy lane (arcade spawn marker $3A in the high byte, at the
-            # height of an enemy's anchor, 16 px above a floor).
-            k = bytes((int(v) & 0x0f) | (0x10 if int(v) >> 8 == 0x3a else 0) for v in p.flat)
-            colmap.append(pats.setdefault(k, len(pats)))
-    data = colmap + b''.join(sorted(pats, key=pats.get))
+    # ---- collision for round 1, per world square (tools/world.py):
+    #   $000  3 x 24 bytes: square id at (square x, square y + 2), $FF none
+    #   $100  256 bytes per square id: 4x4 pattern index per block, column-major
+    #   COLL_PATTERNS: 16-byte 4x4 patterns
+    # Engine byte: the collision code's low nibble (1 solid, 2 rope, 3/4/7 floors,
+    # 6 water, 8 deadly, $E a door: $7E), bit 4 for an enemy lane (arcade spawn
+    # marker $3A in the high byte, at the height of an enemy's anchor, 16 px above
+    # a floor) and bit 7 for a passage a shaft seals behind the camera ($80, $82).
+    import world
+    table = bytearray([0xFF] * 0x100)
+    squares = bytearray()
+    pats = {}
+    for sid, seg in enumerate(world.ORDER):
+        sx, sy, _ = world.LAYOUT[seg]
+        assert 0 <= sx < 24 and -2 <= sy <= 0
+        table[(sy + 2) * 24 + sx] = sid
+        coll = world.square_tiles(rom, seg)[2]
+        for bc in range(16):
+            for br in range(16):
+                p = coll[br * 4:br * 4 + 4, bc * 4:bc * 4 + 4]
+                k = bytes((int(v) & 0x0f) | (0x10 if int(v) >> 8 == 0x3a else 0) | (0x80 if int(v) & 0x80 else 0)
+                          for v in p.flat)
+                squares.append(pats.setdefault(k, len(pats)))
+    data = table + squares + b''.join(sorted(pats, key=pats.get))
     assert len(data) <= 8192
     open(f'{out}/collision.bin', 'wb').write(data)
     with open(f'{out}/player.inc', 'a') as f:
-        f.write(f'\nCOLL_PATTERNS\t= {len(colmap)}\t; offset of 4x4 patterns in collision.bin\n')
+        f.write(f'\nCOLL_PATTERNS\t= {len(table) + len(squares)}\t; offset of 4x4 patterns in collision.bin\n')
     print(f'collision: {len(pats)} patterns, {len(data)} bytes')
 
 

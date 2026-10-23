@@ -1,6 +1,7 @@
 ; ***************************************************************************
 ;
-; Rastan - fire jets over the castle's lava pits (approximate), x 10382-10574.
+; Rastan - fire jets over the castle's lava pits (approximate), x 9870-10062
+; in the lava hall (world square ($13, -1); arcade census x 10382-10574, y 280).
 ;
 ; Measured in the arcade (round 1 census, sim/scripts/castle.txt): a jet
 ; erupts when Rastan is 172 px left of it: the flame rises in the pit (17
@@ -22,10 +23,10 @@ JP_RISE		=	0		; e_alt
 JP_PAUSE	=	1
 JP_COLUMN	=	2
 
-jet_x_l:	db	<10382, <10478, <10574
-jet_x_h:	db	>10382, >10478, >10574
-jet_y_l:	db	<280, <277, <280
-jet_y_h:	db	>280, >277, >280
+jet_x_l:	db	<9870, <9966, <10062
+jet_x_h:	db	>9870, >9966, >10062
+jet_y_l:	db	<-232, <-235, <-232
+jet_y_h:	db	>-232, >-235, >-232
 
 ; jets_spawn - erupt the jets Rastan is near, once per JET_PERIOD each.
 jets_spawn:	cly

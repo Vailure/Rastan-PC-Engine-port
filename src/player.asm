@@ -44,6 +44,7 @@ ST_CATK		=	5
 ST_CLIMB	=	6
 ST_HURT		=	7
 ST_DEAD		=	8
+ST_SWING	=	9		; Hanging from a swinging vine (vines.asm moves him).
 
 PLAYER_HP	=	48		; Health bar units: arcade 12288 / 256.
 HIT_DAMAGE	=	12		; A lizardman hit: arcade 3072.
@@ -89,6 +90,10 @@ p_wtime:	ds	2		; Frames left with a taken weapon.
 p_var:		ds	1		; Weapon drawing variant: weapon - 1, or 3 + flame step.
 p_var_up:	ds	1		; Variant shown with p_pose_up.
 p_wcount:	ds	1		; Weapon pieces this frame.
+p_door:		ds	1		; Nonzero: walked into a door ($7E) this frame.
+p_vine:		ds	1		; Vine slot + 1 while ST_SWING.
+p_vine_h:	ds	1		; Its swing's half-step (signed): the side it is on.
+p_vine_last:	ds	1		; The vine let go of (slot + 1), until he lands.
 cx:		ds	2		; Collision probe position.
 cy:		ds	2
 cp:		ds	2
@@ -185,6 +190,7 @@ player_update:	lda	#COLL_BANK		; Collision data at $A000.
 		dw	st_climb
 		dw	st_hurt
 		dw	st_dead
+		dw	st_swing
 
 ; --- Standing / walking.
 st_ground:	bbr0	<padtrg, .no_jump	; JOY_B1: jump.
@@ -355,8 +361,9 @@ st_air:		bbr1	<padtrg, .no_atk	; Air attack (once per jump):
 		jsr	move_down		; Lands (and changes state) on a floor.
 		bra	.done
 .up:		jsr	move_up
-.done:		; Fell below the map: restart the stage.
+.done:		; Fell below the map (y >= 512): restart the stage.
 		lda	<p_y + 1
+		bmi	!+			; (above row 0: the castle's upper squares)
 		cmp	#2
 		bcc	!+
 		jmp	player_died
@@ -614,6 +621,39 @@ sword_box:	lda	<p_state
 .y0:		db	-28, 0, 8, -64, 8, -80
 .y1:		db	8, 24, 44, -20, 60, -20
 
+; --- On a vine: LEFT/RIGHT turn; I lets go, on the side he faces only.
+st_swing:	bbr5	<pad, !+
+		stz	<p_face
+!:		bbr7	<pad, !+
+		lda	#1
+		sta	<p_face
+!:		bbr0	<padtrg, .done
+		ldx	<p_face
+		lda	<p_vine_h
+		beq	.done
+		cpx	#0
+		bne	.left
+		tax				; Facing right: on the right (h > 0)?
+		bmi	.done
+		bra	.go
+.left:		tax
+		bpl	.done
+.go:		lda	<p_vine
+		sta	<p_vine_last
+		stz	<p_vine
+		lda	#VINE_NOGRAB
+		sta	<p_nograb
+		jmp	start_jump
+.done:		rts
+
+; enter_swing - caught a vine (vines.asm has set p_vine).
+enter_swing:	lda	#ST_SWING
+		sta	<p_state
+		stz	<p_jatk
+		lda	#<anim_swing
+		ldx	#>anim_swing
+		jmp	set_anim
+
 ; --- On a rope: UP climbs, DOWN slides, I jumps off.
 st_climb:	lda	#1
 		sta	<p_hold
@@ -831,6 +871,9 @@ player_set_weapon:
 		rts
 
 player_init_pos:
+		stz	<p_door
+		stz	<p_vine
+		stz	<p_vine_last
 		lda	#WPN_SWORD		; A life starts with the sword.
 		sta	<p_weapon
 		lda	#PLAYER_HP
@@ -947,10 +990,8 @@ move_up:	lda	<p_y			; cy = p_y - 25, cx = p_x
 		inc	<dy
 		bne	move_up
 		rts
-.bump:		lda	<p_jfall		; Rising on the table: fall back down it.
-		bne	!+
-		inc	<p_jfall
-!:		rts
+.bump:		rts				; Head on a ceiling: no higher this frame (the
+						; jump goes on: the arcade glides along it).
 
 ; ---------------------------------------------------------------------------
 ; Collision probes. Carry set = blocked / floor found.
@@ -1017,13 +1058,16 @@ wall_column:	ldx	#3
 		and	#$0F
 		cmp	#1
 		beq	.blocked
+		cmp	#$0E			; A door: a wall that takes him through.
+		beq	.door
 		dex
 		bpl	.loop
 		clc
 		rts
+.door:		sta	<p_door
 .blocked:	sec
 		rts
-.heights:	db	20, 4, -12, -28
+.heights:	db	20, 4, -12, -20		; (not the top of the head: he glides under ceilings)
 
 ; is_floor - carry set if collision code A is something to stand on.
 is_floor:	and	#$0F
@@ -1037,57 +1081,84 @@ is_floor:	and	#$0F
 		rts
 .tab:		db	0, 1, 0, 1, 1, 0, 0, 1
 
-; coll_at - collision code at world (cx, cy); 0 outside the map, 1 past
-; the end of the stage or inside a solid prop. Data (MPR5 $A000): 16 bytes per block column, then
-; 16-byte 4x4 patterns at COLL_PATTERNS.
-coll_at:	lda	<prop_solid		; A solid prop (the cave block) first.
+; coll_at - collision code at world (cx, cy). Outside the world's squares:
+; 0 above the top or below the bottom row of squares and above row 0
+; (open sky), 1 elsewhere (walls). 1 inside a solid prop, and on a passage
+; ($80) that a shaft has sealed: at or below row_top + SEAL_DEPTH.
+; Data (MPR5 $A000, tools/pce_player.py): square ids at (x >> 9, (y >> 9) + 2),
+; 256 bytes per square (block columns of 16), 16-byte 4x4 patterns.
+SEAL_DEPTH	=	480
+coll_at:	phx				; (X and Y kept)
+		phy
+		jsr	coll_world
+		ply
+		plx
+		rts
+coll_world:	lda	<prop_solid		; A solid prop (the cave block) first.
 		beq	.map
 		jsr	prop_coll
 		bcc	.map
 		lda	#1
 		rts
-.map:		lda	<cy + 1
-		cmp	#2			; Also rejects negative ($FF).
-		bcs	.empty
-		sta	<ctx + 1
-		lda	<cy			; cty = cy >> 3
-		lsr	<ctx + 1
+.map:		lda	<cy + 1			; Square row (y >> 9) + 2: 0..2.
+		cmp	#$80
 		ror	a
-		lsr	<ctx + 1
-		ror	a
-		lsr	<ctx + 1
-		ror	a
-		sta	<cty
-		lda	<cx + 1			; ctx = cx >> 3
-		bmi	.empty
-		sta	<ctx + 1
-		lda	<cx
-		lsr	<ctx + 1
-		ror	a
-		lsr	<ctx + 1
-		ror	a
-		lsr	<ctx + 1
-		ror	a
-		sta	<ctx
-		and	#$FC			; cp = (ctx & ~3) << 2 = block column * 16
-		sta	<cp
-		lda	<ctx + 1
-		sta	<cp + 1
-		asl	<cp
-		rol	<cp + 1
-		asl	<cp
-		rol	<cp + 1
-		lda	<cp + 1
-		cmp	#>(COLL_PATTERNS)	; Past the last block column?
+		clc
+		adc	#2
+		cmp	#3
+		bcs	.empty			; Below row 0, or far above.
+		tax
+		lda	<cx + 1			; Square column x >> 9: 0..23.
+		bmi	.solid
+		lsr	a
+		cmp	#24
 		bcs	.solid
+		clc
+		adc	.rows, x
+		tay
+		lda	$A000, y		; Square id.
+		cmp	#$FF
+		bne	.square
+		cpx	#2			; None: sky above row 0, else wall.
+		bcc	.empty
+.solid:		lda	#1
+		rts
+.empty:		cla
+		rts
+.rows:		db	0, 24, 48
+
+.square:	inc	a			; cp = $A100 + id * 256 + block column * 16 + block row
+		ora	#$A0
+		sta	<cp + 1
+		lda	<cx			; block column = (cx >> 5) & 15
+		sta	<ctx
+		lda	<cx + 1
+		lsr	a
+		ror	<ctx
+		lsr	a
+		ror	<ctx
+		lsr	a
+		ror	<ctx			; ctx = cx >> 3 (low 8 bits)
+		lda	<cy
+		sta	<cty
+		lda	<cy + 1
+		lsr	a
+		ror	<cty
+		lsr	a
+		ror	<cty
+		lsr	a
+		ror	<cty			; cty = cy >> 3 (low 8 bits)
+		lda	<ctx
+		asl	a			; (ctx >> 2) & 15 = block column, * 16
+		asl	a
+		and	#$F0
+		sta	<cp
 		lda	<cty
 		lsr	a
 		lsr	a
+		and	#$0F
 		ora	<cp
 		sta	<cp
-		lda	<cp + 1
-		ora	#$A0
-		sta	<cp + 1
 		lda	[cp]			; Pattern number.
 		sta	<cp
 		stz	<cp + 1
@@ -1115,10 +1186,27 @@ coll_at:	lda	<prop_solid		; A solid prop (the cave block) first.
 		adc	#>($A000 + COLL_PATTERNS)
 		sta	<cp + 1
 		lda	[cp]
+		bmi	.passage
 		rts
-.empty:		cla
+.passage:	sta	<ctmp			; Sealed: cy >= row_top + SEAL_DEPTH?
+		lda	<row_top
+		clc
+		adc	#<SEAL_DEPTH
+		sta	<cp
+		lda	<row_top + 1
+		adc	#>SEAL_DEPTH
+		bvs	.open			; (no rows streamed yet)
+		sta	<cp + 1
+		lda	<cy
+		cmp	<cp
+		lda	<cy + 1
+		sbc	<cp + 1
+		bvc	!+
+		eor	#$80
+!:		bmi	.open
+		lda	#1
 		rts
-.solid:		lda	#1
+.open:		lda	<ctmp
 		rts
 
 ; ---------------------------------------------------------------------------
@@ -1175,96 +1263,138 @@ anim_tick:	lda	<p_hold
 .done:		rts
 
 ; ---------------------------------------------------------------------------
-; Camera: scroll forward when Rastan passes screen x 136; keep his feet
-; between screen y 80 and 176.
+; Camera: follows Rastan's x 136 px from the screen's left (in a horizontal
+; square only forwards; in a shaft both ways) and keeps his feet between
+; screen y 80 and 176; then camera_clamp holds it in the box of the region
+; of the next line to stream (stage_regions.inc).
 
-camera_update:	lda	<p_x			; tmp = p_x - 136
+camera_update:	lda	<p_x			; cv = p_x - 136
 		sec
 		sbc	#136
-		sta	<ctx
+		sta	<cv
 		lda	<p_x + 1
 		sbc	#0
-		sta	<ctx + 1
-		bmi	.vert
-		cmp	<scroll_x + 1		; if tmp > scroll_x: scroll_x = tmp
-		bcc	.vert
+		sta	<cv + 1
+		ldx	<cam_region
+		lda	region_free, x
 		bne	.setx
-		lda	<ctx
-		cmp	<scroll_x
-		bcc	.vert
-		beq	.vert
-.setx:		lda	<ctx			; Clamp to MAX_SCROLL_X.
+		lda	<scroll_x		; Forwards only: cv = max(cv, scroll_x).
+		sta	<cl
+		lda	<scroll_x + 1
+		sta	<cl + 1
+		jsr	smax
+.setx:		lda	<cv
 		sta	<scroll_x
-		lda	<ctx + 1
-		sta	<scroll_x + 1
-		cmp	#>MAX_SCROLL_X
-		bcc	.vert
-		bne	.clampx
-		lda	<scroll_x
-		cmp	#<MAX_SCROLL_X
-		bcc	.vert
-.clampx:	lda	#<MAX_SCROLL_X
-		sta	<scroll_x
-		lda	#>MAX_SCROLL_X
+		lda	<cv + 1
 		sta	<scroll_x + 1
 
-.vert:		; feet = p_y + 24; low = feet - 176, high = feet - 80.
+		; feet = p_y + 24: scroll_y in [feet - 176, feet - 80].
+		lda	<scroll_y
+		sta	<cv
+		lda	<scroll_y + 1
+		sta	<cv + 1
 		lda	<p_y
 		clc
 		adc	#<(24 - 176)
-		sta	<ctx
+		sta	<cl
 		lda	<p_y + 1
 		adc	#>(24 - 176)
-		sta	<ctx + 1		; scroll_y must be >= ctx
-		bmi	.lowok
-		cmp	<scroll_y + 1
-		bcc	.lowok
-		bne	.sety_low
-		lda	<ctx
-		cmp	<scroll_y
-		bcc	.lowok
-		beq	.lowok
-.sety_low:	lda	<ctx
-		sta	<scroll_y
-		lda	<ctx + 1
-		sta	<scroll_y + 1
-.lowok:		lda	<p_y			; scroll_y must be <= feet - 80
+		sta	<cl + 1
+		jsr	smax
+		lda	<p_y
 		clc
 		adc	#<(24 - 80)
-		sta	<ctx
+		sta	<cl
 		lda	<p_y + 1
 		adc	#>(24 - 80)
-		sta	<ctx + 1
-		bpl	!+
-		stz	<ctx			; Clamp at 0.
-		stz	<ctx + 1
-!:		lda	<scroll_y + 1
-		cmp	<ctx + 1
-		bcc	.clampy
-		bne	.sety_high
-		lda	<scroll_y
-		cmp	<ctx
-		bcc	.clampy
-		beq	.clampy
-.sety_high:	lda	<ctx
+		sta	<cl + 1
+		jsr	smin
+		lda	<cv
 		sta	<scroll_y
-		lda	<ctx + 1
+		lda	<cv + 1
 		sta	<scroll_y + 1
-.clampy:	lda	<scroll_y + 1		; Clamp to MAX_SCROLL_Y.
-		beq	.done
+		; (fall through)
+
+; camera_clamp - scroll_x, scroll_y into the box of cam_region; scroll_y also
+; stays <= row_top + STAGE_ROW_REACH (the BAT rows a shaft took over).
+camera_clamp:	ldx	<cam_region
+		lda	<scroll_x
+		sta	<cv
+		lda	<scroll_x + 1
+		sta	<cv + 1
+		lda	region_x0_l, x
+		sta	<cl
+		lda	region_x0_h, x
+		sta	<cl + 1
+		jsr	smax
+		lda	region_x1_l, x
+		sta	<cl
+		lda	region_x1_h, x
+		sta	<cl + 1
+		jsr	smin
+		lda	<cv
+		sta	<scroll_x
+		lda	<cv + 1
+		sta	<scroll_x + 1
 		lda	<scroll_y
-		cmp	#<MAX_SCROLL_Y
-		bcc	.done
-		lda	#<MAX_SCROLL_Y
+		sta	<cv
+		lda	<scroll_y + 1
+		sta	<cv + 1
+		lda	<row_top
+		clc
+		adc	#<STAGE_ROW_REACH
+		sta	<cl
+		lda	<row_top + 1
+		adc	#>STAGE_ROW_REACH
+		sta	<cl + 1
+		bvs	!+			; (no rows yet: $7FFF + reach overflows)
+		jsr	smin
+!:		lda	region_y1_l, x
+		sta	<cl
+		lda	region_y1_h, x
+		sta	<cl + 1
+		jsr	smin
+		lda	region_y0_l, x
+		sta	<cl
+		lda	region_y0_h, x
+		sta	<cl + 1
+		jsr	smax
+		lda	<cv
 		sta	<scroll_y
-.done:		rts
+		lda	<cv + 1
+		sta	<scroll_y + 1
+		rts
+
+; smax - cv = max(cv, cl); smin - cv = min(cv, cl) (signed 16-bit). Keep X.
+smax:		lda	<cv
+		cmp	<cl
+		lda	<cv + 1
+		sbc	<cl + 1
+		bvc	!+
+		eor	#$80
+!:		bpl	scopy_done
+scopy:		lda	<cl
+		sta	<cv
+		lda	<cl + 1
+		sta	<cv + 1
+scopy_done:	rts
+smin:		lda	<cl
+		cmp	<cv
+		lda	<cl + 1
+		sbc	<cv + 1
+		bvc	!+
+		eor	#$80
+!:		bmi	scopy
+		rts
+
+		include	"stage_regions.inc"
 
 ; ---------------------------------------------------------------------------
 ; player_draw - upload a new pose into the idle buffer, then write the SATB.
 ; Runs after the frame's logic; the SATB DMA at the next VBLANK picks it up,
 ; together with the scroll registers written then.
 
-player_draw:	php				; VDC writes: IRQ held off (see stream_column).
+player_draw:	php				; VDC writes: IRQ held off (see stream_line).
 		sei
 		jsr	anim_tick
 		; Weapon variant: weapon - 1; the fire sword's flame steps every 2 frames.

@@ -1,0 +1,133 @@
+"""test_castle.py rastan.pce god.pce : the castle's shafts, the swinging vines, the door into
+the boss room, headless.
+
+The arcade streams some of round 1's map segments upwards (tools/world.py): the castle
+climbs two shafts. Routes (god build, debug-menu warps to checkpoints 4 and 5):
+  A  checkpoint 4 (the castle's first room): the ropes up into shaft 1 (its rows stream,
+     the camera follows up), out at its top into the lava hall, across on the three
+     swinging vines, onto the far side;
+  B  checkpoint 5 (past the lava hall): the jets' room, shaft 2, the door at its top into
+     the boss room (dropped in at (11728, 98) as in the arcade), the boss, round clear;
+  V  checkpoint 1: the vine over the chasm at x 2750, caught and let go of, landing on
+     the far ledge (the arcade bot: 2863, 135).
+"""
+import os
+import subprocess
+import sys
+import numpy as np
+from PIL import Image
+from peek import peek
+from trace_player import TGRUN
+
+rom, god = sys.argv[1:3]
+tmp = os.environ.get('TMPDIR', '/tmp')
+fails = []
+SEL, RIGHT, I = '10', '04', '40'
+ST_CLIMB, ST_DEAD, ST_SWING = 6, 8, 9
+
+
+def check(name, ok, detail=''):
+    print(('PASS ' if ok else 'FAIL ') + name + (f'  ({detail})' if detail else ''))
+    if not ok:
+        fails.append(name)
+
+
+def w16(v):
+    return v[0] | v[1] << 8
+
+
+def s16(v):
+    return (w16(v) ^ 0x8000) - 0x8000
+
+
+def warp(cp):
+    return [100, 100, SEL] + sum([[110 + 6 * k, 110 + 6 * k, RIGHT] for k in range(cp)], []) + [150, 150, I]
+
+
+VARS = {'p_x': 2, 'p_y': 2, 'p_state': 1, 'p_vine': 1, 'scroll_x': 2, 'scroll_y': 2, 'cam_region': 1,
+        'next_col': 2, 'score': 3, 'loop_cnt': 2}
+OBJ = {'e_state': 17, 'e_kind': 17}
+
+
+def run(r, end, keys, extra=None):
+    a = peek(r, end, keys, VARS)
+    if extra:
+        b = peek(r, end, keys, extra)
+        a = [dict(**x, **y) for x, y in zip(a, b)]
+    return a
+
+
+ROUTE_A = [200, 449, '04', 450, 453, '08', 470, 473, '41', 474, 700, '01', 710, 713, '48', 714, 940, '08',
+           945, 948, '04', 960, 963, '41', 964, 1190, '01', 1200, 1203, '44', 1204, 1460, '04', 1461, 1464, '08',
+           1480, 1483, '41', 1484, 1720, '01', 1730, 1733, '48', 1734, 1960, '08', 1961, 1980, '04', 1985, 1988,
+           '41', 1989, 2340, '01', 2350, 2353, '44', 2354, 2519, '04', 2525, 2528, '41', 2529, 2720, '01',
+           2730, 2733, '44', 2734, 2840, '04', 2956, 2959, '45', 2960, 3000, '04', 3095, 3098, '44', 3099,
+           3140, '04', 3200, 3203, '44', 3204, 3240, '04', 3300, 3303, '44', 3304, 3330, '04']
+
+ROUTE_B = [200, 830, '05'] + sum([[f, f + 3, I] for f in range(220, 830, 60)], []) + [
+    831, 1100, '04', 864, 867, I, 914, 917, I, 964, 967, I, 1101, 1103, '08', 1110, 1113, '41', 1114, 1470, '01',
+    1480, 1483, '48', 1484, 1572, '08', 1590, 1593, '41', 1594, 1830, '01', 1840, 1843, '48', 1844, 1990, '08',
+    1991, 1995, '04', 2010, 2013, '41', 2014, 2280, '01', 2290, 2293, '44', 2294, 2491, '04', 2510, 2513, '41',
+    2514, 2760, '01', 2770, 2773, '48', 2774, 3100, '08'] + sum([[f, f + 1, '80'] for f in range(3150, 3800, 25)], [])
+
+ROUTE_V = [200, 350, '04', 360, 363, '41', 364, 600, '01', 610, 613, '44', 614, 1300, '04', 730, 733, '44',
+           832, 835, '45', 965, 968, '44']
+
+# A: up shaft 1 and across the lava hall.
+r = run(god, 3400, warp(4) + ROUTE_A)
+ys = [s16(f['scroll_y']) for f in r]
+check('climbing out of the first room, the camera follows up into shaft 1', min(ys[:2800]) <= -500,
+      f'highest scroll_y {min(ys[:2800])}')
+top = next((i for i, f in enumerate(r) if f['cam_region'][0] == 2), None)
+check("once the shaft's rows have all streamed, the lava hall's columns come next",
+      top is not None and w16(r[top]['next_col']) >= 0x12 * 64, f"frame {top}")
+vines = sorted({f['p_vine'][0] for f in r if f['p_state'][0] == ST_SWING})
+check('the three vines over the lava are caught in turn', len(vines) == 3, f'vine slots {vines}')
+end = r[-1]
+check('he lands past the lava', w16(end['p_x']) >= 9240 and s16(end['p_y']) == -345
+      and all(f['p_state'][0] != ST_DEAD for f in r[2800:]), f"at ({w16(end['p_x'])}, {s16(end['p_y'])})")
+lc = [w16(f['loop_cnt']) for f in r]
+slow = min((lc[i + 60] - lc[i]) & 0xffff for i in range(300, len(r) - 60, 60))
+check('no slowdown on the way (60 logic frames a second)', slow >= 59, f'fewest {slow}')
+
+# B: shaft 2, the door, the boss.
+r = run(god, 3800, warp(5) + ROUTE_B, OBJ)
+door = next((i for i, f in enumerate(r) if w16(f['p_x']) == 11728), None)
+check('the door at the top of shaft 2 drops him into the boss room at (11728, 98)',
+      door is not None and s16(r[door - 1]['p_y']) < -800 and 98 <= s16(r[door]['p_y']) < 130,
+      f"frame {door}, from y {s16(r[door - 1]['p_y']) if door else None}")
+boss = next((i for i in range(door or 0, len(r)) if any(r[i]['e_kind'][k] == 14 and r[i]['e_state'][k]
+                                                       for k in range(6, 9))), None) if door else None
+check('the boss comes', boss is not None and boss - door < 60, f'frame {boss}')
+clear = next((i for i in range(door or 0, len(r)) if w16(r[i]['p_x']) == 48), None) if door else None
+check('killing it clears the round (5000 points)', clear is not None and r[clear]['score'][0] == 0x50,
+      f"frame {clear}, score {r[clear]['score'] if clear else None}")
+
+# V: the vine over the chasm.
+r = run(god, 1100, warp(1) + ROUTE_V)
+sw = [i for i, f in enumerate(r) if f['p_state'][0] == ST_SWING]
+check('the vine at x 2750 is caught from the cliff', sw and 2700 <= w16(r[sw[0]]['p_x']) <= 2780,
+      f"at {(w16(r[sw[0]]['p_x']), s16(r[sw[0]]['p_y'])) if sw else None}")
+xs = [w16(r[i]['p_x']) for i in sw]
+check('it swings him out and back (about 43 px either side of its anchor)', sw and max(xs) - min(xs) >= 70, f'x {min(xs) if xs else 0}..{max(xs) if xs else 0}')
+land = next((i for i in range(sw[-1] if sw else 0, len(r)) if r[i]['p_state'][0] in (0, 1)), None)
+check('jumping off on the far side lands on the ledge (arcade: 2863, 135)', land is not None
+      and 2840 <= w16(r[land]['p_x']) <= 2890 and s16(r[land]['p_y']) == 135,
+      f"at {(w16(r[land]['p_x']), s16(r[land]['p_y'])) if land else None}")
+
+
+# The debug menu in a shaft: the tile map comes back.
+def shot(keys, frame):
+    out = os.path.join(tmp, f'castle_{os.getpid()}.ppm')
+    subprocess.run([TGRUN, god, str(frame), out] + [str(k) for k in keys], check=True, capture_output=True)
+    return np.array(Image.open(out))[:224, 32:288]
+
+
+base = warp(4) + ROUTE_A[:ROUTE_A.index(2340) + 2]
+plain = shot(base, 2345)                       # (on a rope top, still)
+menu = shot(base + [2300, 2300, SEL, 2310, 2310, SEL], 2345)
+diff = (plain != menu).any(-1).mean() * 100
+check('in a shaft, closing the debug menu restores the screen', diff == 0, f'{diff:.2f}% pixels differ')
+
+print(f'{len(fails)} failure(s)')
+sys.exit(1 if fails else 0)

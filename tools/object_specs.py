@@ -20,6 +20,7 @@ FILES = {
     'woman': 'woman.snp',        # sim/scripts/woman.txt: the woman warrior (x 4523)
     'castle': 'castle.snp',      # sim/scripts/castle.txt: castle soldiers (mace slot 4, sword slot 6)
     'boss': 'boss.snp',          # sim/scripts/boss.txt: the boss (slot 17), its fire (slots 18-22)
+    'vine': 'vine.snp',          # the bot run (build/vine.txt): the vine at x 2750, slot 0
 }
 
 GROUPS = {
@@ -95,6 +96,10 @@ GROUPS = {
         ('frag_form', 'boss', 18, 1107, 1136),
         ('frag_fly', 'boss', 18, 1140, 1160),
     ],
+    # Swinging vines (marker $4F, arcade slot 0): one whole swing, 180 frames.
+    'vine': [
+        ('vine_swing', 'vine', 0, 10755, 10934),
+    ],
 }
 
 # Scripted flights, replayed relative to the spawn point:
@@ -105,7 +110,7 @@ PATHS = {
 
 # Pieces per pose (src/enemies.asm slot buffers): walkers 11 (the default), items and
 # bats 4, specials 13; projectiles 2 (single-piece here).
-GROUP_MAX = {'items': 4, 'rocks': 13, 'gargoyle': 13, 'jets': 13, 'boss': 13}
+GROUP_MAX = {'items': 4, 'rocks': 13, 'gargoyle': 13, 'jets': 13, 'boss': 13, 'vine': 13}
 
 # Poses the engine refers to by number: (group, animation, step) -> symbol.
 POSE_SYMBOLS = {

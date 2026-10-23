@@ -3,7 +3,8 @@
  * snapshots of video/work RAM for asset and behavior extraction.
  * No video or sound emulation: the sound CPU link always reports "consumed".
  *
- * usage: sim maincpu.bin script.txt out.snp [every_n_frames]
+ * usage: sim maincpu.bin script.txt out.snp [every_n_frames [from_frame]]
+ *   (with from_frame, nothing is recorded before it)
  * script lines:
  *   in   <frame> <p1hex> <syshex>          set inputs from frame on (active-low bits)
  *   poke <from> <to> <addr> <b|w|l> <val>  write value at start of each frame in range
@@ -217,6 +218,7 @@ int main(int argc, char **argv)
     pc_count = calloc(0x30000, sizeof *pc_count);
     load_script(argv[2]);
     int every = argc > 4 ? atoi(argv[4]) : 1;
+    int rec_from = argc > 5 ? atoi(argv[5]) : 0;
     gzFile g = gzopen(argv[3], "wb1");
     if (strcmp(argv[3], "/dev/null")) {
         char on[1024];
@@ -250,7 +252,7 @@ int main(int argc, char **argv)
             for (uint32_t i = 0; i < 0x30000; i++) if (prof_hits[i]) fprintf(pf, "%06x %u\n", i * 2, prof_hits[i]);
             fclose(pf); free(prof_hits); prof_hits = NULL;
         }
-        if (frame % every == 0) write_snapshot(g);
+        if (frame >= rec_from && frame % every == 0) write_snapshot(g);
         /* vblank at end of frame: IRQ5, held until acknowledged */
         irq_pending = 1;
         m68k_set_irq(5);

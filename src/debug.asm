@@ -5,16 +5,16 @@
 ; Checkpoints are the arcade's (continue table $5073A): round 1 restarts at
 ; segments 0, 4, 8, 12, 16 and 19. A death restarts at the last one the camera
 ; has reached, with the arcade's camera and Rastan's position there. Restarting
-; fast-forwards the column stream from column 0 with the display off, so the
+; fast-forwards the line stream from line 0 with the display off (every line
+; before the checkpoint's segment, then those the camera has reached), so the
 ; VRAM tile cache ends up exactly as if the stage had been played to there.
 ;
 ; Debug menu: SELECT opens it (the core's soft reset is RUN held + SELECT).
 ; UP/DOWN pick a line, LEFT/RIGHT change a value, I applies, SELECT or II
 ; closes. While it is open the game is frozen, sprites are hidden, and the
-; menu font sits in the enemy sprite cells. Closing re-streams the resident
-; window of columns, which rewrites the tile map exactly (every pattern a
-; window column uses is still resident), reloads the enemy cells and the BG
-; colors, and the game carries on.
+; menu font sits in the enemy sprite cells. The tile map under the box is
+; saved on opening and put back on closing; closing also reloads the enemy
+; cells and the BG colors, and the game carries on.
 ;
 ; This code lives in bank DEBUG_BANK, mapped in MPR2 ($4000) all the time.
 ;
@@ -49,16 +49,22 @@ dbg_digits:	ds	1
 dbg_t:		ds	1		; put_char scratch.
 dbg_line:	ds	1
 
+		.bss
+dbg_save:	ds	MENU_W * MENU_H * 2	; The tile map under the menu.
+
 		.code
 
 ; ---------------------------------------------------------------------------
-; Checkpoints: camera x, camera y (port scroll_y), Rastan's x and y (world).
-; Measured in the arcade by starting the round at each checkpoint.
+; Checkpoints: camera x, camera y (port scroll_y), Rastan's x and y (world,
+; tools/world.py: segment $13 is the lava hall, square ($12, -1)), and the
+; first line of the camera's segment (64 per segment; the boss warp also takes
+; the door line). Measured in the arcade by starting the round at each one.
 
-cp_cam_x:	dw	0, 2048, 4096, 6144, 8192, 9728, 11160
-cp_cam_y:	dw	192, 160, 192, 192, 265, 265, 265
-cp_p_x:		dw	48, 2096, 4144, 6192, 8240, 9808, 11320
-cp_p_y:		dw	295, 263, 295, 295, 455, 455, 455
+cp_cam_x:	dw	0, 2048, 4096, 6144, 8192, 9216, 11264
+cp_cam_y:	dw	192, 160, 192, 192, 265, -247, 265
+cp_p_x:		dw	48, 2096, 4144, 6192, 8240, 9296, 11320
+cp_p_y:		dw	295, 263, 295, 295, 455, -57, 455
+cp_line:	dw	0, 0, 0, 0, 0, $12 * 64, STAGE_DOOR_LINE + 1
 
 ; checkpoint_track - once a frame: the checkpoint moves on when the camera
 ; reaches the next one's segment (the arcade picks it by segment).
@@ -94,9 +100,14 @@ checkpoint_start:
 		lda	cp_cam_y + 1, x
 		sta	<scroll_y + 1
 		phx
-		stz	<next_col		; Fast-forward the stream to the camera.
-		stz	<next_col + 1
+		jsr	stream_reset		; Fast-forward the stream to the camera.
+		lda	cp_line, x
+		sta	<stream_min
+		lda	cp_line + 1, x
+		sta	<stream_min + 1
 		jsr	stream_ahead
+		stz	<stream_min
+		stz	<stream_min + 1
 		jsr	player_init_pos
 		plx
 		lda	cp_p_x, x
@@ -121,6 +132,63 @@ checkpoint_start:
 		rts
 
 ; ---------------------------------------------------------------------------
+; door_enter - Rastan walked into a door ($7E). The castle gate takes him in,
+; dropping in where the arcade puts him (it loads the castle's first room
+; then); the door at the top of the second shaft into the boss room from
+; above, as in the arcade (Rastan at (11728, 98), falling).
+
+door_enter:	stz	<p_door
+		lda	<p_y + 1
+		bmi	.boss			; Above row 0: the shaft's door.
+		lda	<p_x + 1		; The gate: before the castle.
+		cmp	#>8192
+		bcs	.no
+		lda	#<8240
+		sta	<p_x
+		lda	#>8240
+		sta	<p_x + 1
+		lda	#<384
+		sta	<p_y
+		stz	<p_y + 1
+		jmp	start_fall
+.boss:
+		call	set_dspoff
+		lda	#<(STAGE_DOOR_LINE + 1)	; The rest of the shaft, the door line,
+		sta	<stream_min		; and what the camera needs.
+		lda	#>(STAGE_DOOR_LINE + 1)
+		sta	<stream_min + 1
+		lda	#<(11728 - 136)
+		sta	<scroll_x
+		lda	#>(11728 - 136)
+		sta	<scroll_x + 1
+		stz	<scroll_y
+		stz	<scroll_y + 1
+		jsr	stream_ahead
+		stz	<stream_min
+		stz	<stream_min + 1
+		lda	#$FF			; No shaft above any more: no seals.
+		sta	<row_top
+		lda	#$7F
+		sta	<row_top + 1
+		lda	#<11728
+		sta	<p_x
+		lda	#>11728
+		sta	<p_x + 1
+		lda	#98
+		sta	<p_y
+		stz	<p_y + 1
+		jsr	start_fall
+		jsr	enemies_reset
+		jsr	camera_update
+		jsr	set_scroll_regs
+		jsr	player_draw
+		jsr	props_draw
+		jsr	enemies_draw
+		call	wait_vsync
+		call	set_dspon
+.no:		rts
+
+; ---------------------------------------------------------------------------
 ; debug_check - once a frame, before the game logic: SELECT opens the menu.
 
 debug_check:	lda	joytrg
@@ -143,6 +211,8 @@ debug_menu:	php
 		lda	<cur_cp
 		sta	<dbg_cp
 		stz	<dbg_sel
+		jsr	menu_origin
+		jsr	menu_save
 		jsr	menu_draw
 
 .loop:		call	wait_vsync
@@ -299,7 +369,7 @@ menu_apply:	lda	<dbg_sel
 ; menu_close - put the stage back and carry on.
 menu_close:	php
 		sei
-		jsr	restream_window		; Tile map back as it was.
+		jsr	menu_restore		; Tile map back as it was.
 		jsr	menu_close_quiet
 		plp
 		lda	<dbg_noenemy		; Enemies switched off: clear them.
@@ -325,31 +395,70 @@ menu_close_quiet:
 		plp
 		rts
 
-; restream_window - stream the resident window of columns again.
-restream_window:
-		lda	<next_col		; tmp = next_col (end)
-		sta	<tmp
-		lda	<next_col + 1
-		sta	<tmp + 1
-		lda	<next_col		; next_col -= STAGE_WINDOW (min 0)
-		sec
-		sbc	#STAGE_WINDOW
-		sta	<next_col
-		lda	<next_col + 1
-		sbc	#0
-		sta	<next_col + 1
-		bcs	.loop
-		stz	<next_col
-		stz	<next_col + 1
-.loop:		lda	<next_col
-		cmp	<tmp
-		bne	.go
-		lda	<next_col + 1
-		cmp	<tmp + 1
-		beq	.done
-.go:		jsr	stream_column
-		bra	.loop
-.done:		rts
+; menu_save / menu_restore - the tile map under the menu box, to and from
+; dbg_save. IRQ off for menu_restore (as for put_char).
+menu_save:	php
+		sei
+		jsr	box_first
+.loop:		jsr	bat_addr
+		st0	#VDC_MARR
+		sta	VDC_DL
+		stx	VDC_DH
+		st0	#VDC_VRR
+		lda	VDC_DL
+		sta	[dbg_ptr]
+		lda	VDC_DH
+		ldy	#1
+		sta	[dbg_ptr], y
+		jsr	box_next
+		bcc	.loop
+		plp
+		rts
+
+menu_restore:	jsr	box_first
+.loop:		jsr	bat_addr
+		st0	#VDC_MAWR
+		sta	VDC_DL
+		stx	VDC_DH
+		st0	#VDC_VWR
+		lda	[dbg_ptr]
+		sta	VDC_DL
+		ldy	#1
+		lda	[dbg_ptr], y
+		sta	VDC_DH
+		jsr	box_next
+		bcc	.loop
+		rts
+
+; box_first / box_next - (dbg_x, dbg_y) over the menu box, dbg_ptr over
+; dbg_save; box_next sets the carry after the last cell.
+box_first:	lda	#MENU_COL
+		sta	<dbg_x
+		lda	#MENU_ROW
+		sta	<dbg_y
+		lda	#<dbg_save
+		sta	<dbg_ptr
+		lda	#>dbg_save
+		sta	<dbg_ptr + 1
+		rts
+box_next:	lda	<dbg_ptr
+		clc
+		adc	#2
+		sta	<dbg_ptr
+		bcc	!+
+		inc	<dbg_ptr + 1
+!:		inc	<dbg_x
+		lda	<dbg_x
+		cmp	#MENU_COL + MENU_W
+		bcc	.more
+		lda	#MENU_COL
+		sta	<dbg_x
+		inc	<dbg_y
+		lda	<dbg_y
+		cmp	#MENU_ROW + MENU_H
+		rts
+.more:		clc
+		rts
 
 ; font_upload - 64 characters ($20-$5F) as 4bpp tiles: text color 15 on 1.
 font_upload:	st0	#VDC_MAWR
@@ -410,7 +519,9 @@ menu_colors:	stz	VCE_CTA + 1
 ; Drawing. The menu draws into the tile map under the screen; the screen is
 ; snapped to the tile grid while it is open.
 
-menu_draw:	lda	<scroll_x		; dbg_col = scroll_x >> 3 (mod 64)
+menu_draw:	jsr	menu_origin
+		bra	menu_body
+menu_origin:	lda	<scroll_x		; dbg_col = scroll_x >> 3 (mod 64)
 		sta	<dbg_num
 		lda	<scroll_x + 1
 		lsr	a
@@ -434,8 +545,9 @@ menu_draw:	lda	<scroll_x		; dbg_col = scroll_x >> 3 (mod 64)
 		lda	<dbg_num
 		and	#63
 		sta	<dbg_row
+		rts
 
-		php
+menu_body:	php
 		sei
 		stz	<dbg_pal		; Clear the box.
 		lda	#MENU_ROW
@@ -677,7 +789,24 @@ put_char:	sec
 		clc
 		adc	#<FONT_TILE
 		pha
-		lda	<dbg_y			; MAWR = ((row + y) & 63) * 64 + ((col + x) & 63)
+		phx
+		jsr	bat_addr
+		st0	#VDC_MAWR
+		sta	VDC_DL
+		stx	VDC_DH
+		plx
+		st0	#VDC_VWR
+		pla
+		sta	VDC_DL
+		lda	#>FONT_TILE
+		ora	<dbg_pal
+		sta	VDC_DH
+		inc	<dbg_x
+		rts
+
+; bat_addr - BAT address of screen tile (dbg_x, dbg_y): A = lo, X = hi.
+; ((row + y) & 63) * 64 + ((col + x) & 63)
+bat_addr:	lda	<dbg_y
 		clc
 		adc	<dbg_row
 		and	#63
@@ -686,23 +815,12 @@ put_char:	sec
 		ror	<dbg_t
 		lsr	a
 		ror	<dbg_t			; a = hi, dbg_t = bits 6-7 of lo
-		pha
+		tax
 		lda	<dbg_x
 		clc
 		adc	<dbg_col
 		and	#63
 		ora	<dbg_t
-		st0	#VDC_MAWR
-		sta	VDC_DL
-		pla
-		sta	VDC_DH
-		st0	#VDC_VWR
-		pla
-		sta	VDC_DL
-		lda	#>FONT_TILE
-		ora	<dbg_pal
-		sta	VDC_DH
-		inc	<dbg_x
 		rts
 
 ; ---------------------------------------------------------------------------

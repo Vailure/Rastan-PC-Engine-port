@@ -6,15 +6,18 @@ The arcade FG layer is composited over the BG layer locked at 1:1 scroll
 (the round's BG strips repeat to cover the FG width). Colors are quantized to
 the PCE's 9-bit RGB and packed into 16 BG palettes of 15 colors + shared color 0.
 
-Rastan scrolls forward only, so VRAM is managed offline: a window of WINDOW
-block-columns is resident; when column k+WINDOW-1 enters, any pattern no longer
-used by the window is freed and the new column's missing patterns are uploaded.
+The world (see world.py) streams as lines of 64 tiles, columns and rows, in
+play order. VRAM is managed offline with a model of the 64x64 BAT: a pattern is
+resident while some BAT cell shows it, and a line uploads the patterns it
+needs that are not resident.
 
 Outputs (outdir):
-  stage.bin   pointer table (3 bytes/column: bank offset, addr lo, addr hi
-              relative to $6000 window) then column records:
+  stage.bin   pointer table (3 bytes/line: bank offset, addr lo, addr hi
+              relative to $6000 window) then line records:
+                u8 flags (1 row, 2 stop: a door loads the rest), u8 BAT column/row,
+                s16 trigger (world x of a column, y of a row), u8 camera region;
                 u8 n; n * (u16 tile#, 32 bytes pattern); 64 * u16 BAT word
-  stage.inc   equates (columns, window, first slot)
+  stage.inc   equates and the camera box of each region
   palette.bin 256 words (16 palettes) in VCE format
   preview.png converted stage as the PCE would show it
   dyncolor.inc VCE update lists for colors the arcade changes at run time
@@ -30,37 +33,42 @@ from arcade_gfx import load_region, decode_packed
 from fgmap import fg_tilemap
 from bgmap import bg_entry, strip_codes, segment_bg_entry
 from snap import read_snaps
+import world
 
 ROMDIR = os.environ.get('RASTAN_ROMS', os.path.join(os.path.dirname(__file__), '..', 'roms', 'rastan'))
-WINDOW = 35            # resident: 33 visible + 1 preloaded + 1 lagging (no overwrite of on-screen tiles)
 FIRST_SLOT = 0x100     # tile # of first streamed slot (VRAM $1000)
 NUM_SLOTS = 960       # $1000-$4BFF; $4C00-$4FFF holds stage prop cells
 ROWS = 64
 
 
 def arcade_pixels(rom, tiles, seg0, seg1):
-    """Composite palette-index image [ROWS*8, W*8] of FG over 1:1 BG."""
-    ncols = (seg1 - seg0 + 1) * 16
-    fc, fa = fg_tilemap(rom, seg0 * 16, ncols)
-    ft = tiles[fc & 0x3fff]
-    fx, fy = (fa >> 14) & 1, (fa >> 15) & 1
-    ft = np.where(fx[..., None, None] == 1, ft[..., :, ::-1], ft)
-    ft = np.where(fy[..., None, None] == 1, ft[..., ::-1, :], ft)
-    fidx = (fa & 0x1ff)[..., None, None].astype(np.int32) * 16 + ft
-
+    """Palette-index tiles [ROWS, L, 8, 8] of the world's stream lines (world.lines()),
+    FG composited over the BG locked at 1:1. The BG strips of segments seg0..seg1
+    repeat along the map columns; a shaft takes its map columns' strips too."""
     ents = []
     for s in range(seg0, seg1 + 1):
         e = segment_bg_entry(rom, s)
         ents += [e, e + 1]
     bc = np.concatenate([strip_codes(rom, bg_entry(rom, e)[1]) for e in ents], 1)
     ba = np.concatenate([np.full((64, 16), bg_entry(rom, e)[0], np.uint16) for e in ents], 1)
-    W = fc.shape[1]
-    reps = (W + bc.shape[1] - 1) // bc.shape[1]
-    bc = np.tile(bc, (1, reps))[:, :W]
-    ba = np.tile(ba, (1, reps))[:, :W]
-    bt = tiles[bc & 0x3fff]
-    bidx = (ba & 0x1ff)[..., None, None].astype(np.int32) * 16 + bt   # BG opaque: pen 0 shows too
-    return np.where(ft == 0, bidx, fidx)    # [64, W, 8, 8]
+    out = []
+    squares = {}
+    for ln in world.lines():
+        s = ln['seg']
+        if s not in squares:
+            fc, fa, _ = world.square_tiles(rom, s)
+            ft = tiles[fc & 0x3fff]
+            fx, fy = (fa >> 14) & 1, (fa >> 15) & 1
+            ft = np.where(fx[..., None, None] == 1, ft[..., :, ::-1], ft)
+            ft = np.where(fy[..., None, None] == 1, ft[..., ::-1, :], ft)
+            fidx = (fa & 0x1ff)[..., None, None].astype(np.int32) * 16 + ft
+            cols = (s * 64 + np.arange(64)) % bc.shape[1]
+            bt = tiles[bc[:, cols] & 0x3fff]
+            bidx = (ba[:, cols] & 0x1ff)[..., None, None].astype(np.int32) * 16 + bt
+            squares[s] = np.where(ft == 0, bidx, fidx)       # [64, 64, 8, 8]
+        sq = squares[s]
+        out.append(sq[ln['i'], :] if ln['row'] else sq[:, ln['i']])
+    return np.stack(out, 1)    # [64, L, 8, 8]
 
 
 def to_pce_rgb(palwords):
@@ -256,41 +264,53 @@ def main():
     colpat = tile_pat[inv]          # [64, W]
     colpal = tile_pal[inv]
 
-    # ---- offline VRAM streaming schedule
+    # ---- offline VRAM streaming schedule: a model of the BAT. A pattern stays
+    # resident while a BAT cell shows it; a line's upload list holds the patterns
+    # it brings that are not resident.
+    lines = world.lines()
     free = list(range(FIRST_SLOT + NUM_SLOTS - 1, FIRST_SLOT - 1, -1))
     resident = {}        # pattern -> slot
-    users = {}           # pattern -> set of columns in window using it
+    refs = {}            # pattern -> number of live BAT cells showing it
+    bat_pat = -np.ones((64, 64), np.int64)
+    bat_x = np.zeros((64, 64), np.int64)     # world position of each cell's tile
+    bat_y = np.zeros((64, 64), np.int64)
     records = []
     max_res = 0
+    # Bounds on where the camera can still go (see world.camera_bounds): cells out of
+    # reach are released, so their patterns can go.
+    reach = world.camera_reach(lines)
 
-    def add_column(c):
-        ups = []
-        bat = []
+    def release(br, bc_):
+        old = int(bat_pat[br, bc_])
+        if old >= 0:
+            bat_pat[br, bc_] = -1
+            refs[old] -= 1
+            if not refs[old]:
+                del refs[old]
+                free.append(resident.pop(old))
+
+    for c, ln in enumerate(lines):
+        if ln['stop']:          # A door loads the next room whole: the BAT starts empty.
+            for br in range(64):
+                for bc_ in range(64):
+                    release(br, bc_)
+        ox, oy = world.square_origin(ln['seg'])
+        ups, bat = [], []
         for r in range(ROWS):
+            br, bc_ = (ln['i'], r) if ln['row'] else (r, ln['i'])
             p = int(colpat[r, c])
             if p not in resident:
                 slot = free.pop()
                 resident[p] = slot
                 ups.append((slot, p))
-            users.setdefault(p, set()).add(c)
+            refs[p] = refs.get(p, 0) + 1
+            release(br, bc_)
+            bat_pat[br, bc_] = p
+            bat_x[br, bc_], bat_y[br, bc_] = ox + bc_ * 8, oy + br * 8
             bat.append(resident[p] | (int(colpal[r, c]) << 12))
-        return ups, bat
-
-    def drop_column(c):
-        for r in range(ROWS):
-            p = int(colpat[r, c])
-            u = users.get(p)
-            if u is None:
-                continue
-            u.discard(c)
-            if not u:
-                del users[p]
-                free.append(resident.pop(p))
-
-    for c in range(W):
-        if c >= WINDOW:
-            drop_column(c - WINDOW)
-        ups, bat = add_column(c)
+        x_lo, y_hi = reach[c]
+        for br, bc_ in zip(*np.nonzero((bat_pat >= 0) & ((bat_x + 8 <= x_lo) | (bat_y >= y_hi + 224)))):
+            release(br, bc_)
         max_res = max(max_res, len(resident))
         records.append((ups, bat))
     print(f'max resident patterns {max_res}/{NUM_SLOTS}, total uploads {sum(len(u) for u, _ in records)}')
@@ -311,8 +331,15 @@ def main():
     body = bytearray()
     offs = []
     table_size = 3 * W
-    for ups, bat in records:
+    regions = []
+    for (ups, bat), ln in zip(records, lines):
         offs.append(table_size + len(body))
+        box = ln['box'] + (int(ln['stop'] or ln['seg'] in world.FREE),)
+        if box not in regions:
+            regions.append(box)
+        trig = ln['trigger'] & 0xffff
+        body += bytes([(1 if ln['row'] else 0) | (2 if ln['stop'] else 0), ln['i'], trig & 0xff, trig >> 8,
+                       regions.index(box)])
         body.append(len(ups))
         for slot, p in ups:
             body += slot.to_bytes(2, 'little') + pce_pats[p]
@@ -358,21 +385,47 @@ def main():
             f.write(vce_list(name, pairs))
     print(f'dynamic slots: ' + ', '.join(f'{i}:{len(v)}' for i, v in sorted(slots.items())))
     with open(f'{out}/stage.inc', 'w') as f:
-        f.write(f'STAGE_COLUMNS = {W}\nSTAGE_WINDOW = {WINDOW}\nSTAGE_BANKS = {(len(blob) + 8191) // 8192}\n')
+        f.write(f'STAGE_LINES = {W}\nSTAGE_BANKS = {(len(blob) + 8191) // 8192}\n')
+        f.write(f'STAGE_LEAD_X = {world.LEAD}\t; a column streams once scroll_x + this reaches it\n')
+        f.write(f'STAGE_LEAD_Y = {world.LEAD_Y}\t; a row streams once scroll_y - this reaches it\n')
+        regions.append(world.BOX_END + (1,))
+        f.write(f'STAGE_REGION_END = {len(regions) - 1}\n')
+        f.write(f'STAGE_ROW_REACH = {world.ROW_REACH}\t; scroll_y <= last row streamed + this\n')
+        f.write(f'STAGE_DOOR_LINE = {next(i for i, ln in enumerate(lines) if ln["stop"])}\t; the boss room door\'s line\n')
+    with open(f'{out}/stage_regions.inc', 'w') as f:
+        f.write('; Generated by tools/pce_stage.py.\n')
+        f.write('; Camera boxes per region (the region of the next line to stream): x0, x1, y0, y1;\n')
+        f.write('; region_free: 1 in a shaft (scroll_x follows Rastan both ways), else scroll_x only grows.\n')
+        f.write('region_free:\tdb\t' + ', '.join(str(r[4]) for r in regions) + '\n')
+        for k, name in enumerate(('x0', 'x1', 'y0', 'y1')):
+            f.write(f'region_{name}_l:\tdb\t' + ', '.join(f'${r[k] & 0xff:02X}' for r in regions) + '\n')
+            f.write(f'region_{name}_h:\tdb\t' + ', '.join(f'${(r[k] >> 8) & 0xff:02X}' for r in regions) + '\n')
 
-    # preview: render from the PCE-side data (patterns + palettes)
-    prev = np.zeros((ROWS * 8, W * 8, 3), np.uint8)
-    for c in range(W):
-        for r in range(ROWS):
-            p = pat_list[colpat[r, c]]
-            prev[r * 8:r * 8 + 8, c * 8:c * 8 + 8] = (pal_rgb[colpal[r, c]][p] * 255 // 7)
-    Image.fromarray(prev).save(f'{out}/preview.png')
-    # arcade reference at full color for comparison
+    # Previews of the world (origin at world (0, PREVIEW_Y0)): as the PCE shows it and the arcade.
+    x0s, y0s = [], []
+    for s in world.ORDER:
+        ox, oy = world.square_origin(s)
+        x0s.append(ox)
+        y0s.append(oy)
+    PW, PY0 = max(x0s) + 512, min(y0s)
+    PH = max(y0s) + 512 - PY0
+    prev = np.zeros((PH, PW, 3), np.uint8)
+    arc = np.zeros((PH, PW, 3), np.uint8)
     ref = np.array(pal, dtype=np.int32)
     rr, gg, bb = ref & 31, (ref >> 5) & 31, (ref >> 10) & 31
-    ref8 = np.stack([rr, gg, bb], 1) * 255 // 31
-    arc = ref8[idx].transpose(0, 2, 1, 3, 4).reshape(ROWS * 8, W * 8, 3).astype(np.uint8)
+    ref8 = (np.stack([rr, gg, bb], 1) * 255 // 31).astype(np.uint8)
+    for c, ln in enumerate(lines):
+        ox, oy = world.square_origin(ln['seg'])
+        for r in range(ROWS):
+            ty, tx = (ln['i'], r) if ln['row'] else (r, ln['i'])
+            y, x = oy - PY0 + ty * 8, ox + tx * 8
+            p = pat_list[colpat[r, c]]
+            prev[y:y + 8, x:x + 8] = (pal_rgb[colpal[r, c]][p] * 255 // 7)
+            arc[y:y + 8, x:x + 8] = ref8[idx[r, c]]
+    Image.fromarray(prev).save(f'{out}/preview.png')
     Image.fromarray(arc).save(f'{out}/arcade.png')
+    with open(f'{out}/stage.inc', 'a') as f:
+        f.write(f'PREVIEW_Y0 = {PY0}\t; world y of preview.png row 0\n')
 
 
 if __name__ == '__main__':
