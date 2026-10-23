@@ -374,8 +374,12 @@ stream, and checks the notes in the audio's spectrum are the ones the stream ask
 - [x] The castle's floor spears (markers `$46`)
 - [x] Music and sound effects on the PSG (`$1A`/`$1B`/`$1C` and the FM effects)
 - [ ] The MSM5205 voice samples (jump, death)
-- [ ] The lava hall's flames (markers `$4C`, `$52-$55`: tall flames on the lava and the sparks
-      drifting off them, about 2 KB of VRAM); score popups; the small castle flyers
+- [ ] The lava hall's flames (markers `$4C`, `$52-$55`: 80x32 px flames standing on the lava,
+      five of them, and the sparks that drift up off them). They need 16 resident cells, about
+      1 KB of VRAM words, and the stage's tile pool is already at 929 of 944 slots.
+
+(Checked and not needed: Rastan shows no score popups when anything dies, and the "small castle
+flyers" seen in an early census are the blue throwers' clubs, which the port already has.)
 - [x] Restart at the arcade's checkpoints after a death (stream fast-forward, no preload data)
 - [x] Debug menu (UP + SELECT): checkpoint warp, invincible, enemies on/off, health, lives, slow motion, weapon
 
