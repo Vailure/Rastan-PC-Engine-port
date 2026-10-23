@@ -761,6 +761,9 @@ DEBUG_BANK	=	$05
 		include	"debug.asm"
 		include	"gargoyle.asm"
 		include	"woman.asm"
+	.if	STAGE_ROUND - 1		; (round 2's own; bank $05 is full in round 1's build)
+		include	"snake.asm"
+	.endif
 		include	"jets.asm"
 		include	"vines.asm"
 		include	"still.asm"

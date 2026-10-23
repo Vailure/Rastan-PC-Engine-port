@@ -150,6 +150,10 @@ $(BUILD)/item.snp: sim/sim sim/maincpu.bin sim/scripts/item.txt
 	@mkdir -p $(BUILD)
 	sim/sim sim/maincpu.bin sim/scripts/item.txt $@ 1
 
+$(BUILD)/snake.snp: sim/sim sim/maincpu.bin sim/scripts/snake.txt
+	@mkdir -p $(BUILD)
+	sim/sim sim/maincpu.bin sim/scripts/snake.txt $@ 1 500
+
 $(BUILD)/item_%.snp: sim/sim sim/maincpu.bin sim/scripts/item_%.txt
 	@mkdir -p $(BUILD)
 	sim/sim sim/maincpu.bin sim/scripts/item_$*.txt $@ 1
@@ -157,7 +161,7 @@ $(BUILD)/item_%.snp: sim/sim sim/maincpu.bin sim/scripts/item_%.txt
 # Object (enemy, projectile, item) poses: groups and captures in tools/object_specs.py.
 # Cells start at bank $60; each group's poses and anims get the next banks.
 OBJECTS    := $(BUILD)/objects
-$(OBJECTS)/objcells.bin: tools/pce_objects.py tools/object_specs.py tools/census_all.py $(BUILD)/lizard.snp $(BUILD)/blue.snp $(BUILD)/item.snp $(BUILD)/item_fire.snp $(BUILD)/item_star.snp $(BUILD)/chimera.snp $(BUILD)/gargoyle.snp $(BUILD)/gargkill.snp $(BUILD)/woman.snp $(BUILD)/castle.snp $(BUILD)/boss.snp $(BUILD)/vine.snp $(BUILD)/hall.snp $(BUILD)/swarm.snp
+$(OBJECTS)/objcells.bin: tools/pce_objects.py tools/object_specs.py tools/census_all.py $(BUILD)/lizard.snp $(BUILD)/blue.snp $(BUILD)/item.snp $(BUILD)/item_fire.snp $(BUILD)/item_star.snp $(BUILD)/chimera.snp $(BUILD)/gargoyle.snp $(BUILD)/gargkill.snp $(BUILD)/woman.snp $(BUILD)/castle.snp $(BUILD)/boss.snp $(BUILD)/vine.snp $(BUILD)/hall.snp $(BUILD)/swarm.snp $(BUILD)/snake.snp
 	cd tools && python3 pce_objects.py ../$(BUILD) ../$(OBJECTS) 0x13
 
 # HUD cells (lives, icon, health bar, ROUND) from the arcade's HUD sprites.
@@ -275,6 +279,13 @@ $(BUILD)/rastan_r2.pce: $(GAME_DEPS) $(STAGE2)/stage.bin $(BUILD)/hud2/hud.bin
 	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_r2):$(abspath $(STAGE2)):$(abspath $(BUILD)/hud2):$$PCE_INCLUDE $(PCEAS) --newproc --sf2 --strip -l 0 --raw ../src/main.asm -o rastan_r2.pce
 	$(SF2PAD) $(BUILD)/rastan_r2.pce
 
+# Test build: round 2 with god mode.
+$(BUILD)/god_r2.pce: $(GAME_DEPS) $(STAGE2)/stage.bin $(BUILD)/hud2/hud.bin
+	@mkdir -p $(BUILD)/opt_god_r2
+	printf "CAMERA_TEST = 0\nNO_ENEMIES = 0\nGOD_MODE = 1\nBG_CHECK = 0\nTITLE = 0\nDEBUG_MENU = 1\n" > $(BUILD)/opt_god_r2/options.inc
+	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_god_r2):$(abspath $(STAGE2)):$(abspath $(BUILD)/hud2):$$PCE_INCLUDE $(PCEAS) --newproc --sf2 --strip -l 0 --raw ../src/main.asm -o god_r2.pce
+	$(SF2PAD) $(BUILD)/god_r2.pce
+
 # Test build: the pad drives the camera directly and Rastan is not drawn.
 $(BUILD)/camtest.pce: $(GAME_DEPS)
 	@mkdir -p $(BUILD)/opt_test
@@ -305,7 +316,7 @@ $(BUILD)/bgcheck.pce: $(GAME_DEPS)
 	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_bg):$$PCE_INCLUDE $(PCEAS) --newproc --sf2 --strip -l 0 --raw ../src/main.asm -o bgcheck.pce
 	$(SF2PAD) $(BUILD)/bgcheck.pce
 
-test: $(BUILD)/camtest.pce $(BUILD)/noenemy.pce $(BUILD)/rastan.pce $(BUILD)/rastan_debug.pce $(BUILD)/testdbg.pce $(BUILD)/god.pce tools/tgrun/tgrun
+test: $(BUILD)/camtest.pce $(BUILD)/noenemy.pce $(BUILD)/rastan.pce $(BUILD)/rastan_debug.pce $(BUILD)/testdbg.pce $(BUILD)/god.pce $(BUILD)/rastan_r2.pce tools/tgrun/tgrun
 	python3 tools/test_scroll.py $(BUILD)/camtest.pce $(STAGE)/preview.png $(BUILD)/test $$(seq 62 37 2950)
 	PAD=46 python3 tools/test_scroll.py $(BUILD)/camtest.pce $(STAGE)/preview.png $(BUILD)/test_down 80 120 160 300
 	KEYS=61:2175:44,2176:2540:01,2541:2930:44,2931:3300:01 python3 tools/test_scroll.py $(BUILD)/camtest.pce $(STAGE)/preview.png $(BUILD)/test_castle $$(seq 2150 30 3300)
@@ -318,6 +329,7 @@ test: $(BUILD)/camtest.pce $(BUILD)/noenemy.pce $(BUILD)/rastan.pce $(BUILD)/ras
 	python3 tools/test_castle.py $(BUILD)/testdbg.pce $(BUILD)/god.pce $(BUILD)/noenemy.pce
 	python3 tools/test_sound.py $(BUILD)/testdbg.pce $(BUILD)/god.pce $(BUILD)
 	python3 tools/test_demo.py $(BUILD)/rastan.pce $(BUILD)/still
+	python3 tools/test_round2.py $(BUILD)/rastan_r2.pce
 
 # A whole playthrough, checkpoint by checkpoint (about 2 minutes): object
 # poses, slowdown, SATB use, and the tile map against the converter's preview.

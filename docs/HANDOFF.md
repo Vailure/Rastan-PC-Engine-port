@@ -559,10 +559,25 @@ The order is roughly by the value it adds to the demo for the effort.
      boss room's own line `$2x`.
    - Round 2 needs 960 resident tiles at its peak, so it also streams into `$4B00-$4FFF` (slots
      `$4B0-$4FF`), which round 1's spears, props and fire use; their uploads are off in round 2.
-   - Still to do, by the arcade (`sim/scripts/snake.txt` has the snakes): the snakes (walker kind,
-     spawned like the lizardmen; the code at `$0473B8`: they crawl about 0.9 px a frame, strike three
-     times when Rastan is near, touch type 1, strike type 2, 1 hit point), the golden woman (`$420`
-     cells, map markers in segment `$22`), the castle wizard (`$1C0`), the round's items, its boss and music.
+   - **Snakes** (`src/snake.asm`, `EK_SNAKE`; `sim/scripts/snake.txt`; the arcade's code at `$0473B8`
+     and the walkers' at `$0407BE`): spawned on the lanes like the lizardmen, which they take turns
+     with (`spawn_two`/`spawn_three` per round in `enemies.asm`). They crawl 7/8 px a frame, strike
+     three times when Rastan is level and 57 px away (box `$5F`, type 2: 8 units; crouching ducks it),
+     turn away at 48-51 px and flee at twice the speed to 104 px. Touch type 1, 1 hit point, 200 points.
+     The arcade decides to strike at the lanes' `$3A` markers with a random byte; the port whenever
+     Rastan is near and 16 frames have passed. `test_round2.py` checks them.
+   - **Round 2's own code goes in its build only** (`.if STAGE_ROUND - 1` around `include "snake.asm"`
+     and its dispatch): bank `$05` is full in round 1's build. Round 2's has about 0.5 KB left there
+     and 1 KB in bank `$04`; past that, leave round 1's own modules (gargoyle, woman, jets, boss,
+     props, traps, fire, column, wall, weights, items, boulders) out of round 2's build.
+   - **Vines:** round 2's two (markers `$4F` at (5632, 208) and (8416, 240)) use round 1's code,
+     placed from the marker as round 1's chasm vine is; their phases are not measured.
+   - **Map markers still to port** (high byte of the collision map, by round x): `$59`-`$60` (y 336,
+     x 1824-2880): blue throwers that drop in from the trees (arcade type 23); `$61`-`$63` (6464-6592):
+     the golden women (cells `$420`, anims 201-204), who pace 7/9 px a frame between turning points
+     (6778-6910 seen); `$45` weights (8896), `$47` the hanging column (10752), `$48` (8800), `$49`
+     (8128), `$4C`, `$52`-`$55` fire (9312-10144), `$64`, `$65`, `$6A`, `$6B` (8960-9200, new).
+     Then the castle wizard (`$1C0`), the round's items, its boss and music.
    - One ROM for every round needs `sf2_round` and the `^stage_*` bank references per round: a small
      table of page, banks and line count, indexed by the round.
 5. **The exact port of the player.**

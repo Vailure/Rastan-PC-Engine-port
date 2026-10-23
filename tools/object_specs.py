@@ -23,6 +23,7 @@ FILES = {
     'boss': 'boss.snp',          # sim/scripts/boss.txt: the boss (slot 17), its fire (slots 18-22)
     'vine': 'vine.snp',          # the bot run (build/vine.txt): the vine at x 2750, slot 0
     'swarm': 'swarm.snp',        # sim/scripts/swarm.txt: the hurry-up swarm at the round start
+    'snake': 'snake.snp',        # sim/scripts/snake.txt: round 2's snakes (slot 6 crawls, strikes, dies)
 }
 
 GROUPS = {
@@ -107,6 +108,13 @@ GROUPS = {
     'vine': [
         ('vine_swing', 'vine', 0, 10755, 10934),
     ],
+    # Round 2's snakes (arcade slot 6): crawl (anims 181-183, 4 frames each), one strike of the three
+    # in a row (181, 184, 185 for 3, 6, 9 frames), death (the walkers' burst).
+    'snake': [
+        ('snake_crawl', 'snake', 6, 523, 538),
+        ('snake_strike', 'snake', 6, 744, 761),
+        ('snake_death', 'snake', 6, 791, 820),
+    ],
     # The hurry-up swarm's small bats (arcade slots 20-28): flapping (cells $268-$26A,
     # all bats on one global clock) and the cell a sword hit leaves ($276). src/swarm.asm
     # draws them itself (CELL_SYMBOLS); these captures only bring in the cells.
@@ -156,4 +164,5 @@ POSE_SYMBOLS = {
     ('castle', 'sword_attack', 6): 'POSE_SWORD_OUT',
     ('castle', 'mace_low', 6): 'POSE_MACE_LOW',         # arcade anim 156: the low swing's reach
     ('castle', 'sword_low', 6): 'POSE_SWORD_LOW',
+    ('snake', 'snake_strike', 3): 'POSE_SNAKE_OUT',     # arcade anim 185: the strike's reach
 }
