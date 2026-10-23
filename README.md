@@ -3,6 +3,10 @@
 A port of Taito's *Rastan* (1987 arcade) to the PC Engine / TurboGrafx-16 HuCard.
 The first target is one BG layer at 256 px wide in 8 Mbit, with the engine written in PCEAS assembly.
 
+**Start here:**
+- `docs/REPORT.md` covers the state of the round 1 demo and how it was verified.
+- `docs/HANDOFF.md` covers setup, architecture, pitfalls and next steps for whoever continues the port.
+
 **No ROM data is in this repository.** You need your own MAME `rastan` set (World, rev 1).
 Put the unzipped files in `roms/rastan/`, or point `RASTAN_ROMS` at them. Everything decoded
 from the ROMs (`*.bin`, snapshots, renders, disassembly) is git-ignored.
