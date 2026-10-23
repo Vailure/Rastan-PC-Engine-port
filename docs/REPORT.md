@@ -1,6 +1,6 @@
 # Rastan → PC Engine: round 1 proof-of-concept report
 
-**State on 2026-10-22, branch `section1-parity`.**
+**State on 2026-10-23, branch `section1-parity`.**
 
 Round 1 of Taito's *Rastan* (1987 arcade) runs on a PC Engine / TurboGrafx-16 HuCard. The run covers the title screen, the whole round with its castle and boss, the round-clear screen with its jingle, and GAME OVER. Everything on screen and in the speakers was converted from the arcade program and ROMs by the tools in this repository. Gameplay values were measured by running the arcade program headless.
 
@@ -20,7 +20,7 @@ The demo ROM is `build/rastan.pce`:
 | **Round 1, outdoors** | The arcade's map from the start to the castle gate:<br>• the cave and its block, broken by a down thrust;<br>• ropes;<br>• the chasm vine;<br>• the waterfall, with its flowing colour cycle and deadly lip;<br>• the dusk sky change;<br>• rockfalls and rolling boulders. |
 | **Enemies outdoors** | • Lizardmen;<br>• blue club throwers and their clubs;<br>• chimeras and their fireballs;<br>• two gargoyle flights;<br>• the woman warrior;<br>• five weapon items, each with its bat. |
 | **The castle** | Laid out as the arcade lays it out, in the castle's own colours:<br>• the first room;<br>• shaft 1, scrolling up;<br>• the lava hall, with its animated fire and three vines;<br>• the jets' room;<br>• shaft 2;<br>• the boss room door. |
-| **Enemies in the castle** | • Sword and mace soldiers, gold and blue (green after a restart at the last two checkpoints, as in the arcade);<br>• floor spears;<br>• the first room's hanging column, which shuts the top corridor most of the time;<br>• the lava hall's sealing wall, which pushes a lingering Rastan into the fire;<br>• fire jets. |
+| **Enemies in the castle** | • Sword and mace soldiers, gold and blue (green after a restart at the last two checkpoints, as in the arcade);<br>• floor spears;<br>• the first room's hanging column, which shuts the top corridor most of the time;<br>• the lava hall's sealing wall, which pushes a lingering Rastan into the fire;<br>• fire jets;<br>• shaft 2's three spiked weights, which come down on the corridor at its top and kill on touch. |
 | **Hurry-up swarm** | Anywhere but the boss room: dawdle 42 s in one pair of segments and nine small bats come for Rastan, faster with each wave. |
 | **Boss** | Drops in, walks, leaps, staff swing, a fan of fire from above. Ten hits kill it. |
 | **Round clear** | The arcade's screen (YOU ARE A BRAVE FIGHTER…) with its jingle for 7 s (RUN skips it after 2 s), then the title. |
@@ -80,7 +80,7 @@ A bot plays every section in god mode, starting from each checkpoint.
 - **The bgcheck build:** every 10th frame is compared pixel for pixel with the converter's preview. That build shows the tile map alone.
 - **Contact sheets** (`build/audit/cpN.png`) are written for review by eye.
 
-The results below are from the run on 2026-10-23, with the swarm, the hanging column and the sealing wall in.
+The results below are from the run on 2026-10-23, with the swarm, the hanging column, the sealing wall and shaft 2's spiked weights in.
 
 | Section (start) | Distance covered (world x) | Slow frames | Bad poses | Tile-map frames wrong | SATB full¹ | Frames with a sprite lost to the 16-a-line limit¹ |
 |---|---|---|---|---|---|---|
@@ -89,8 +89,10 @@ The results below are from the run on 2026-10-23, with the swarm, the hanging co
 | cp2: segment 8 (waterfall) | 4145 → 5638 | 0 | 0 | 0 / 240 | 120 | 159 |
 | cp3: segment 12 → castle | 6193 → 8662 | 0 | 0 | 0 / 240 | 0 | 242 |
 | cp4: segment 16 (castle) | 8253 → 9300 | 0 | 0 | 0 / 411 | 0 | 273 |
-| cp5: lava hall → boss | 9306 → 11728 | 0 | 0 | 0 / 377 | 0 | 502 |
+| cp5: lava hall → boss | 9306 → 11728 | 0 | 0 | 0 / 377 | 0 | 704² |
 | **Problems** | | | | | | **0 (both runs)** |
+
+² Up from 502: the weights' 32 px bars (two cells a line each) share the corridor's lines with Rastan and the soldiers.
 
 ¹ These are reported, not failed: they are the PC Engine's hardware limits, 64 sprites and 16 sprite cells per scanline. When either runs out, the walkers take turns losing pieces, which shows as flicker, as many PC Engine games do. No single enemy disappears for good.
 
@@ -151,7 +153,7 @@ All of these are fixed, and each now has a check:
 
 | Gap | Effect on the demo | Notes |
 |---|---|---|
-| Shaft 2's three `$45` objects | Absent | Piston-type objects spawned by an event; no arcade capture reaches shaft 2 yet |
+| Shaft 2's spiked weights: their hit box | Measured, not read | The kill range (-26 .. +30 px of a weight, the bar's bottom a frame late) is measured from bot runs; the crouched case only shows he lives |
 | Sprite flicker in crowds | Visible when 3–4 walkers share a line, or with the swarm | Hardware limit; mitigated by rotation (walkers and bats) |
 | Fire sparks | Not drawn | Cosmetic |
 
@@ -162,8 +164,8 @@ All of these are fixed, and each now has a check:
 | Resource | Use |
 |---|---|
 | **ROM** | A 2.5 MB SF2 image. The fixed 512 KB half holds the code and everything shared between rounds, with 136 KB free. Round 1's own data (stage and collision, 224 KB) is in page 1. Pages 0, 2 and 3 (1.5 MB) are empty. |
-| **Code** | About 9,200 lines of PCEAS assembly in 20 modules. Code banks $04 and $05 each have about 3 KB free. |
-| **VRAM** | BG tile pool: 960 slots, peak 932. Rastan is double-buffered. 17 object slot buffers, plus the HUD and the SATB. |
+| **Code** | About 11,100 lines of PCEAS assembly in 23 modules. Code space is tight: bank $00 has 0.6 KB free, bank $04 1.4 KB, bank $05 1 KB. |
+| **VRAM** | BG tile pool: 936 slots, peak 930. Rastan is double-buffered. 17 object slot buffers, plus the HUD (whose free cells hold shaft 2's weights) and the SATB. |
 | **CPU** | No slow frames in any audited section. The voice IRQ costs about 9% of the CPU while a sample plays. |
 | **Sprites** | The HUD takes the first 12 of 64 entries. Rastan, his weapon, props and objects are packed after it each frame. |
 
@@ -177,7 +179,7 @@ All of these are fixed, and each now has a check:
 
 ## 6. Phase history
 
-The project spans 34 commits (2026-10-20 → 2026-10-22).
+The project spans 39 commits (2026-10-20 → 2026-10-23).
 
 1. **Tools:**
    - arcade graphics decoder;
@@ -208,13 +210,13 @@ The project spans 34 commits (2026-10-20 → 2026-10-22).
    - the castle shaft's morning star;
    - the camera clamp fix;
    - stage compression (513 KB → 206 KB) and the move to the Street Fighter II mapper.
-   - the hurry-up swarm, the sprite colour bank (soldiers' colours), the hanging column and the sealing wall.
+   - the hurry-up swarm, the sprite colour bank (soldiers' colours), the hanging column and the sealing wall;
+   - shaft 2's spiked weights (marker `$45`), from an arcade bot that now climbs shaft 2.
 
 The next steps, in order, are in `docs/HANDOFF.md` §8:
-1. shaft 2's `$45` objects;
-2. the swarm's sprite budget and the measured-not-read collision details;
-3. the lava hall's vines and fire sparks;
-4. more compression, if needed;
-5. rounds 2–6;
-6. the exact player port;
-7. parallax.
+1. the swarm's sprite budget and the measured-not-read collision details;
+2. the lava hall's vines and fire sparks;
+3. more compression, if needed;
+4. rounds 2–6;
+5. the exact player port;
+6. parallax.

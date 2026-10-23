@@ -743,6 +743,7 @@ GAME_BANK	=	$04
 		include	"boulder.asm"
 		include	"props.asm"
 		include	"column.asm"
+		include	"weights.asm"
 
 ; Checkpoints, the debug menu and more object code: bank DEBUG_BANK, in MPR2
 ; ($4000) all the time, so it is as callable as GAME_BANK.
@@ -778,6 +779,7 @@ debug_font:	incbin	"font.bin"		; HuC's 8x8 bold font, $20-$5F (build/debug).
 trap_palettes:	incbin	"trappal.bin"		; The floor spears (build/traps).
 trap_cells:	incbin	"traps.bin"
 column_data:	incbin	"column.bin"		; The hanging column (build/traps).
+weights_data:	incbin	"weights.bin"		; Shaft 2's spiked weights (build/traps).
 
 ; The ROM uses the Street Fighter II mapper (pceas --sf2): banks $00-$3F are
 ; fixed, and banks $40-$7F show one of four 512 KB pages, chosen by a write to

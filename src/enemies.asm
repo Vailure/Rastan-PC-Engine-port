@@ -247,6 +247,7 @@ enemies_update:	lda	<dbg_noenemy		; Debug menu: no walkers (items still come).
 		beq	!+			; column (src/column.asm).
 		jsr	column_update
 		jsr	wall_update		; (and the lava hall's sealing wall)
+		jsr	weights_update		; (and shaft 2's spiked weights)
 !:		jsr	boss_spawn
 		lda	boss_clear		; The boss is dead: the round is clear soon.
 		beq	!+

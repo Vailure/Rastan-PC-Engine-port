@@ -6,7 +6,7 @@ This document is for whoever picks the port up next, whether a person or an agen
 - `README.md` holds the per-feature notes and the measured arcade values.
 - This file covers how to work on the port: setup, architecture, conventions, traps and what to do next.
 
-Branch: `section1-parity` on `github.com/Vailure/Rastan-PC-Engine-port`. Last update: 2026-10-22.
+Branch: `section1-parity` on `github.com/Vailure/Rastan-PC-Engine-port`. Last update: 2026-10-23.
 
 ---
 
@@ -56,7 +56,7 @@ Branch: `section1-parity` on `github.com/Vailure/Rastan-PC-Engine-port`. Last up
 5. **Run the checks:**
 
    ```sh
-   make HUC=/path/to/huc test    # about 2 min
+   make HUC=/path/to/huc test    # about 3 min
    make HUC=/path/to/huc audit   # about 2 min once the ROMs are built
    ```
 
@@ -118,19 +118,22 @@ The captures that matter most:
 | `ending.snp` | `ending.txt` | Round-clear screen |
 | `title.snp` | `attract_stills.txt` | Title and GAME OVER |
 | per-enemy captures | `lizard.txt`, `blue.txt`, `chimera.txt`, `gargoyle.txt`, `woman.txt`, `castle.txt`, `boss.txt` | Enemy poses, paths and timing |
+| (run by hand) | `weights.txt` | Shaft 2's spiked weights: the only bot that climbs shaft 2 (the jets' room's pool jumps, three ropes, the corridor) |
 
 ### Capture scripts
 
 Script syntax:
 
 - `in <frame> <p1> <sys>`: active-low pad bits (up 01, down 02, left 04, right 08, b1 10, b2 20);
-- `poke`, `patch`, `end`, `trace`, `callsnap`.
+- `poke`, `patch`, `end`, `trace`, `callsnap`, `watch <addr> <len>` (every write to that range, with the frame and the PC, on stderr: the quickest way to the code behind a value).
+
+Clearing a crowd: `poke <from> <to> <slot + 8> b 0` for each object slot (`$10C2C0` + 64 × slot) switches it off every frame, so that one object can be measured alone (`weights.txt` clears slots 3-29).
 
 ---
 
 ## 4. Engine architecture (`src/`)
 
-The engine is about 9,200 lines of PCEAS assembly on top of HuC's core library (`--newproc`, using the core's vblank handler, `wait_vsync`, `joytrg` and `timer_hook`).
+The engine is about 11,100 lines of PCEAS assembly on top of HuC's core library (`--newproc`, using the core's vblank handler, `wait_vsync`, `joytrg` and `timer_hook`).
 
 ### 4.1 Memory map (MPRs)
 
@@ -193,7 +196,7 @@ Pages 0, 2 and 3 are empty.
 - A round's data must sit in one page, and `sf2_round` must select it before the stage streams. It runs at boot and from `stream_reset`.
 - Round 1 is deliberately in page 1, not page 0, so a missing or wrong page write breaks the tests at once.
 
-**Code space is the tight resource now:** bank $00 has 0.6 KB left, bank $04 (game code) 2.1 KB and bank $05 (debug and late objects) 1 KB. The next sizeable module needs a third code bank. Map it in MPR2 alongside bank $05 (swap around calls), or move a module out to a bank of its own.
+**Code space is the tight resource now:** bank $00 has 0.6 KB left, bank $04 (game code) 1.4 KB and bank $05 (debug and late objects) 1 KB. The next sizeable module needs a third code bank. Map it in MPR2 alongside bank $05 (swap around calls), or move a module out to a bank of its own.
 
 Check bank usage with `make … build/rastan.pce 2>&1 | grep ^BANK`. That build has the listing on, and `pceas` prints used and free space per bank.
 
@@ -209,7 +212,7 @@ Check bank usage with `make … build/rastan.pce 2>&1 | grep ^BANK`. That build 
 | `$5000` / `$5600` | Rastan's two pattern buffers (double-buffered) |
 | `$5C00–$76BF` | Object slot buffers |
 | `$76C0` | The killed bat's cell (`$276`) |
-| `$7700` | HUD |
+| `$7700` | HUD (cells 0-12, 16-25); its cells 26-30 (`$7D80-$7EBF`) hold shaft 2's weights (`src/weights.asm`) |
 | `$7F00` | SATB |
 
 The still screens (title, GAME OVER, round clear) overwrite the BAT and tile area. Going back into play re-streams everything.
@@ -412,7 +415,7 @@ tgrun rom.pce frames out.ppm [from to padhex]...
 | `test_debug.py` | The menu needs a hold; the screen comes back exactly; warps, invincibility, checkpoint restart |
 | `test_items.py` | Weapons, items, bats (weapon drawing is sampled over 4 frames: the fire sword's flame hides behind the blade on some) |
 | `test_monsters.py` | Chimeras, boulders, gargoyle, woman, boss; the round-clear screen and jingle; the hurry-up swarm (arrives after 40 counts, closes in, bites every 45 frames at most, dies to the sword for 100) |
-| `test_castle.py` | Soldiers, spears, jets, vines, doors, camera walls; the round is cleared within 4400 frames; the hanging column's cycle and its blocking; the sealing wall's timing and push; colour bank 48 / 64 (VCE) |
+| `test_castle.py` | Soldiers, spears, jets, vines, doors, camera walls; the round is cleared within 4400 frames; the hanging column's cycle and its blocking; the sealing wall's timing and push; shaft 2's weights: when they appear, their 147-frame cycle, the kill standing and the crouch under them; colour bank 48 / 64 (VCE) |
 | `test_sound.py` | PSG writes match the streams; notes are in the audio spectrum; the voices' levels in order on channel 5 |
 | `test_demo.py` | The image is a 2.5 MB SF2 card; title, blink, RUN starts, pause; no debug menu after RUN; UP+SELECT on the title opens it (on screen, warp works) and unlocks it in the game; GAME OVER → title → new game |
 
@@ -478,8 +481,9 @@ tgrun rom.pce frames out.ppm [from to padhex]...
 11. **`make` does not notice recipe changes.** Changing an argument in a rule (for example the objects' first bank) does not rebuild its target. Delete the output (`build/objects/objcells.bin`) to force the rebuild.
 12. **Zero page is full.** The HuC core and System Card variables start at `$20DC`; the core's own (`_bp`, `_si`, `vdc_crl`, `irq_vec`, `_ax`…) from `$20EC`. PCEAS does not stop a `.zp` variable from landing on them. Six bytes of swarm variables did, `irq_vec` was overwritten, and the game hung in `wait_vsync` the moment the first bat appeared. New variables go in `.bss`. Check the top of the zero page in `src/main.lst` (`F8:20xx`); it now ends at `$20E1`. `TGRUN_PC=1` prints where a hang sits.
 13. **`pb_*` is one solid box shared by the cave block, the hanging column and the sealing wall.** They never meet: outside, the first room's row 0, below row 0. The swarm borrows `pb_*` for its hit tests and restores it.
-14. **Frame-timed routes and fixed-cycle objects.** The hanging column shuts route A's corridor for most of its 540-frame cycle, so route A waits there 540 frames (three vine periods too). A new periodic object on a route needs the same care.
+14. **Frame-timed routes and fixed-cycle objects.** The hanging column shuts route A's corridor for most of its 540-frame cycle, so route A waits there 540 frames (three vine periods too). A new periodic object on a route needs the same care. Shaft 2's weights (147 frames) kill even in the god build (traps check only the debug menu's invincibility, not `GOD_MODE`); route B passes between them, but a change in its timing before the corridor can put Rastan under one.
 15. **The debug menu once popped up at random.** SELECT alone was enough to open it, and some pads and emulators send it spuriously. It now needs UP+SELECT held, and in the demo build it stays locked until unlocked on the title screen.
+16. **Arcade positions in the castle's later squares.** The census tools' camera x is `(segment - 1) × 512` plus the scroll register. In the jets' room and shaft 2 (the arcade's segments `$14`, `$15`) that counter is one ahead of the port's squares, so the port's x is that minus 512 (the restart point: 9808 → 9296; the jets: 10384 → 9870 was taken 2 px off). Take positions on frames where the scroll registers do not change: a moving camera puts 1-2 px of jitter in them. For the vertical, the same view is the port's `scroll_y` = the arcade's (Rastan's y − his screen y) + 8.
 
 ---
 
@@ -522,26 +526,24 @@ Then:
 
 The order is roughly by the value it adds to the demo for the effort.
 
-1. **Shaft 2's markers `$45`** (three at y -752, x 9920–10055). They are piston-type map objects (type `$18`, the hanging column's kind) spawned by an event (`$04621E`, when `$10C28A` is 1), not on sight.
-   - No arcade capture reaches shaft 2 yet. Write a bot script that climbs it (route B shows the way in the port), then measure them as the column was measured (`src/column.asm`).
-2. **The swarm's sprite budget.** Nine bats on top of a crowd hit the 64-entry and 16-cells-a-line limits. They are drawn last and rotate, so they flicker first. The audit reports this, as it does for the walkers.
-3. **The bite and push details.** The bats' touch box (16×16) and the column's and wall's push distances were derived from positions, not read from the arcade's collision code (the hit list at `$10D2A8` comes from `$0449xx`).
-4. **The lava hall's vines and the fire's sparks.** The three vines swing together, and their grab box is a guess. Measure them like the chasm vine (`vine.snp`).
-5. **More compression, if needed.**
+1. **The swarm's sprite budget.** Nine bats on top of a crowd hit the 64-entry and 16-cells-a-line limits. They are drawn last and rotate, so they flicker first. The audit reports this, as it does for the walkers.
+2. **The bite and push details.** The bats' touch box (16×16), the column's and wall's push distances and the weights' kill range were derived from positions, not read from the arcade's collision code (the hit list at `$10D2A8` comes from `$0449xx`).
+3. **The lava hall's vines and the fire's sparks.** The three vines swing together, and their grab box is a guess. Measure them like the chasm vine (`vine.snp`).
+4. **More compression, if needed.**
    - The stage stream is now 206 KB (dictionaries; §4.7). The 3,645 raw patterns are 57% of it.
    - A cheap per-pattern code would save about 15%: a bit mask for zero bytes and for rows that repeat the row above.
    - zlib-class LZ would save about 35%, but would need a RAM window and more CPU time in the frame.
    - At the current size, two rounds fit in each free page, so this is not urgent.
-6. **Rounds 2–6.**
+5. **Rounds 2–6.**
    - The world decoder, segment layout and converter are generic. The bot needs to reach those rounds to capture their palettes.
    - Each round needs its own stage outputs, placed in a free page (0, 2 or 3).
    - Make `sf2_round` and the `^stage_*` bank references per round: a small table of page, banks and line count, indexed by the round.
    - `$10D2A6` is only a candidate health counter. Poke invincibility, or jump straight to a round via the continue table.
-7. **The exact port of the player.**
+6. **The exact port of the player.**
    - `tools/m68k` and `tools/lockstep.py` reproduce the arcade's player update call for call (9,215/9,215 calls).
    - A HuC6280 back end translating those routines would replace the hand-written `player.asm`.
    - PR #5 is the owner's work in this direction. Coordinate before touching it.
-8. **Parallax.** See `docs/parallax-feasibility.md`. Round 1's BG strips could come back with raster splits, or with the SuperGrafx's second layer.
+7. **Parallax.** See `docs/parallax-feasibility.md`. Round 1's BG strips could come back with raster splits, or with the SuperGrafx's second layer.
 
 ---
 

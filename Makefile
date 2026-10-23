@@ -180,8 +180,8 @@ $(BUILD)/spikes.snp: sim/sim sim/maincpu.bin sim/scripts/spikes.txt
 	@mkdir -p $(BUILD)
 	sim/sim sim/maincpu.bin sim/scripts/spikes.txt $@ 1 1470
 
-$(BUILD)/traps/traps.bin: tools/pce_traps.py $(BUILD)/spikes.snp
-	cd tools && python3 pce_traps.py ../$(BUILD)/spikes.snp ../$(BUILD)/traps
+$(BUILD)/traps/traps.bin: tools/pce_traps.py $(BUILD)/spikes.snp $(PLAYER)/player.bin
+	cd tools && PLAYER_PAL=$(abspath $(PLAYER))/sprpal.bin python3 pce_traps.py ../$(BUILD)/spikes.snp ../$(BUILD)/traps
 
 # Stage props (the cave block) from a bot run that breaks it with a down thrust.
 $(BUILD)/block.snp: sim/sim sim/maincpu.bin sim/scripts/block.txt

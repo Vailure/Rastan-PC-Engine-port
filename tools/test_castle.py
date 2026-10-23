@@ -170,6 +170,35 @@ check('the sealing wall comes out 257 frames after he comes into the hall', seen
 check('and pushes him off the ledge into the fire', fell is not None and 27 <= rw[fell]['wl_step'][0] <= 31
       and w16(rw[fell]['p_x']) >= 8768, f"dead at {fell}, step {rw[fell]['wl_step'][0] if fell else None}")
 
+# Shaft 2's spiked weights (marker $45, sim/scripts/weights.txt): they appear when the
+# camera comes up to y -744 (the arcade's view at -752), wait 8, 40 and 72 frames, then
+# cycle every 147 (down to 31). Route B, cut where it walks the corridor: standing under
+# the middle one (x 10016) he dies as it reaches length 23 (the arcade: 2868); crouched
+# he lives through its whole cycle.
+_i = next(j for j in range(0, len(ROUTE_B), 3) if ROUTE_B[j] == 2066 and ROUTE_B[j + 2] == '04')
+_pre = ROUTE_B[:_i]
+WT = {'p_x': 2, 'p_y': 2, 'p_state': 1, 'scroll_y': 2, 'wt_act': 1, 'wt_len': 3}
+ks, bs = route_keys(god, 5, _pre + [2066, 2193, '04'])
+rs = peek(god, bs + 2700, ks, WT)
+act = next((i for i, f in enumerate(rs) if f['wt_act'][0]), None)
+check('the weights appear as the camera comes up to y -744', act is not None
+      and s16(rs[act]['scroll_y']) <= -744 < s16(rs[act - 2]['scroll_y']),
+      f"at {act - bs if act else None}, scroll_y {s16(rs[act]['scroll_y']) if act else None}")
+starts = [[i for i in range(act or 0, len(rs)) if rs[i]['wt_len'][k] == 1 and rs[i - 1]['wt_len'][k] == 0]
+          for k in range(3)]
+check('they come down 8, 40, 72 frames later, then every 147 frames', act is not None
+      and all(abs(starts[k][0] - act - (9 + 32 * k)) <= 2 for k in range(3))
+      and all(abs(b - a - 147) <= 1 for a, b in zip(starts[0], starts[0][1:]))
+      and max(f['wt_len'][0] for f in rs) == 31, f'starts {[s[:2] for s in starts]}')
+dead = next((i for i, f in enumerate(rs) if i > bs + 2100 and f['p_state'][0] == ST_DEAD), None)
+check('standing under the middle one, he dies as it reaches 23', dead is not None
+      and w16(rs[dead]['p_x']) == 10016 and rs[dead]['wt_len'][1] in (22, 23, 24),
+      f"at {dead - bs if dead else None}, length {rs[dead]['wt_len'][1] if dead else None}")
+kc, bc = route_keys(god, 5, _pre + [2066, 2193, '04', 2194, 2700, '02'])
+rc = peek(god, bc + 2700, kc, WT)
+check('crouched under it, he lives through its cycle', all(f['p_state'][0] != ST_DEAD for f in rc[bc + 2100:])
+      and max(f['wt_len'][1] for f in rc[bc + 2194:]) == 31)
+
 # The arcade's sprite colour bank: 48 through round 1 (gold and blue soldiers), 64
 # after a restart at checkpoint 4 or 5 (green): the object palettes the VCE holds.
 def sprite_pals(keys, frame):

@@ -74,7 +74,7 @@ column_reset:	stz	col_act
 		sta	col_len
 		stz	wl_act
 		stz	wl_step
-		rts
+		jmp	weights_reset
 
 ; column_cells - in the castle, once: the cells into VRAM (VBLANK, fire_update).
 column_cells:	lda	col_on
@@ -88,6 +88,11 @@ column_cells:	lda	col_on
 		st2	#>COL_VRAM
 		st0	#VDC_VWR
 		tia	column_data, VDC_DL, 6 * 128
+		st0	#VDC_MAWR		; (and shaft 2's weights', src/weights.asm)
+		st1	#<WT_VRAM
+		st2	#>WT_VRAM
+		st0	#VDC_VWR
+		tia	weights_data, VDC_DL, 5 * 128
 		plp
 		lda	#1
 		sta	col_on

@@ -64,7 +64,7 @@ Requirements: Python 3 with numpy and Pillow, gcc and zlib, and a built checkout
 
 ```sh
 make HUC=/path/to/huc          # -> build/rastan.pce (the demo) and build/rastan_debug.pce
-make HUC=/path/to/huc test     # the test scripts, headless (about 2 minutes)
+make HUC=/path/to/huc test     # the test scripts, headless (about 3 minutes)
 make HUC=/path/to/huc audit    # a whole playthrough checked frame by frame (about 2 minutes)
 python3 tools/trace_player.py build/rastan_debug.pce 600 60 300 04   # walk right, print Rastan's state
 ```
@@ -177,7 +177,8 @@ cd tools && python3 contact.py ../out/play1.snp ../out/play1.png 700 900 1100
 VRAM layout: BAT `$0000`, streamed tiles `$1000-$4A7F`, the swarm's bat cells `$4A80-$4AFF`, the floor
 spears' cells `$4B00`, props `$4C00` (outside: the cave block; in the castle the fire's tiles `$4C00-$4DFF` and
 the hanging column's cells `$4E00-$4F7F`), Rastan's two sprite pattern buffers `$5000`/`$5600` (20 body cells +
-4 weapon cells each), object buffers `$5C00-$76BF`, the killed bat's cell `$76C0`, HUD `$7700`, SATB `$7F00`.
+4 weapon cells each), object buffers `$5C00-$76BF`, the killed bat's cell `$76C0`, HUD `$7700` (its free cells
+26-30, `$7D80-$7EBF`: shaft 2's spiked weights), SATB `$7F00`.
 
 ## Rastan (milestone 2, approximate)
 
@@ -279,6 +280,14 @@ Not done yet: slopes, waterfall currents, the other collision codes, rope attack
   comes into the lava hall, a wall of the spears' slot-cover cells comes out of the shaft's wall at x 8680 and
   moves right 2 px every 7 frames (31 steps), its top row growing behind it. It is solid and pushes: whoever is
   still on the ledge before the fire is pushed off into it (the arcade's Rastan at step 29).
+- **The spiked weights** (`src/weights.asm`, marker `$45`, the arcade's handler `$0442BA`;
+  `sim/scripts/weights.txt`, a bot that crosses the jets' room and climbs shaft 2 with the corridor's soldiers
+  poked away): over the corridor at the top of shaft 2 three weights hang on chains from ceiling plates at
+  x 9952, 10016, 10080. They appear when the camera comes up to y -752 (the port: scroll_y -744, the same view),
+  wait 8, 40 and 72 frames, then cycle every 147: down 1 a frame to 31 (the spiked bar 62 px lower), 2 frames,
+  up 1 a frame, 1 frame, 80 frames. A touch kills (the arcade's hit effect `$0553D6`, death as in the fire):
+  standing under one he dies as it reaches 23; crouched he lives through it. Drawn with sprites (plate, chain
+  links, frame, a 32 px bar), the plate in Rastan's palette, which holds its four greys.
 - **The hurry-up swarm** (`src/swarm.asm`, arcade `$049FA6`; `sim/scripts/swarm.txt`): not only the castle's.
   While the stream stays in one pair of segments a count goes up every 64 frames; at 40 (42 s) nine small bats
   come (arcade slots 20-28, type `$0B`), each wave raising a level (to 3) and the next coming after 30, 20, then
@@ -519,8 +528,7 @@ music gets the channel back, and that the voice shows in the audio.
 - [x] RUN pauses
 - [x] The first room's hanging column (marker `$47`) and the lava hall's sealing wall (marker `$4D`)
 - [x] The sprite colour bank: gold and blue castle soldiers, green after a restart at checkpoint 4 or 5
-- [ ] Shaft 2's three markers `$45` (y -752): piston objects of the same kind (type `$18`), spawned by an
-      event (`$04621E`, `$28A` = 1); no capture reaches shaft 2 yet
+- [x] Shaft 2's three spiked weights (marker `$45`, `src/weights.asm`)
 
 (Checked and not needed: Rastan shows no score popups when anything dies, and the "small castle
 flyers" seen in an early census are the blue throwers' clubs, which the port already has.)

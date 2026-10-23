@@ -11,10 +11,16 @@ The same room's hanging column (marker $47, hall.txt) is drawn the same way: a 3
 block ($236-$239) hanging from the ceiling and a piston, shaft ($23A, repeated) and
 foot ($23B), in the spears' palette.
 
+Shaft 2's three spiked weights (marker $45, sim/scripts/weights.txt) are drawn the same
+way too: a ceiling plate ($23F, in the arcade's palette 3: Rastan's), chain links ($23C,
+repeated), a frame ($23D) and a 32 px spiked bar ($23E twice), in the spears' palette.
+
 Outputs:
   traps.bin    3 cells (cover, head, shaft), 128 bytes each (PCE sprite format)
   trappal.bin  two sprite palettes (the cover's, the spear's)
   column.bin   6 cells: the block (4, in 32x32 sprite order), shaft, foot
+  weights.bin  5 cells: chain, frame, bar, bar (a 32 x 16 sprite), plate; the plate's
+               colours mapped to their indices in Rastan's palette (PCE sprite palette 0)
 """
 import os
 import sys
@@ -26,6 +32,9 @@ ROMDIR = os.environ.get('RASTAN_ROMS', os.path.join(os.path.dirname(__file__), '
 FRAME = 1480
 CELLS = (0x234, 0x266, 0x267)
 COLUMN = (0x236, 0x237, 0x238, 0x239, 0x23A, 0x23B)
+WEIGHTS = (0x23C, 0x23D, 0x23E, 0x23E, 0x23F)
+PLATE_PAL = 3                       # (the others: the spear's palette, 12)
+PLAYER_PAL = os.path.join(os.path.dirname(__file__), '..', 'build', 'player', 'sprpal.bin')
 
 
 def to9(c):
@@ -46,10 +55,12 @@ def main():
     assert set(color) == set(CELLS), color
     pals = [color[0x234], color[0x266]]
     assert color[0x267] == color[0x266]
-    def cells(codes):
+    def cells(codes, remap={}):
         blob = bytearray()
         for code in codes:
             g = spr[code]
+            if code in remap:
+                g = np.vectorize(remap[code].get)(g)
             b = bytearray(128)
             for pl in range(4):
                 for y in range(16):
@@ -62,6 +73,19 @@ def main():
             blob += b
         return blob
     open(f'{out}/column.bin', 'wb').write(cells(COLUMN))
+    # The plate's colours (arcade palette 3 of this bank, Rastan's) by index in Rastan's
+    # PCE palette, which holds each of them exactly.
+    pp = open(os.environ.get('PLAYER_PAL', PLAYER_PAL), 'rb').read()
+    pce0 = [int.from_bytes(pp[2 * i:2 * i + 2], 'little') for i in range(16)]
+    plate = {}
+    for v in sorted(set(int(c) for c in spr[0x23F].flat)):
+        if v == 0:
+            plate[0] = 0
+            continue
+        r, g, b = to9(pal[(bank + PLATE_PAL) * 16 + v])
+        want = (g << 6) | (r << 3) | b
+        plate[v] = next(i for i in range(1, 16) if pce0[i] == want)
+    open(f'{out}/weights.bin', 'wb').write(cells(WEIGHTS, {0x23F: plate}))
     blob = bytearray()
     for code in CELLS:
         g = spr[code]
