@@ -228,6 +228,19 @@ bites = [i for i in range(1, 3000) if r[i]['sw_bite'][0] == 45 and r[i - 1]['sw_
 gaps = {b - a for a, b in zip(bites, bites[1:])}
 check('touching him, they bite every 45 frames at most', len(bites) >= 3 and min(gaps) >= 45,
       f'{len(bites)} bites, gaps {sorted(gaps)[:4]}')
+# The bite's box is the arcade's ($044CBA: the bat's box $55 against Rastan's for slots
+# 18 on, checked against the arcade capture on all 318 frames of swarm.snp): a flying bat
+# within 10 px across and -36 .. 32 down of his anchor (standing).
+def in_box(f):
+    return any(4 <= f['sw_st'][k] <= 9 and abs(s16(f['sw_xl'][k], f['sw_xh'][k]) - w16(f['p_x'])) <= 10
+               and -36 <= s16(f['sw_yl'][k], f['sw_yh'][k]) - s16(*f['p_y']) <= 32 for k in range(9))
+# (RAM is sampled once a video frame, mid-logic: a bite shows as sw_bite going up, and the
+# bat that bit may be in the box in that sample or the one before.)
+free = [i for i in range(2500, 3000) if r[i - 1]['sw_bite'][0] == r[i - 2]['sw_bite'][0] == 0]
+bit = lambda i: r[i]['sw_bite'][0] > r[i - 1]['sw_bite'][0]
+odd = [i for i in free if bit(i) != (in_box(r[i]) or in_box(r[i - 1]) if bit(i) else in_box(r[i]) and in_box(r[i - 1]))]
+check("they bite when one is in the arcade's box (|dx| <= 10, dy -36 .. 32), and only then",
+      not odd and any(bit(i) for i in free), f"{len(odd)} of {len(free)} frames disagree {odd[:4]}")
 kills = [i for i in range(3000, 3400) for k in range(9) if r[i]['sw_st'][k] == 15 and r[i - 1]['sw_st'][k] != 15]
 # (several can die in one swing; a lizardman killed with them adds 300)
 check('his sword kills them, 100 points each', len(kills) >= 3

@@ -16,12 +16,15 @@
 ; a cycle of 147 frames. At length L the frame is drawn at y -830 + 2L, the
 ; spiked bar (32 wide) 16 px below it, the chain's links (at most 4) above.
 ;
-; A touch kills (the arcade's hit effect $0553D6, state 8, like the fire):
-; Rastan's middle within -26 .. +30 px of the weight's x, and his body's top
-; (p_y - 24) above the bar's bottom, -796 + 2L for the weight's length on the
-; frame before (the arcade reads it a frame late): standing on the corridor's
-; floor, from L 23. Crouched he lives through whole cycles (the arcade), so
-; his top is then taken as p_y - 5: the bar, down to -734, never reaches it.
+; A touch kills (the arcade's hit effect $0553D6, state 8, like the fire).
+; The arcade's boxes (inclusive; the test is $044CBA, the weights' boxes
+; $044CE0 + 4 * ($27 + L / 2), Rastan's at $10D248): the weight x - 16 ..
+; x + 16, y -828 + 4 (L / 2) .. -796 + 4 (L / 2); Rastan x - 12 .. x + 12,
+; y - 24 .. y + 26 (crouched: y .. y + 26). So: |p_x - x| <= 28 and his top
+; at or above the bar's bottom. The hit is recorded in one frame and takes
+; effect in the next (here: tested with the length before this frame's
+; step). Standing on the corridor's floor (-729) he dies from L 22 (dead as
+; it reaches 23); crouched, never: the bar comes down to -736.
 ;
 ; Sprites like the column's (no object slot): plate, frame, bar (32 x 16) and
 ; chain links; the plate in Rastan's palette (0), the rest in the spears'
@@ -146,7 +149,7 @@ wt_touch:	lda	<p_state
 		eor	#$80
 !:		bmi	.r
 		ldx	#NUM_WT - 1
-.one:		lda	<p_x			; p_x - (x - 26) in 0 .. 56?
+.one:		lda	<p_x			; p_x - (x - 28) in 0 .. 56?
 		sec
 		sbc	wt_x_l, x
 		sta	wt_sx
@@ -155,7 +158,7 @@ wt_touch:	lda	<p_state
 		sta	wt_sx + 1
 		lda	wt_sx
 		clc
-		adc	#26
+		adc	#28
 		sta	wt_sx
 		lda	wt_sx + 1
 		adc	#0
@@ -163,8 +166,9 @@ wt_touch:	lda	<p_state
 		lda	wt_sx
 		cmp	#57
 		bcs	.next
-		; p_y < -772 + 2L (crouched: -791 + 2L): his top above the bar's bottom.
-		lda	wt_len, x
+		; p_y < -771 + 4 (L / 2) (crouched: -795 + ...): his top at or above
+		lda	wt_len, x		; the bar's bottom.
+		and	#$FE
 		asl	a
 		sta	wt_sy
 		stz	wt_sy + 1
@@ -173,11 +177,11 @@ wt_touch:	lda	<p_state
 		beq	.low
 		cmp	#ST_CATK
 		beq	.low
-		lda	#<(-772)
-		ldy	#>(-772)
+		lda	#<(-771)
+		ldy	#>(-771)
 		bra	!+
-.low:		lda	#<(-791)
-		ldy	#>(-791)
+.low:		lda	#<(-795)
+		ldy	#>(-795)
 !:		clc
 		adc	wt_sy
 		sta	wt_sy

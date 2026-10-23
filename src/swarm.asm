@@ -213,23 +213,38 @@ swarm_update:	lda	<dbg_noenemy		; (debug menu: enemies off)
 		sta	sw_box, x
 		dex
 		bpl	.sb
-		lda	<p_x			; Body: p_x +/- 12, p_y - 24 .. p_y + 24
-		sec				; (as body_vs_enemy).
-		sbc	#12
+		; The bite's box, the arcade's (the test $044CBA, inclusive): the
+		; bat's box $55 (x - 6 .. x + 6, y - 6 .. y + 12) against Rastan's
+		; for slots 18 on ($10D22C: x - 4 .. x + 4, y - 24 .. y + 26;
+		; crouched y .. y + 26). Against the bat's 16 x 16 pb_* box (and
+		; sword_vs_box's < and >=) that is p_x - 3 .. p_x + 2, p_y - 29
+		; (crouched p_y - 5) .. p_y + 24: a bite when |bat x - p_x| <= 10
+		; and bat y - p_y in -36 .. 32 (crouched -12 .. 32).
+		lda	<p_x
+		sec
+		sbc	#3
 		sta	sw_box + 8
 		lda	<p_x + 1
 		sbc	#0
 		sta	sw_box + 9
 		lda	<p_x
 		clc
-		adc	#12
+		adc	#2
 		sta	sw_box + 10
 		lda	<p_x + 1
 		adc	#0
 		sta	sw_box + 11
+		ldy	#29
+		lda	<p_state
+		cmp	#ST_CROUCH
+		beq	.low
+		cmp	#ST_CATK
+		bne	!+
+.low:		ldy	#5
+!:		sty	sw_box + 12
 		lda	<p_y
 		sec
-		sbc	#24
+		sbc	sw_box + 12
 		sta	sw_box + 12
 		lda	<p_y + 1
 		sbc	#0

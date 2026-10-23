@@ -527,7 +527,9 @@ Then:
 
 The order is roughly by the value it adds to the demo for the effort.
 
-1. **The bite and push details.** The bats' touch box (16×16), the column's and wall's push distances and the weights' kill range were derived from positions, not read from the arcade's collision code (the hit list at `$10D2A8` comes from `$0449xx`).
+1. **Rastan's hurt box per pose.** The arcade's collision code is now known (below); the bats' bite and the weights' kill use it. The walkers' hits on Rastan (`enemies.asm`: p_x ± 12, p_y − 24, crouched − 6) and the clubs still use older measured boxes. Read each kind's box index and port them, with Rastan's box per pose from `$10D248` (the captures show only x −12/−8 .. 12, y −24 or 0 .. 26).
+   - **How the arcade tests a touch:** `$0449B4` clears the hit lists (`$10D2A8`, `$10D2C8`, 4 entries of 8 bytes), then for each object slot takes a box index (`$0446BC`, or for map objects with `+$0B` set, `$044548` and its table at `$044582`: `$47` the column `$13` + length / 2, `$45` the weights `$27` + length / 2, `$4D` the wall `$43` + length / 2 − 1) and tests it (`$044CBA`, inclusive) against Rastan's box: `$10D248` for slots below 18, `$10D22C` (8 px narrower each side) from 18 on. Box entries are 4 signed bytes (x0, x1, y0, y1) at `$044CE0` + 4 × index, relative to the object's (x, y). A hit is processed the next frame (`$054A2C`): the entry's type picks the effect through the table at `$0550A8` (damage `$800`-`$1800`, or `$0553D6`: death).
+   - The column's box (8 px either side, Rastan's 12) gives the measured 21 px push. The wall's box (x 16 .. 20 + 4 n) is relative to its object, whose x was not tied to the port's; its push stays measured.
 2. **The lava hall's vines and the fire's sparks.** The three vines swing together, and their grab box is a guess. Measure them like the chasm vine (`vine.snp`).
 3. **More compression, if needed.**
    - The stage stream is now 206 KB (dictionaries; §4.7). The 3,645 raw patterns are 57% of it.

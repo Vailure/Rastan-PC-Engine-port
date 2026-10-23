@@ -275,7 +275,8 @@ Not done yet: slopes, waterfall currents, the other collision codes, rope attack
   at x 8480 a 32x32 block hangs from the ceiling (y 32) and a piston comes out of it. Once on the screen it
   waits 9 frames, then cycles every 540: down 2 px every 2 frames until its foot is on the floor, held 258
   frames, up 2 px every 4, held 54. It does no harm, but it is solid and pushes Rastan out to 21 px from its
-  middle, so the corridor is open about 140 frames in 540. (These were the "ceiling spikes" of earlier notes;
+  middle (the arcade's box for it, `$044CE0` + 4 × (`$13` + length / 2), is 8 px either side, Rastan's 12),
+  so the corridor is open about 140 frames in 540. (These were the "ceiling spikes" of earlier notes;
   the floor spears at 8328 and 8488 are the room's only spikes.) Drawn with sprites like the spears.
 - **The sealing wall** (`src/column.asm`, marker `$4D`; `hall.txt` frames 4230-4700): 257 frames after Rastan
   comes into the lava hall, a wall of the spears' slot-cover cells comes out of the shaft's wall at x 8680 and
@@ -286,8 +287,10 @@ Not done yet: slopes, waterfall currents, the other collision codes, rope attack
   poked away): over the corridor at the top of shaft 2 three weights hang on chains from ceiling plates at
   x 9952, 10016, 10080. They appear when the camera comes up to y -752 (the port: scroll_y -744, the same view),
   wait 8, 40 and 72 frames, then cycle every 147: down 1 a frame to 31 (the spiked bar 62 px lower), 2 frames,
-  up 1 a frame, 1 frame, 80 frames. A touch kills (the arcade's hit effect `$0553D6`, death as in the fire):
-  standing under one he dies as it reaches 23; crouched he lives through it. Drawn with sprites (plate, chain
+  up 1 a frame, 1 frame, 80 frames. A touch kills (the arcade's hit effect `$0553D6`, death as in the fire).
+  The boxes are the arcade's (the test `$044CBA`; a weight's, `$044CE0` + 4 × (`$27` + length / 2), 16 px
+  either side and down to -796 + 4 × (length / 2); Rastan's, `$10D248`, 12 px either side, from 24 above his
+  anchor, or from it when crouched): standing under one he dies as it reaches 23; crouched, never. Drawn with sprites (plate, chain
   links, frame, a 32 px bar), the plate in Rastan's palette, which holds its four greys.
 - **The hurry-up swarm** (`src/swarm.asm`, arcade `$049FA6`; `sim/scripts/swarm.txt`): not only the castle's.
   While the stream stays in one pair of segments a count goes up every 64 frames; at 40 (42 s) nine small bats
@@ -297,7 +300,10 @@ Not done yet: slopes, waterfall currents, the other collision codes, rope attack
   came (a point on the screen: the arcade keeps objects in screen coordinates): scripts of six steps, a step every
   4 frames (2 from level 2, 1 at level 3), turning one of 56 directions a step (the arcade's velocity table), the
   next script picked by where the target is, on a bit of each bat's own pseudo-random byte (`$041FAC`). At level 3
-  they aim at Rastan as he is. A touch bites 1024 (4 units, then 45 frames before the next); one sword hit kills a
+  they aim at Rastan as he is. A touch bites 1024 (4 units, then 45 frames before the next): the arcade's boxes,
+  the bat's (`$55`: 6 px either side, 6 above to 12 below) against Rastan's for slots 18 on (`$10D22C`: 4 px
+  either side), so a bat within 10 px across and 36 above to 32 below his anchor (checked against all 318
+  frames of `swarm.snp`); one sword hit kills a
   bat (100). All flap on one clock (cells `$268`, `$269`, `$26A`, `$269`, 4 frames each).
 - **Colour bank** (the soldiers' colours): the arcade's sprite colour bank is 48 in round 1, but a restart at a
   checkpoint from segment 16 on (checkpoints 4 and 5) sets it to 64 (`$0452DA`: the restart segment mod 23 >= 16),

@@ -153,7 +153,7 @@ All of these are fixed, and each now has a check:
 
 | Gap | Effect on the demo | Notes |
 |---|---|---|
-| Shaft 2's spiked weights: their hit box | Measured, not read | The kill range (-26 .. +30 px of a weight, the bar's bottom a frame late) is measured from bot runs; the crouched case only shows he lives |
+| Rastan's hurt box by pose | Two forms only | The arcade's (`$10D248`) is set per pose; the port uses its standing and crouched forms (the weights, the bats), and for the walkers' hits its older measured box |
 | Sprite flicker in crowds | Visible when 3–4 walkers share a line, or with the swarm | Hardware limit; mitigated by rotation (walkers and the swarm take turns, and the bats among themselves) |
 | Fire sparks | Not drawn | Cosmetic |
 
@@ -179,7 +179,7 @@ All of these are fixed, and each now has a check:
 
 ## 6. Phase history
 
-The project spans 40 commits (2026-10-20 → 2026-10-23).
+The project spans 41 commits (2026-10-20 → 2026-10-23).
 
 1. **Tools:**
    - arcade graphics decoder;
@@ -212,10 +212,11 @@ The project spans 40 commits (2026-10-20 → 2026-10-23).
    - stage compression (513 KB → 206 KB) and the move to the Street Fighter II mapper.
    - the hurry-up swarm, the sprite colour bank (soldiers' colours), the hanging column and the sealing wall;
    - shaft 2's spiked weights (marker `$45`), from an arcade bot that now climbs shaft 2;
-   - the swarm's share of the sprites: it takes turns with the walkers, so its bats no longer vanish behind a crowd.
+   - the swarm's share of the sprites: it takes turns with the walkers, so its bats no longer vanish behind a crowd;
+   - the bats' bite and the weights' kill read from the arcade's collision code (its box tables), no longer measured.
 
 The next steps, in order, are in `docs/HANDOFF.md` §8:
-1. the measured-not-read collision details;
+1. Rastan's hurt box per pose (the arcade's table), for the walkers too;
 2. the lava hall's vines and fire sparks;
 3. more compression, if needed;
 4. rounds 2–6;
