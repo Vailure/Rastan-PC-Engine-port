@@ -9,6 +9,12 @@
 ; rests; the cycle is 163 frames, the second trap 32 frames behind the first.
 ; A spear standing out of the floor kills Rastan on touch.
 ;
+; They are map objects: the arcade puts them in play once the camera rises
+; past the middle room's floor (its top at y 247 or above: arcade camy 239,
+; in a run up the rope, spikes.txt), not while it shows only that floor's
+; underside from the corridor below; both at rest, the second trap rising
+; 10 frames later and the first 32 after it (trap_t starts at TRAP_T0).
+;
 ; The three cells (cover, head, shaft) stay in VRAM at TRAP_VRAM (the end of
 ; the stage's tile pool, tools/pce_stage.py NUM_SLOTS); their palettes are
 ; sprite palettes 13 (cover) and 14 (spear). The spears take SATB entries
@@ -26,6 +32,8 @@ TRAP_PAT	=	TRAP_VRAM >> 5		; SATB pattern of the cover (head +2, shaft +4).
 TRAP_PAL_COVER	=	13
 TRAP_PAL_SPEAR	=	14
 TRAP_ROOM	=	8192			; They run while Rastan is in this room.
+TRAP_SHOW_Y	=	248			; ... once scroll_y < this there,
+TRAP_T0		=	32 - 10			; with this clock.
 
 trap_x_l:	db	<8320, <8480
 trap_x_h:	db	>8320, >8480
@@ -95,8 +103,13 @@ trap_head:	tay
 		sta	<etmp + 1
 		rts
 
-; traps_active - carry set while Rastan is in the room (x 8192-8703, row 0).
-traps_active:	lda	<p_y + 1
+; traps_active - carry set while Rastan is in the room (x 8192-8703, row 0)
+; and the spears have appeared.
+traps_active:	lda	trap_on
+		bne	traps_room
+		clc
+		rts
+traps_room:	lda	<p_y + 1
 		bmi	.no
 		lda	<p_x + 1
 		and	#$FE
@@ -107,13 +120,28 @@ traps_active:	lda	<p_y + 1
 .no:		clc
 		rts
 
-; traps_update - once a frame (enemies_update): the clock, and the spears' touch.
-traps_update:	inc	trap_t
+; traps_update - once a frame (enemies_update): the spears appear (the camera
+; up past the middle room's floor), then the clock, and the spears' touch.
+traps_update:	lda	trap_on
+		bne	.tick
+		jsr	traps_room
+		bcc	.not
+		lda	<scroll_y		; scroll_y < TRAP_SHOW_Y (and >= 0: row 0)?
+		cmp	#<TRAP_SHOW_Y
+		lda	<scroll_y + 1
+		sbc	#>TRAP_SHOW_Y
+		bcs	.not
+		lda	#TRAP_T0
+		sta	trap_t
+		inc	trap_on
+		bra	.on
+.not:		rts
+.tick:		inc	trap_t
 		lda	trap_t
 		cmp	#TRAP_PERIOD
-		bcc	!+
+		bcc	.on
 		stz	trap_t
-!:		jsr	traps_active
+.on:		jsr	traps_active
 		bcc	.r
 		lda	<p_state
 		cmp	#ST_DEAD

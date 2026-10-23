@@ -27,7 +27,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 from peek import peek
 from trace_player import TGRUN
-from routes import ROUTE_A, ROUTE_B, keys as route_keys
+from routes import ROUTE_A, ROUTE_B, A_LATE, keys as route_keys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 rom, out = sys.argv[1:3]
@@ -66,7 +66,7 @@ def warp(cp):
 def route(cp):
     if cp == 4:
         k, base = route_keys(rom, cp, ROUTE_A)
-        return k, base + 3377 + 540     # (+540: the column, routes.py)
+        return k, base + 3377 + A_LATE  # (+A_LATE: the column and spears, routes.py)
     if cp == 5:
         k, base = route_keys(rom, cp, ROUTE_B)
         return k, base + 3572

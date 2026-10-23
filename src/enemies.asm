@@ -121,6 +121,7 @@ woman_done:	ds	1		; The woman warrior spawned this life.
 jet_wait:	ds	3		; Frames before each fire jet may erupt again.
 vines_done:	ds	1		; Vines present (bits, vines.asm).
 trap_t:		ds	1		; The floor spears' clock (traps.asm).
+trap_on:	ds	1		; The floor spears have appeared (traps.asm).
 vine_t:		ds	1		; The vines' swing clock (vines.asm).
 boss_done:	ds	1		; The boss has come this life.
 boss_clear:	ds	1		; Frames to the round clear (0: not counting).
@@ -222,6 +223,7 @@ enemies_reset:	ldx	#NUM_OBJ - 1
 		stz	jet_wait + 2
 		stz	vines_done
 		stz	trap_t
+		stz	trap_on
 		stz	vine_t
 		lda	#SPAWN_FIRST
 		sta	<spawn_timer

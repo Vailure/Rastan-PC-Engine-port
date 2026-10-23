@@ -59,16 +59,26 @@ def run(r, end, keys, extra=None):
     return a
 
 
-from routes import ROUTE_A, ROUTE_SHAFT, ROUTE_B, ROUTE_V, SHAFT_HANG, keys as route_keys
+from routes import ROUTE_A, ROUTE_SHAFT, ROUTE_B, ROUTE_V, SHAFT_HANG, A_LATE, keys as route_keys
 
 # A: up shaft 1 and across the lava hall.
 ka, base = route_keys(god, 4, ROUTE_A)
-r = run(god, base + 3377 + 540, ka)          # (+540: the column, routes.py)
+r = run(god, base + 3377 + A_LATE, ka)       # (+A_LATE: the column and spears, routes.py)
 ys = [s16(f['scroll_y']) for f in r]
 check('the floor spears of the middle corridor can be walked past', all(f['p_state'][0] != ST_DEAD for f in r),
       f"died at frame {next((i for i, f in enumerate(r) if f['p_state'][0] == ST_DEAD), None)}")
-check('climbing out of the first room, the camera follows up into shaft 1', min(ys[:base + 2577 + 540]) <= -450,
-      f'highest scroll_y {min(ys[:base + 2577 + 540])}')
+# The spears are map objects: the arcade puts them in play as the camera rises past
+# the middle room's floor (its view's top at y 247: camy 239, sim/scripts/spikes.txt),
+# not at the restart below, where the floor's underside shows; the second trap rises
+# 10 frames after they appear (trap_t 22), the first 32 after that.
+rt = peek(god, base + 900, ka, {'trap_on': 1, 'trap_t': 1, 'scroll_y': 2})
+on = next((i for i, f in enumerate(rt) if f['trap_on'][0]), None)
+check('the floor spears appear as the camera rises past y 248, not at the restart below',
+      on is not None and on > base + 100 and s16(rt[on]['scroll_y']) < 248 <= s16(rt[on - 1]['scroll_y'])
+      and rt[on]['trap_t'][0] == 22, f"at {on}, scroll_y {s16(rt[on]['scroll_y']) if on else None}, "
+      f"clock {rt[on]['trap_t'][0] if on else None}")
+check('climbing out of the first room, the camera follows up into shaft 1', min(ys[:base + 2577 + A_LATE]) <= -450,
+      f'highest scroll_y {min(ys[:base + 2577 + A_LATE])}')
 top = next((i for i, f in enumerate(r) if f['cam_region'][0] == 2), None)
 check("once the shaft's rows have all streamed, the lava hall's columns come next",
       top is not None and w16(r[top]['next_col']) >= 0x12 * 64, f"frame {top}")
@@ -76,7 +86,7 @@ vines = sorted({f['p_vine'][0] for f in r if f['p_state'][0] == ST_SWING})
 check('the three vines over the lava are caught in turn', len(vines) == 3, f'vine slots {vines}')
 end = r[-1]
 check('he lands past the lava', w16(end['p_x']) >= 9280 and s16(end['p_y']) == -345
-      and all(f['p_state'][0] != ST_DEAD for f in r[base + 2577 + 540:]), f"at ({w16(end['p_x'])}, {s16(end['p_y'])})")
+      and all(f['p_state'][0] != ST_DEAD for f in r[base + 2577 + A_LATE:]), f"at ({w16(end['p_x'])}, {s16(end['p_y'])})")
 lc = [w16(f['loop_cnt']) for f in r]
 slow = min((lc[i + 60] - lc[i]) & 0xffff for i in range(300, len(r) - 60, 60))
 check('no slowdown on the way (60 logic frames a second)', slow >= 59, f'fewest {slow}')
@@ -142,10 +152,21 @@ diff = (plain != menu).any(-1).mean() * 100
 check('in a shaft, closing the debug menu restores the screen', diff == 0, f'{diff:.2f}% pixels differ')
 
 
+# A restart at checkpoint 5 (the room past the lava hall's wall, on its floor at y -33):
+# the camera follows him there, as the arcade's does (the hall's lower view is for
+# the fire's room only).
+from routes import resume
+r5 = peek(god, resume(god, 5) + 30, warp(5), {'p_y': 2, 'scroll_y': 2})[-1]
+feet = s16(r5['p_y']) + 24 - s16(r5['scroll_y'])
+check('restarted at checkpoint 5, Rastan stands on the screen (on the room\'s floor at its bottom, as in the arcade)',
+      150 <= feet <= 216,
+      f'feet at {feet}')
+
+
 # The top corridor's hanging column (marker $47): once seen it cycles every 540 frames
 # (down to 112 below its top, up to 34); it shuts the corridor while down: Rastan,
 # walking right on route A, is held 21 px left of its middle (8475) until it rises.
-rc = peek(god, base + 2200, ka, {'col_act': 1, 'col_len': 1, 'p_x': 2, 'p_y': 2})
+rc = peek(god, base + 2020 + A_LATE, ka, {'col_act': 1, 'col_len': 1, 'p_x': 2, 'p_y': 2})
 act = next((i for i, f in enumerate(rc) if f['col_act'][0]), None)
 lens = [f['col_len'][0] for f in rc[act:]] if act else []
 downs = [i for i in range(1, len(lens)) if lens[i] > 34 and lens[i - 1] == 34]
@@ -159,9 +180,9 @@ check('down, it holds Rastan back (8475); risen, he walks through', len(held) > 
 # The lava hall's sealing wall (marker $4D): 257 frames after Rastan comes into the
 # hall it slides out of the shaft's wall, 2 px every 7 frames; left standing on the
 # ledge before the fire, he is pushed off into it at its 29th step (the arcade's).
-J = ROUTE_A.index(2990 - 221 + 540)                  # (route A up to the lava hall's ledge)
-kw, bw = route_keys(god, 4, ROUTE_A[:J - 2] + [3263, '04'])
-rw = peek(god, bw + 3900, kw, {'p_x': 2, 'p_y': 2, 'p_state': 1, 'wl_act': 1, 'wl_step': 1})
+J = ROUTE_A.index(2990 - 221 + A_LATE)                  # (route A up to the lava hall's ledge)
+kw, bw = route_keys(god, 4, ROUTE_A[:J - 2] + [3263 - 540 + A_LATE, '04'])
+rw = peek(god, bw + 3360 + A_LATE, kw, {'p_x': 2, 'p_y': 2, 'p_state': 1, 'wl_act': 1, 'wl_step': 1})
 seen = next((i for i, f in enumerate(rw) if f['wl_act'][0]), None)
 out = next((i for i, f in enumerate(rw) if f['wl_step'][0]), None)
 fell = next((i for i, f in enumerate(rw) if out and i > out and f['p_state'][0] == ST_DEAD), None)

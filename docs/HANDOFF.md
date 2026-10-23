@@ -321,7 +321,7 @@ The format is documented at the top of `tools/pce_stage.py` and above `stream_li
 - The camera box is chosen by the next line's region:
   - forward-only on horizontal stretches;
   - free in shafts and the boss room;
-  - in the lava hall, resting at `CAM_REST_Y` (−441) while `p_x` is in 8704–9728, but never above `p_y − 36`.
+  - in the lava hall, resting at `CAM_REST_Y` (−441) while `p_x` is in 8704–9215 (square `$12`, the fire's room), but never above `p_y − 36`. (It once covered square `$13` too, the room past the hall's wall: there the camera stayed at −441 while Rastan stood on its floor at −33, off the screen, after every restart at checkpoint 5.)
 
 **Restarts** (`checkpoint_start`) fast-forward the stream from line 0 with the display off. This leaves VRAM exactly as if played that far.
 
@@ -487,8 +487,8 @@ tgrun rom.pce frames out.ppm [from to padhex]...
 15. **The debug menu once popped up at random, and drew over the stage.** SELECT alone opened it, and some pads and emulators send it spuriously; and opened in play, its font and colours overwrote the stage's (the sky showed through in the menu's colours). It is now a screen of its own on the title (`title_menu`, UP+SELECT held), which sets up a new game; title builds have no menu in play (`dbg_on` stays 0). Only `testdbg.pce` and the other test builds, which have no title, keep the in-play menu for their warps.
 16. **Arcade positions in the castle's later squares.** The census tools' camera x is `(segment - 1) × 512` plus the scroll register. In the jets' room and shaft 2 (the arcade's segments `$14`, `$15`) that counter is one ahead of the port's squares, so the port's x is that minus 512 (the restart point: 9808 → 9296; the jets: 10384 → 9870 was taken 2 px off). Take positions on frames where the scroll registers do not change: a moving camera puts 1-2 px of jitter in them. For the vertical, the same view is the port's `scroll_y` = the arcade's (Rastan's y − his screen y) + 8.
 17. **pceas packs the HuC library's procedures into the bank with the least free space that holds them** (`vdc_set_mode`, `read_joypads`, `init_screen`, `vdc_clear_vram`, `clear_vce`, about 500 bytes). Packed into a code bank (4 or 5, assembled after them), the bank's location counter is left at the procedure's end and the bank's own code lands on top: hundreds of "Symbol's bank or address changed in final pass" errors through that bank, with no hint of the cause. It happens as soon as bank 4's or 5's free space drops below the landing bank's. `main.asm` keeps a landing place: the title's second bank (7) is filled up to `PROC_ROOM` (512) bytes from its end. If a code bank's free space ever falls between about 120 and 512 bytes, the procedures can pick it again: shrink `PROC_ROOM`, or watch for the symptom.
-
 18. **`vce_list` once indexed its list with Y alone**, so a list over 63 colour pairs wrapped and rewrote the first ones. The sky's lists are longer: the pointer now moves on 4 bytes a pair. `dyncolor.inc` lives in data bank `$08` (bank 0 is full); `dyn_reset`/`dyn_update` map it into MPR3 themselves.
+19. **The floor spears' clock starts when they appear** (the camera rising into the middle room), not at the restart. Route A's timing past them depends on it: it waits 36 frames more there, and 144 more at the room's left end so the vines' 180-frame clock (which runs from the restart) meets it as before. `routes.A_LATE` (720) is everything added to route A since it was measured; tests and the audit time route A with it.
 
 ---
 

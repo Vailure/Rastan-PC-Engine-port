@@ -33,8 +33,17 @@ ROUTE_A = shift(ROUTE_A, 2 - 223)
 # (the column's period, three of the vines'), so the rest runs as it did.
 _i = ROUTE_A.index(1359)                 # (the end of that walk: 1580 - 221)
 ROUTE_A = ROUTE_A[:_i] + [1359 + 540] + shift(ROUTE_A[_i + 1:], 540)
-# The same up to the top of shaft 1's lower rope, where he hangs still (from 2789).
-SHAFT_HANG = 2249 + 540
+# The middle corridor's floor spears appear as the camera rises into its room, their
+# clock starting then (src/traps.asm): he waits 36 frames more before walking left
+# past them, then 144 more at the room's left end (x 8233, clear of them), so the
+# rest keeps the vines' 180-frame phase. A_LATE: the frames added since measuring.
+_i = ROUTE_A.index(609)
+ROUTE_A = ROUTE_A[:_i] + shift(ROUTE_A[_i:], 36)
+_i = ROUTE_A.index(870)
+ROUTE_A = ROUTE_A[:_i] + shift(ROUTE_A[_i:], 144)
+A_LATE = 540 + 180
+# The same up to the top of shaft 1's lower rope, where he hangs still (from 2969).
+SHAFT_HANG = 2249 + A_LATE
 ROUTE_SHAFT = ROUTE_A[:ROUTE_A.index(SHAFT_HANG)]
 
 ROUTE_B = [200, 830, '05'] + sum([[f, f + 3, I] for f in range(220, 830, 60)], []) + [

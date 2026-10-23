@@ -282,6 +282,12 @@ Not done yet: slopes, waterfall currents, the other collision codes, rope attack
   10382-10574 in segment `$14`, now the jets' room at square ($13, -1)). Each erupts when Rastan is 172 px
   left of it (the flame rises for 17 frames, dies down for 18, then a column flickers for 57) and again about 220
   frames later while he is near; touching the flame hurts.
+- **The floor spears** (`src/traps.asm`, markers `$46`; `sim/scripts/spikes.txt`): two traps of two spears in
+  the middle room's floor (y 320, at x 8320 and 8480). They rise 2 px a frame for 31 frames, stay 3, sink in 31,
+  163 frames a cycle, the second trap 32 behind the first; standing out of the floor they kill on touch. Like the
+  arcade's map objects they appear only when the camera rises past that floor (its view's top above y 248, arcade
+  camy 239): not from the corridor below, where the floor's underside is in view after a restart at
+  checkpoint 4. They appear at rest, the second trap rising 10 frames later.
 - **The hanging column** (`src/column.asm`, marker `$47`; measured on `sim/scripts/hall.txt` and variants
   that stop Rastan under it with the soldiers and the swarm poked away): over the first room's top corridor
   at x 8480 a 32x32 block hangs from the ceiling (y 32) and a piston comes out of it. Once on the screen it
