@@ -73,6 +73,7 @@ The build:
 - LEFT/RIGHT: walk
 - DOWN: crouch
 - I: jump (UP+I for the high jump; a direction for a forward jump)
+- RUN: pause (sound off) and resume
 - II: attack, standing or crouched; UP+II standing swings the sword over his head; in a jump,
   DOWN+II is the down thrust and UP+II the up thrust
 - UP: grab a rope; UP and DOWN climb it, and I jumps off

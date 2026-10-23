@@ -111,6 +111,11 @@ core_main:	lda	#GAME_BANK		; (the boot mapping already has it there)
 		jsr	objects_upload		; Changed object poses' cells (VBLANK).
 		jsr	sound_update		; Music and effects (the PSG).
 		jsr	debug_check		; SELECT: debug menu.
+		lda	joytrg			; RUN: pause.
+		bit	#JOY_RUN
+		beq	!+
+		jsr	game_pause
+!:
 		lda	<loop_cnt		; Debug slow motion: skip logic frames.
 		and	<dbg_slow
 		bne	.frame
@@ -137,6 +142,19 @@ core_main:	lda	#GAME_BANK		; (the boot mapping already has it there)
 		jsr	checkpoint_track
 	.endif
 		jmp	.frame
+
+; ---------------------------------------------------------------------------
+; game_pause - RUN pressed: everything stops, sound too, until RUN again.
+; (RUN held with SELECT is still the core's soft reset.)
+
+game_pause:	stz	PSG_VOL			; Silence (the PSG's main volume; the
+.wait:		call	wait_vsync		; streams and a voice keep their place).
+		lda	joytrg
+		bit	#JOY_RUN
+		beq	.wait
+		lda	#$FF
+		sta	PSG_VOL
+		rts
 
 ; ---------------------------------------------------------------------------
 ; stage_start - (re)start the stage: with the display off, stream the first
