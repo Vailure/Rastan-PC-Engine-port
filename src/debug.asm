@@ -9,7 +9,10 @@
 ; before the checkpoint's segment, then those the camera has reached), so the
 ; VRAM tile cache ends up exactly as if the stage had been played to there.
 ;
-; Debug menu: UP + SELECT opens it (the core's soft reset is RUN held + SELECT).
+; Debug menu: UP + SELECT held opens it (the core's soft reset is RUN held +
+; SELECT). In the demo build it is locked until UP + SELECT is held on the title
+; screen: that starts the game with the menu open, and unlocks it for the rest
+; of the session.
 ; UP/DOWN pick a line, LEFT/RIGHT change a value, I applies, SELECT or II
 ; closes. While it is open the game is frozen, sprites are hidden, and the
 ; menu font sits in the enemy sprite cells. The tile map under the box is
@@ -50,6 +53,9 @@ dbg_t:		ds	1		; put_char scratch.
 dbg_line:	ds	1
 dbg_rebuilt:	ds	1		; A warp redrew the map: the menu box must not be put back.
 dbg_hold:	ds	1		; Frames UP + SELECT have been held together.
+dbg_on:		ds	1		; The menu can be opened (debug builds; the demo:
+					; once UP + SELECT is held on the title screen).
+dbg_now:	ds	1		; Open it at the next game frame (from the title).
 
 		.bss
 dbg_save:	ds	MENU_W * MENU_H * 2	; The tile map under the menu.
@@ -257,10 +263,15 @@ door_enter:	stz	<p_door
 DBG_HOLD	=	45		; Three quarters of a second.
 
 debug_check:
-	.if	!DEBUG_MENU
-		rts				; (the demo build has no debug menu)
-	.endif
-		lda	joynow
+		lda	<dbg_now		; Asked for on the title screen.
+		beq	!+
+		stz	<dbg_now
+		stz	<dbg_hold
+		jmp	debug_menu
+!:		lda	<dbg_on			; (the demo: locked until then)
+		bne	!+
+		rts
+!:		lda	joynow
 		and	#JOY_SEL | JOY_U
 		cmp	#JOY_SEL | JOY_U
 		beq	.held

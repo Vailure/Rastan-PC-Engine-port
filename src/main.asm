@@ -79,6 +79,9 @@ core_main:	lda	#GAME_BANK		; (the boot mapping already has it there)
 		stz	<dbg_god
 		stz	<dbg_noenemy
 		stz	<dbg_slow
+		stz	<dbg_now
+		lda	#DEBUG_MENU		; Debug builds: the menu from the start.
+		sta	<dbg_on
 		jsr	sf2_round		; (the page the mapper starts with is not known)
 		call	init_screen
 

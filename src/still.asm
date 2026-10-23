@@ -228,7 +228,8 @@ still_wait:	sta	<st_t + 1
 .r:		rts
 
 ; ---------------------------------------------------------------------------
-; title_screen - the arcade's title, "PUSH RUN BUTTON" blinking, until RUN;
+; title_screen - the arcade's title, "PUSH RUN BUTTON" blinking, until RUN
+; (or UP + SELECT held: the game starts with the debug menu open);
 ; then a new game (3 lives, no score) from the start of round 1.
 
 title_screen:
@@ -245,9 +246,23 @@ title_screen:
 		lda	<st_t
 		and	#$20
 		jsr	title_blink
-.key:		lda	joytrg
+.key:		lda	joynow			; UP + SELECT held: the game, with the
+		and	#JOY_SEL | JOY_U	; debug menu open (src/debug.asm).
+		cmp	#JOY_SEL | JOY_U
+		beq	.held
+		stz	<dbg_hold
+		lda	joytrg
 		bit	#JOY_RUN
 		beq	.loop
+		bra	.start
+.held:		inc	<dbg_hold
+		lda	<dbg_hold
+		cmp	#DBG_HOLD
+		bcc	.loop
+		lda	#1
+		sta	<dbg_on
+		sta	<dbg_now
+.start:		stz	<dbg_hold
 		jsr	still_end
 	.endif					; (test builds: straight into a new game)
 		lda	#START_LIVES

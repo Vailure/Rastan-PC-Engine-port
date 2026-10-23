@@ -72,7 +72,9 @@ python3 tools/trace_player.py build/rastan_debug.pce 600 60 300 04   # walk righ
 Two ROMs:
 - **`rastan.pce`, the demo:** the arcade's title screen (PUSH RUN BUTTON), round 1, the arcade's
   round-clear screen and jingle after the boss, GAME OVER when the last life goes, and back to the
-  title. No debug menu.
+  title. The debug menu is hidden: hold UP + SELECT on the title screen (about ¾ s) and the game
+  starts with it open; after that it opens in the game too (until power-off). A game started with RUN
+  has no menu.
 - **`rastan_debug.pce`:** straight into the game, with the debug menu. The tests run on this one (and
   on `god.pce`, `noenemy.pce`, `camtest.pce`, `bgcheck.pce`, test builds the Makefile also makes).
 
@@ -93,7 +95,7 @@ The build:
 
 The camera only scrolls forward. A death restarts at the last checkpoint reached, as in the arcade.
 
-**Debug menu** (`rastan_debug.pce`): hold UP + SELECT together for about ¾ s to open it (a press, or a stray SELECT bit
+**Debug menu** (`rastan_debug.pce`; in `rastan.pce` once unlocked on the title screen): hold UP + SELECT together for about ¾ s to open it (a press, or a stray SELECT bit
 from a pad or emulator mapping, is not enough); it freezes the game (RUN held + SELECT is still the
 core's soft reset).
 UP/DOWN pick a line, LEFT/RIGHT change a value, I applies, SELECT or II closes.

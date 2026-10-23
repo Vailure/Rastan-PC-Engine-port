@@ -68,7 +68,7 @@ Branch: `section1-parity` on `github.com/Vailure/Rastan-PC-Engine-port`. Last up
 
 | ROM | Options (`build/opt*/options.inc`) | Use |
 |---|---|---|
-| `rastan.pce` | `TITLE=1 DEBUG_MENU=0` | **The demo.** Title → round 1 → round-clear → title; GAME OVER → title. |
+| `rastan.pce` | `TITLE=1 DEBUG_MENU=0` | **The demo.** Title → round 1 → round-clear → title; GAME OVER → title. The debug menu is locked until UP+SELECT is held on the title. |
 | `rastan_debug.pce` | `TITLE=0 DEBUG_MENU=1` | Straight into play, with the debug menu (hold UP+SELECT). Most tests run on it. |
 | `god.pce` | `GOD_MODE=1` | Rastan takes no damage; for bots that must reach the end of a section. |
 | `noenemy.pce` | `NO_ENEMIES=1` | Rastan alone (player and effects tests). |
@@ -367,7 +367,11 @@ The arcade draws a row of 32×32 flame sprites. That is too many for the VDC on 
 
 - **Checkpoints:** the arcade's continue table, at segments 0, 4, 8, 12, 16 and 19, plus a seventh target, the boss room.
 - **Opening the menu:** UP+SELECT held for `DBG_HOLD` (45) frames. A press is not enough, because stray SELECT bits from emulator pad mappings used to open it at random.
-- **In the demo build** (`DEBUG_MENU=0`), the menu code is not assembled at all.
+- **In the demo build** (`DEBUG_MENU=0`), the menu is locked.
+  - `dbg_on` starts at 0, and `debug_check` returns at once.
+  - Holding UP+SELECT for `DBG_HOLD` frames on the title screen (`title_screen`, `src/still.asm`) sets `dbg_on` and `dbg_now`. The game then starts, and `debug_check` opens the menu on its first frame.
+  - From then on, the menu works as in the debug build until power-off.
+  - The code is in every build; `DEBUG_MENU` only sets `dbg_on` at boot.
 - **What the menu does:** it draws into the BAT under the screen, using a font in enemy sprite cells, and restores the BAT on close.
 
 ---
@@ -406,7 +410,7 @@ tgrun rom.pce frames out.ppm [from to padhex]...
 | `test_monsters.py` | Chimeras, boulders, gargoyle, woman, boss; the round-clear screen and jingle |
 | `test_castle.py` | Soldiers, spears, jets, vines, doors, camera walls; the round is cleared within 4400 frames |
 | `test_sound.py` | PSG writes match the streams; notes are in the audio spectrum; the voices' levels in order on channel 5 |
-| `test_demo.py` | The image is a 2.5 MB SF2 card; title, blink, RUN starts, pause, no debug menu, GAME OVER → title → new game |
+| `test_demo.py` | The image is a 2.5 MB SF2 card; title, blink, RUN starts, pause; no debug menu after RUN; UP+SELECT on the title opens it (on screen, warp works) and unlocks it in the game; GAME OVER → title → new game |
 
 ### The audit
 
@@ -468,7 +472,7 @@ tgrun rom.pce frames out.ppm [from to padhex]...
     - Anything shared between rounds, or read from an interrupt, goes in `$00-$3F`.
     - The page register is write-only and is not saved anywhere, so code that switches pages must switch back.
 11. **`make` does not notice recipe changes.** Changing an argument in a rule (for example the objects' first bank) does not rebuild its target. Delete the output (`build/objects/objcells.bin`) to force the rebuild.
-12. **The debug menu once popped up at random.** SELECT alone was enough to open it, and some pads and emulators send it spuriously. It now needs UP+SELECT held, and the demo build has no menu.
+12. **The debug menu once popped up at random.** SELECT alone was enough to open it, and some pads and emulators send it spuriously. It now needs UP+SELECT held, and in the demo build it stays locked until unlocked on the title screen.
 
 ---
 

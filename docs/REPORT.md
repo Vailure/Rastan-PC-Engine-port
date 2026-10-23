@@ -41,8 +41,11 @@ The demo ROM is `build/rastan.pce`:
   - MAME and Mednafen support the mapper, because they run *Street Fighter II' Champion Edition*. For other emulators, check before relying on them.
   - Not every flash cart supports it. Check yours before a live demo.
   - So far the image has been run only in the project's own test emulator, which is patched to decode the mapper like the real card. Try it in your target emulator before presenting.
-- The demo build has **no debug menu**.
-- To show a particular section quickly, use `rastan_debug.pce`. Hold UP+SELECT for about ¾ s and use "Warp to checkpoint".
+- **The debug menu is hidden in the demo.**
+  - A game started with RUN has no menu, so a stray button cannot interrupt a presentation.
+  - To show a particular section, hold **UP + SELECT on the title screen** for about ¾ s. The game starts with the debug menu open: pick "Warp to checkpoint", invincibility and so on.
+  - From then on, UP+SELECT held opens the menu in the game too, until power-off.
+  - `rastan_debug.pce` skips the title and has the menu from the start.
 
 ---
 
@@ -65,7 +68,7 @@ Every test drives the real ROM in a patched copy of HuC's `tgemu` emulator (`too
 | Later monsters | Chimeras, boulders, gargoyle, woman warrior, the boss; the round-clear screen and jingle. |
 | Castle | Soldiers, spears, jets, vines, doors and the camera walls. A bot clears the round inside 4400 frames. |
 | Sound | PSG writes match the converted streams, and the notes appear in the audio spectrum. Voice samples reach channel 5 complete and in order, and the music gets the channel back. |
-| Demo flow | Title, blink, RUN to start, pause, no debug menu, GAME OVER → title → a new game. |
+| Demo flow | Title, blink, RUN to start, pause; no debug menu in a game started with RUN; UP+SELECT held on the title opens it (warp checked), then it opens in the game too; GAME OVER → title → a new game. |
 
 ### 2.2 Playthrough audit (`make audit`)
 
@@ -101,7 +104,7 @@ All of these are fixed, and each now has a check:
 - **A torn frame at the boss room door.** Cuts now turn the display off at a VBLANK.
 - **Castle soldiers losing pieces.** The SATB ran out of entries; it is now packed.
 - **The camera clamp silently disabled** by code inserted in front of it.
-- **The debug menu opening at random.** It was opened by stray SELECT bits; it now needs a hold, and the demo has no menu.
+- **The debug menu opening at random.** It was opened by stray SELECT bits; it now needs a hold, and in the demo it is hidden until unlocked on the title screen.
 - **Voice samples landing on the wrong PSG channel.** The music's writes moved the channel select; this is fixed with a shadow register and `sei`.
 - **Stage loads got faster with compression,** which put the frame-timed bot routes out of step: Rastan died at the spears and missed the vines. Routes are now timed from the frame play resumes, measured in each build, so restart length no longer matters.
 - **Two bugs in the test emulator itself:** a one-shot timer, and no PSG direct D/A. It also now emulates the per-line sprite limit, so the tests see what hardware would show.

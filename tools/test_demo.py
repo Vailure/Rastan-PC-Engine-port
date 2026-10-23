@@ -65,11 +65,29 @@ check('RUN starts a new game at the start of round 1 (3 lives)', start is not No
 check('RUN pauses (the game logic stops) and RUN resumes', lc[390] == lc[310] and lc[450] > lc[410],
       f'loop count {lc[310]} {lc[390]} {lc[410]} {lc[450]}')
 
-# 3. No debug menu: UP + SELECT held does not stop the game.
+# 3. The debug menu is locked in a game started with RUN: UP + SELECT held does not
+# stop the game.
 r = peek(rom, 500, [120, 121, RUN, 250, 400, OPEN], VARS)
 lc = [w16(x['loop_cnt']) for x in r]
-check('there is no debug menu (UP + SELECT held: the game goes on)', lc[450] - lc[250] >= 199,
+check('started with RUN, there is no debug menu (UP + SELECT held: the game goes on)', lc[450] - lc[250] >= 199,
       f'{lc[450] - lc[250]} logic frames in 200')
+
+# 3b. UP + SELECT held on the title: the game starts with the debug menu open (the game
+# frozen under it); its warp works (checkpoint 4: RIGHT x4, I); and from then on UP +
+# SELECT held opens it in the game too.
+RIGHT4 = sum([[200 + 6 * k, 200 + 6 * k, '04'] for k in range(4)], [])
+keys = [60, 110, OPEN] + RIGHT4 + [240, 240, '40', 500, 560, OPEN]
+r = peek(rom, 650, keys, VARS)
+lc = [w16(x['loop_cnt']) for x in r]
+check('UP + SELECT held on the title starts the game with the debug menu open',
+      r[100]['st_n'][0] == 1 and lc[115] == lc[235] <= 2, f'loop count {lc[115]} .. {lc[235]}')
+m = shot(180, [60, 110, OPEN])
+g = shot(180, [60, 61, RUN])
+diff = (m != g).any(-1).mean() * 100
+check('the menu is on screen', diff > 30, f'{diff:.0f}% of the screen differs from a game started with RUN')
+check("the menu's warp works (checkpoint 4)", w16(r[300]['p_x']) == 8240, f"at x {w16(r[300]['p_x'])}")
+check('then UP + SELECT held opens it in the game too', lc[640] == lc[560] and lc[499] > lc[300],
+      f'loop count {lc[300]} {lc[499]} {lc[560]} {lc[640]}')
 
 # 4. Idle until the last life goes: GAME OVER, then the title, then a new game.
 r = peek(rom, 3400, [120, 121, RUN, 3100, 3101, RUN], VARS)
