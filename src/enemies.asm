@@ -511,7 +511,22 @@ enemy_think:	lda	e_kind, x
 		stz	e_struck, x
 		stz	e_timer, x
 		ldy	e_kind, x
-		lda	kind_attack_l, y
+		lda	kind_attack2_h, y	; Soldiers: a high or a low swing, at
+		beq	.high			; random (the arcade: bit 2 of the slot's
+		jsr	rand			; byte $21); e_alt = low.
+		and	#4
+		ldy	e_kind, x
+		stz	e_alt, x
+		cmp	#0
+		beq	.high
+		inc	e_alt, x
+		lda	kind_attack2_l, y
+		pha
+		lda	kind_attack2_h, y
+		tay
+		pla
+		jmp	enemy_set_anim
+.high:		lda	kind_attack_l, y
 		pha
 		lda	kind_attack_h, y
 		tay
@@ -534,9 +549,17 @@ enemy_think:	lda	e_kind, x
 		bra	.wait
 
 .club_swing:	; The weapon is out in the kind's hit pose: the arcade arms its box
-		lda	e_pose, x		; for the pose's first 3 frames ($042F92) and
-		cmp	kind_hitpose, y		; tests it each frame until it hits, once a
-		bne	.armed			; swing.
+		lda	kind_attack2_h, y	; for the pose's first 3 frames ($042F92) and
+		beq	.hi			; tests it each frame until it hits, once a
+		lda	e_alt, x		; swing. (Soldiers' low swings: their own
+		beq	.hi			; pose and weapon_hit's rows 13, 14.)
+		lda	kind_hitpose2 - 11, y
+		iny
+		iny
+		bra	.pose
+.hi:		lda	kind_hitpose, y
+.pose:		cmp	e_pose, x
+		bne	.armed
 		lda	e_struck, x
 		bne	.wait
 		lda	e_animt, x
@@ -671,6 +694,9 @@ kind_retreat_l:	db	<anim_liz_walk, <anim_blue_walk2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
 kind_retreat_h:	db	>anim_liz_walk, >anim_blue_walk2, 0, 0, 0, 0, 0, 0, 0, 0, 0, >anim_sword_walk
 		db	>anim_mace_walk
 kind_hitpose:	db	POSE_LIZ_CLUB_OUT, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, POSE_SWORD_OUT, POSE_MACE_OUT
+kind_hitpose2:	db	POSE_SWORD_LOW, POSE_MACE_LOW		; (kinds 11, 12)
+kind_attack2_l:	db	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, <anim_sword_low, <anim_mace_low, 0, 0, 0, 0, 0
+kind_attack2_h:	db	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, >anim_sword_low, >anim_mace_low, 0, 0, 0, 0, 0
 kind_death_l:	db	<anim_liz_death, <anim_blue_death, 0, 0, 0, <anim_chim_death, 0, 0, 0, 0, <anim_woman_death
 		db	<anim_sword_death, <anim_mace_death, 0, 0, 0, 0, 0
 kind_death_h:	db	>anim_liz_death, >anim_blue_death, 0, 0, 0, >anim_chim_death, 0, 0, 0, 0, >anim_woman_death
@@ -853,8 +879,8 @@ club_think:	jsr	sword_vs_enemy
 .gone:		stz	e_state, x
 .r:		rts
 
-; weapon_hit - X = slot, Y = its kind: carry set if the weapon's box overlaps
-; Rastan's body. The arcade's boxes (inclusive; $044CBA): the weapon's at
+; weapon_hit - X = slot, Y = its row (its kind; 13, 14 the low swings):
+; carry set if the weapon's box overlaps Rastan's body. The arcade's boxes (inclusive; $044CBA): the weapon's at
 ; $044CE0 + 4 * index, mirrored facing left (lizardman $38: x 4 .. 48, y -20
 ; .. -12; sword soldier $3A: 4 .. 52, -19 .. -13; mace soldier $AE: 4 .. 60,
 ; -19 .. -13); Rastan's x - 12 .. x + 12, y - 24 .. y + 26, crouched y ..
@@ -922,12 +948,14 @@ weapon_hit:	lda	<p_x
 		sta	<etmp + 1
 		rts
 
-; (lizardman, ..., sword soldier, mace soldier; the others do not swing)
-kind_hx_lo:	db	-8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -8, -8
-kind_hx_w:	db	68, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 72, 80
-kind_hy_lo:	db	-46, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -45, -45
-kind_hy_w:	db	58, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56, 56
-kind_hy_wc:	db	34, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32, 32
+; (lizardman, ..., sword soldier, mace soldier, then their low swings: the
+; sword's $3C, 4 .. 52, -3 .. 3; the mace's $B0, 4 .. 60, -3 .. 3, which
+; reach a crouching Rastan; the others do not swing)
+kind_hx_lo:	db	-8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -8, -8, -8, -8
+kind_hx_w:	db	68, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 72, 80, 72, 80
+kind_hy_lo:	db	-46, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -45, -45, -29, -29
+kind_hy_w:	db	58, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56, 56, 56, 56
+kind_hy_wc:	db	34, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32, 32, 32, 32
 
 ; face_player - e_face = Rastan is to the right.
 face_player:	lda	<p_x

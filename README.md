@@ -271,8 +271,10 @@ Not done yet: slopes, waterfall currents, the other collision codes, rope attack
 - **Castle soldiers** (`sim/scripts/castle.txt`): from x 8200 sword and mace soldiers come in turn on the lanes.
   The arcade's two share a body and differ by weapon; both walk in, stand about 60 px away and swing (3-frame steps),
   then walk on. They use the lizardmen's loop (walk in, two swings, back off, come again) with their own hit pose
-  and the arcade's weapon boxes (the high swing the port shows: the sword's `$3A`, 4 to 52 px in front, the mace's
-  `$AE`, 4 to 60, both 13 to 19 above the anchor; crouching ducks it); a swing that reaches costs 12 units. The arcade gave 900 for a sword and a mace soldier dying together;
+  and the arcade's weapon boxes: each attack is a high or a low swing at random (the arcade: bit 2 of a byte of the
+  slot); the sword's reach 4 to 52 px in front (`$3A`, `$3C`), the mace's 4 to 60 (`$AE`, `$B0`); high, 13 to 19
+  above the anchor, which a crouching Rastan ducks; low, 3 above to 3 below, which hits him crouched too. A swing
+  that reaches costs 12 units. The arcade gave 900 for a sword and a mace soldier dying together;
   the port splits it 300 / 600.
 - **Fire jets** (`src/jets.asm`): over the lava pits at world x 9870, 9966 and 10062 (the arcade's census:
   10382-10574 in segment `$14`, now the jets' room at square ($13, -1)). Each erupts when Rastan is 172 px

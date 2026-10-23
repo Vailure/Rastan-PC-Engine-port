@@ -199,6 +199,26 @@ rc = peek(god, bc + 2700, kc, WT)
 check('crouched under it, he lives through its cycle', all(f['p_state'][0] != ST_DEAD for f in rc[bc + 2100:])
       and max(f['wt_len'][1] for f in rc[bc + 2194:]) == 31)
 
+# The soldiers swing high or low at random (the arcade: bit 2 of the slot's byte $21);
+# the high swing's box (13 to 19 px above the anchor) passes over a crouching Rastan, the
+# low one's (3 above to 3 below) does not. Crouched in the first room (normal build),
+# he is hit only by low swings; standing, by both.
+inc = open(os.path.join(os.path.dirname(os.path.abspath(god)), 'objects', 'objects.inc')).read()
+pose = lambda n: int(inc.split(n)[1].split('=')[1].split()[0])
+LOW = {pose('POSE_SWORD_LOW'), pose('POSE_MACE_LOW')}
+HIGH = {pose('POSE_SWORD_OUT'), pose('POSE_MACE_OUT')}
+def soldier_hits(extra):
+    r = peek(rom, 3000, warp(4) + extra, {'p_hp': 1, 'e_pose': 4, 'e_kind': 4})
+    drops = [i for i in range(201, len(r)) if r[i]['p_hp'][0] < r[i - 1]['p_hp'][0]]
+    by = lambda i, poses: any(r[j]['e_pose'][k] in poses and r[j]['e_kind'][k] in (11, 12)
+                              for j in range(i - 3, i + 1) for k in range(4))
+    return drops, [i for i in drops if by(i, LOW)], [i for i in drops if by(i, HIGH)]
+d, lo, hi = soldier_hits([200, 3000, '02'])
+check('crouched, he is hit by the soldiers\' low swings only', d and len(lo) == len(d) and not hi,
+      f'{len(d)} hits, {len(lo)} low, {len(hi)} high')
+d, lo, hi = soldier_hits([])
+check('standing, by both', lo and hi, f'{len(d)} hits, {len(lo)} low, {len(hi)} high')
+
 # The arcade's sprite colour bank: 48 through round 1 (gold and blue soldiers), 64
 # after a restart at checkpoint 4 or 5 (green): the object palettes the VCE holds.
 def sprite_pals(keys, frame):

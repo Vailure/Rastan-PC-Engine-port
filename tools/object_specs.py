@@ -66,13 +66,16 @@ GROUPS = {
         ('woman_hop', 'woman', 7, 3141, 3169),
         ('woman_death', 'woman', 7, 3239, 3269),
     ],
-    # Castle soldiers: the same body with a mace or a sword; walk, two swings, death.
+    # Castle soldiers: the same body with a mace or a sword; walk, two swings (high, or
+    # low: the arcade picks by bit 2 of the slot's byte $21), death.
     'castle': [
         ('mace_walk', 'castle', 4, 2526, 2557),
         ('mace_attack', 'castle', 4, 2622, 2699),
+        ('mace_low', 'castle', 4, 1272, 1350),
         ('mace_death', 'castle', 4, 2726, 2756),
         ('sword_walk', 'castle', 6, 2526, 2557),
         ('sword_attack', 'castle', 6, 2622, 2699),
+        ('sword_low', 'castle', 6, 1272, 1350),
         ('sword_death', 'castle', 6, 2726, 2756),
     ],
     # Fire jets over the castle's lava pits: the flame rising, then the column flickering.
@@ -148,4 +151,6 @@ POSE_SYMBOLS = {
     ('sect1', 'liz_attack', 3): 'POSE_LIZ_CLUB_OUT',
     ('castle', 'mace_attack', 6): 'POSE_MACE_OUT',      # arcade anim 166: the swing's reach
     ('castle', 'sword_attack', 6): 'POSE_SWORD_OUT',
+    ('castle', 'mace_low', 6): 'POSE_MACE_LOW',         # arcade anim 156: the low swing's reach
+    ('castle', 'sword_low', 6): 'POSE_SWORD_LOW',
 }

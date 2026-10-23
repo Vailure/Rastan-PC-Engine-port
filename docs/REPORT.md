@@ -87,12 +87,12 @@ The results below are from the run on 2026-10-23, with the swarm, the hanging co
 | cp0: round start | 49 → 1830 | 0 | 0 | 0 / 240 | 0 | 191 |
 | cp1: segment 4 | 2097 → 4708 | 0 | 0 | 0 / 240 | 114 | 322 |
 | cp2: segment 8 (waterfall) | 4145 → 5638 | 0 | 0 | 0 / 240 | 120 | 176 |
-| cp3: segment 12 → castle | 6193 → 8662 | 0 | 0 | 0 / 240 | 0 | 246 |
-| cp4: segment 16 (castle) | 8253 → 9300 | 0 | 0 | 0 / 411 | 0 | 273 |
-| cp5: lava hall → boss | 9306 → 11728 | 0 | 0 | 0 / 377 | 0 | 704² |
+| cp3: segment 12 → castle | 6193 → 8662 | 0 | 0 | 0 / 240 | 0 | 226 |
+| cp4: segment 16 (castle) | 8253 → 9300 | 0 | 0 | 0 / 411 | 0 | 272 |
+| cp5: lava hall → boss | 9306 → 11728 | 0 | 0 | 0 / 377 | 0 | 683² |
 | **Problems** | | | | | | **0 (both runs)** |
 
-² Up from 502: the weights' 32 px bars (two cells a line each) share the corridor's lines with Rastan and the soldiers.
+² Up from 502 before the weights: the weights' 32 px bars (two cells a line each) share the corridor's lines with Rastan and the soldiers.
 
 ¹ These are reported, not failed: they are the PC Engine's hardware limits, 64 sprites and 16 sprite cells per scanline. When either runs out, the walkers and the swarm take turns losing pieces, which shows as flicker, as many PC Engine games do. No single enemy disappears for good.
 
@@ -154,7 +154,6 @@ All of these are fixed, and each now has a check:
 | Gap | Effect on the demo | Notes |
 |---|---|---|
 | Rastan's hurt box by pose | Two forms only | The arcade's (`$10D248`) is set per pose (x −18/−12/−8 .. 6/12); the port uses its standing and crouched forms |
-| The soldiers' low swing | Not shown | The arcade alternates a high and a low swing (box `$3C`/`$B0`, which reaches a crouching Rastan); the port has the high one only |
 | Sprite flicker in crowds | Visible when 3–4 walkers share a line, or with the swarm | Hardware limit; mitigated by rotation (walkers and the swarm take turns, and the bats among themselves) |
 | Fire sparks | Not drawn | Cosmetic |
 
@@ -180,7 +179,7 @@ All of these are fixed, and each now has a check:
 
 ## 6. Phase history
 
-The project spans 42 commits (2026-10-20 → 2026-10-23).
+The project spans 43 commits (2026-10-20 → 2026-10-23).
 
 1. **Tools:**
    - arcade graphics decoder;
@@ -215,10 +214,11 @@ The project spans 42 commits (2026-10-20 → 2026-10-23).
    - shaft 2's spiked weights (marker `$45`), from an arcade bot that now climbs shaft 2;
    - the swarm's share of the sprites: it takes turns with the walkers, so its bats no longer vanish behind a crowd;
    - the bats' bite and the weights' kill read from the arcade's collision code (its box tables), no longer measured;
-   - the lizardmen's, soldiers' and clubs' hits on Rastan from the same tables: crouching now ducks a lizardman's swing, as in the arcade, and clubs reach 7 px, not 19.
+   - the lizardmen's, soldiers' and clubs' hits on Rastan from the same tables: crouching now ducks a lizardman's swing, as in the arcade, and clubs reach 7 px, not 19;
+   - the soldiers' low swing (the arcade picks high or low at random), which does reach a crouching Rastan.
 
 The next steps, in order, are in `docs/HANDOFF.md` §8:
-1. the remaining kinds' hits by the arcade's boxes (woman, gargoyle, chimera, boss), Rastan's box per pose, the soldiers' low swing;
+1. the remaining kinds' hits by the arcade's boxes (woman, gargoyle, chimera, boss), and Rastan's box per pose;
 2. the lava hall's vines and fire sparks;
 3. more compression, if needed;
 4. rounds 2–6;
