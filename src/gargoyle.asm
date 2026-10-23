@@ -94,6 +94,8 @@ garg_spawn:	cly
 		lda	<etmp + 1
 		sta	e_kind, x
 		stz	e_face, x
+		stz	e_dmg, x
+		stz	e_flash, x
 		lda	#$FF
 		sta	e_shown, x
 		phy
@@ -107,8 +109,29 @@ garg_spawn:	cly
 		sta	e_alt, x
 		rts
 
-; garg_think - X = body or wings: the next step of the path.
-garg_think:	jsr	touch_hurts		; (body and wings: the arcade's both drain 8)
+; garg_think - X = body or wings: the next step of the path. Only the wings
+; can be struck (the arcade's sword test skips the body's slot 9): two hits,
+; or one stronger blow, and body and wings burst together, 500 points each
+; (sim/scripts/gargkill.txt).
+garg_think:	lda	e_state, x
+		cmp	#ES_DYING
+		bne	.alive
+		lda	e_animend, x		; The burst done: gone.
+		beq	!+
+		stz	e_state, x
+!:		rts
+.alive:		lda	e_flash, x		; Struck: untouchable 16 frames (it
+		beq	!+			; flies on).
+		dec	e_flash, x
+		bra	.path
+!:		jsr	touch_hurts		; (body and wings: the arcade's both drain 8)
+		lda	e_kind, x
+		cmp	#EK_WINGS
+		bne	.path
+		jsr	sword_strike
+		bcc	.path
+		jmp	garg_kill
+.path:
 		lda	e_timer, x
 		bne	.step
 		lda	e_range, x		; Next run: dx, dy, frames (0: the end).
@@ -138,3 +161,23 @@ garg_think:	jsr	touch_hurts		; (body and wings: the arcade's both drain 8)
 		jsr	add_x
 		lda	e_struck, x
 		jmp	add_y
+
+; garg_kill - the wings struck down: both halves burst (each its own death
+; animation and 500 points).
+garg_kill:	ldx	#SPEC_FIRST
+.loop:		lda	e_state, x
+		beq	.next
+		cmp	#ES_DYING
+		beq	.next
+		lda	e_kind, x
+		cmp	#EK_GARG
+		beq	.kill
+		cmp	#EK_WINGS
+		bne	.next
+.kill:		phx
+		jsr	kill_enemy
+		plx
+.next:		inx
+		cpx	#SPEC_LAST + 1
+		bne	.loop
+		rts

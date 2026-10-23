@@ -270,9 +270,12 @@ Not done yet: slopes, waterfall currents, the other collision codes, rope attack
   4601 and 6674 land (9 px above the floor), roll left at 7/6 px/frame and drop off ledges. Touching one hurts.
 - **Gargoyle** (`src/gargoyle.asm`; `sim/scripts/gargoyle.txt`): at x 4608 and 6841, 176 px ahead of Rastan. In the
   arcade it flies the same path every time whatever Rastan does (glide in, hover, dive past him, turn, swoop back;
-  about 410 frames), and swings and thrusts did nothing to it. The converter records that path from the capture as
-  runs of per-frame steps (`PATHS` in `tools/object_specs.py`), and the port replays it with two objects, body and
-  wings (arcade slots 9 and 10). Touching the body hurts.
+  about 410 frames). The converter records that path from the capture as runs of per-frame steps (`PATHS` in
+  `tools/object_specs.py`), and the port replays it with two objects, body and wings (arcade slots 9 and 10).
+  Touching either drains 8 units. Only the wings can be struck (the arcade's sword test skips slot 9): two of the
+  sword's hits (it flies on, untouchable 16 frames, after the first) or one stronger blow, and body and wings burst
+  together in 16 frames, 500 points each (`sim/scripts/gargkill.txt`: Rastan held untouchable stands and swings at
+  it, frames 1007 and 1163).
 - **Woman warrior** (`src/woman.asm`; `sim/scripts/woman.txt`): at x 4523, appearing when Rastan reaches 4355. In the
   arcade she doesn't stop to fight: she runs left at 1 px/frame hopping down the 32 px steps, turns about 50 px past
   Rastan, runs back right at 1.5 px/frame hopping up, and leaves. Touching her hurts; one hit kills her (300).

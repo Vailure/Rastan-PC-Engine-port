@@ -36,6 +36,7 @@ def check(name, ok, detail=''):
 
 
 EK_LIZARD, EK_BLUE, EK_CHIM, EK_FIRE, EK_ROCK, EK_GARG, EK_WOMAN, EK_SWORD, EK_MACE, EK_JET, EK_BOSS = 0, 1, 5, 6, 7, 8, 10, 11, 12, 13, 14
+EK_WINGS = 9
 ES_WALK, ES_ATTACK, ES_DYING = 1, 2, 4
 OBJ = {'e_state': 17, 'e_kind': 17, 'e_xl': 17, 'e_xh': 17, 'e_yl': 17, 'e_yh': 17, 'e_alt': 17}
 SEL, I, RIGHT = '10', '40', '04'
@@ -141,6 +142,23 @@ ARC = {126: (4512, 289), 199: (4418, 334), 249: (4495, 316), 349: (4572, 295)}
 got = {d: next(((x, y) for i, x, y in g if i - g[0][0] == d), None) for d in ARC} if g else {}
 check("the gargoyle flies the arcade's path", g and all(got[d] and abs(got[d][0] - ARC[d][0]) <= 1
       and abs(got[d][1] - ARC[d][1]) <= 1 for d in ARC), f'{got}')
+
+# Striking the gargoyle (the arcade: sim/scripts/gargkill.txt): only its wings can be hit,
+# two of the sword's hits; then body and wings burst together (16 frames), 500 points each.
+keys = [40, 90, OPEN, 100, 100, RIGHT, 106, 106, RIGHT, 150, 150, I, 200, 590, "05"]
+keys += sum([[f, f + 3, I] for f in range(220, 590, 60)], [])
+keys += sum([[f, f, '04' if t % 2 == 0 else '08', f + 2, f + 3, '80'] for t, f in enumerate(range(600, 1000, 20))], [])
+rg = peek(god, 1000, keys, {'e_kind': 9, 'e_state': 9, 'e_dmg': 9, 'score': 3})
+gk = [(i, k) for i in range(1, len(rg)) for k in (6, 7, 8) if rg[i]['e_kind'][k] in (EK_GARG, EK_WINGS)
+      and rg[i]['e_state'][k] == ES_DYING and rg[i - 1]['e_state'][k] != ES_DYING]
+first = min(i for i, _ in gk) if gk else None
+gone = next((i for i in range(first, len(rg)) if not any(rg[i]['e_state'][k] and rg[i]['e_kind'][k] in (EK_GARG, EK_WINGS)
+                                                         for k in (6, 7, 8))), None) if gk else None
+check('struck twice on its wings, the gargoyle bursts, body and wings together, for 1000',
+      len(gk) == 2 and gk[0][0] == gk[1][0] and bcd(rg[first]['score']) - bcd(rg[first - 1]['score']) >= 1000
+      and gone and 15 <= gone - first <= 19,
+      f'deaths {gk}, score {bcd(rg[first - 1]["score"]) if gk else None} -> {bcd(rg[first]["score"]) if gk else None}, '
+      f'gone after {gone - first if gone else None}')
 
 # The woman warrior (same run).
 w = [(i, x_of(f, k), f['e_yl'][k] | f['e_yh'][k] << 8, w16(f['p_x']), f['e_alt'][k]) for i, f in enumerate(r)

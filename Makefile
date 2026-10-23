@@ -111,6 +111,10 @@ $(BUILD)/gargoyle.snp: sim/sim sim/maincpu.bin sim/scripts/gargoyle.txt
 	@mkdir -p $(BUILD)
 	sim/sim sim/maincpu.bin sim/scripts/gargoyle.txt $@ 1
 
+$(BUILD)/gargkill.snp: sim/sim sim/maincpu.bin sim/scripts/gargkill.txt
+	@mkdir -p $(BUILD)
+	sim/sim sim/maincpu.bin sim/scripts/gargkill.txt $@ 1 1150
+
 $(BUILD)/woman.snp: sim/sim sim/maincpu.bin sim/scripts/woman.txt
 	@mkdir -p $(BUILD)
 	sim/sim sim/maincpu.bin sim/scripts/woman.txt $@ 1
@@ -134,7 +138,7 @@ $(BUILD)/item_%.snp: sim/sim sim/maincpu.bin sim/scripts/item_%.txt
 # Object (enemy, projectile, item) poses: groups and captures in tools/object_specs.py.
 # Cells start at bank $60; each group's poses and anims get the next banks.
 OBJECTS    := $(BUILD)/objects
-$(OBJECTS)/objcells.bin: tools/pce_objects.py tools/object_specs.py tools/census_all.py $(BUILD)/lizard.snp $(BUILD)/blue.snp $(BUILD)/item.snp $(BUILD)/item_fire.snp $(BUILD)/item_star.snp $(BUILD)/chimera.snp $(BUILD)/gargoyle.snp $(BUILD)/woman.snp $(BUILD)/castle.snp $(BUILD)/boss.snp $(BUILD)/vine.snp $(BUILD)/hall.snp $(BUILD)/swarm.snp
+$(OBJECTS)/objcells.bin: tools/pce_objects.py tools/object_specs.py tools/census_all.py $(BUILD)/lizard.snp $(BUILD)/blue.snp $(BUILD)/item.snp $(BUILD)/item_fire.snp $(BUILD)/item_star.snp $(BUILD)/chimera.snp $(BUILD)/gargoyle.snp $(BUILD)/gargkill.snp $(BUILD)/woman.snp $(BUILD)/castle.snp $(BUILD)/boss.snp $(BUILD)/vine.snp $(BUILD)/hall.snp $(BUILD)/swarm.snp
 	cd tools && python3 pce_objects.py ../$(BUILD) ../$(OBJECTS) 0x13
 
 # HUD cells (lives, icon, health bar, ROUND) from the arcade's HUD sprites.

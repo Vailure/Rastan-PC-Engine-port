@@ -712,15 +712,15 @@ kind_hitpose:	db	POSE_LIZ_CLUB_OUT, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, POSE_SWORD_OUT
 kind_hitpose2:	db	POSE_SWORD_LOW, POSE_MACE_LOW		; (kinds 11, 12)
 kind_attack2_l:	db	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, <anim_sword_low, <anim_mace_low, 0, 0, 0, 0, 0
 kind_attack2_h:	db	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, >anim_sword_low, >anim_mace_low, 0, 0, 0, 0, 0
-kind_death_l:	db	<anim_liz_death, <anim_blue_death, 0, 0, 0, <anim_chim_death, 0, 0, 0, 0, <anim_woman_death
+kind_death_l:	db	<anim_liz_death, <anim_blue_death, 0, 0, 0, <anim_chim_death, 0, 0, <anim_garg_death, <anim_wings_death, <anim_woman_death
 		db	<anim_sword_death, <anim_mace_death, 0, 0, 0, 0, 0
-kind_death_h:	db	>anim_liz_death, >anim_blue_death, 0, 0, 0, >anim_chim_death, 0, 0, 0, 0, >anim_woman_death
+kind_death_h:	db	>anim_liz_death, >anim_blue_death, 0, 0, 0, >anim_chim_death, 0, 0, >anim_garg_death, >anim_wings_death, >anim_woman_death
 		db	>anim_sword_death, >anim_mace_death, 0, 0, 0, 0, 0
 kind_range:	db	ATTACK_RANGE, 88, 0, 0, 0, 0, 0, 0, 0, 0, 0, SOLDIER_RANGE, SOLDIER_RANGE, 0, 0, 0, 0, 0
 kind_keep:	db	0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 0, 1	; No off-screen despawn.
 ; Arcade: lizardman 300, blue thrower 200, bat 200, chimera 300.
 ; Castle soldiers: the arcade's ($2C,A4): 400 the sword's, 500 the mace's.
-kind_score:	db	$03, $02, 0, 0, $02, $03, 0, 0, 0, 0, $03, $04, $05, 0, 0, 0, 0, 0
+kind_score:	db	$03, $02, 0, 0, $02, $03, 0, 0, $05, $05, $03, $04, $05, 0, 0, 0, 0, 0
 ; Touching Rastan (the arcade's ($29,A4), player_touch): 1, 2 drain 4, 8 units;
 ; 3 knocks him back, 12 units; 0 nothing (the woman warrior: only her sword).
 ; (The item and its bat, the boss's second half and the vines: their own code;

@@ -17,6 +17,7 @@ FILES = {
     'star': 'item_star.snp',     # sim/scripts/item_star.txt: the morning star (segment $0C)
     'chimera': 'chimera.snp',    # sim/scripts/chimera.txt: chimeras from checkpoint segment 4
     'gargoyle': 'gargoyle.snp',  # sim/scripts/gargoyle.txt: the gargoyle from checkpoint segment 8
+    'gargkill': 'gargkill.snp',  # sim/scripts/gargkill.txt: the gargoyle struck down
     'woman': 'woman.snp',        # sim/scripts/woman.txt: the woman warrior (x 4523)
     'castle': 'castle.snp',      # sim/scripts/castle.txt: castle soldiers (mace slot 4, sword slot 6)
     'boss': 'boss.snp',          # sim/scripts/boss.txt: the boss (slot 17), its fire (slots 18-22)
@@ -59,6 +60,8 @@ GROUPS = {
     'gargoyle': [
         ('garg_body', 'gargoyle', 9, 900, 900),
         ('garg_wings', 'gargoyle', 10, 875, 890),
+        ('garg_death', 'gargkill', 9, 1163, 1179),
+        ('wings_death', 'gargkill', 10, 1163, 1179),
     ],
     # The woman warrior (arcade slot 7): walk, hop down a step, death.
     'woman': [

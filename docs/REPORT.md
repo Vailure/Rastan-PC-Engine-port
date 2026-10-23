@@ -214,12 +214,13 @@ The project spans 44 commits (2026-10-20 → 2026-10-23).
    - the lizardmen's, soldiers' and clubs' hits on Rastan from the same tables: crouching now ducks a lizardman's swing, as in the arcade, and clubs reach 7 px, not 19;
    - the soldiers' low swing (the arcade picks high or low at random), which does reach a crouching Rastan.
    - Rastan's weapon and body boxes from the arcade's tables, per pose and weapon, with its rules for when the weapon hits (a swing's blade only while it is out; held up as he rises in a jump), and the objects' body boxes from its box index table: the blade now reaches a lizardman 68 px ahead, as in the arcade;
+   - the gargoyle can be struck down, by its wings, as in the arcade (its burst captured in a new simulator script);
    - the arcade's damage to enemies: soldiers take two sword hits (reeling from the first), stronger blows (in the air, a down thrust, the axe, the fire sword) count three, the boss's ten hit points the same way; soldiers score 400 and 500; struck and hurt sounds;
    - the arcade's hit effects: what each enemy's touch and swing cost, knockback or a drain, and how long he is untouchable after; the up-swing in a jump in place of an "up thrust" that was the hurt pose;
    - parity fixes from comparing the arcade and the port checkpoint by checkpoint: the sky's 8 steps toward dusk, the floor spears appearing as the arcade's do, the camera after a restart at checkpoint 5, and gold soldiers in a game begun at a castle checkpoint.
 
 The next steps, in order, are in `docs/HANDOFF.md` §8:
-1. the gargoyle's wings, which the arcade's sword can strike, and the fire jets' touch;
+1. the fire jets' touch and the item bat's box;
 2. the lava hall's vines and fire sparks;
 3. more compression, if needed;
 4. rounds 2–6;
