@@ -234,5 +234,14 @@ check('his sword kills them, 100 points each', len(kills) >= 3
       and all(bcd(r[i + 1]['score']) - bcd(r[i - 1]['score']) - 100 * kills.count(i) in (0, 300) for i in kills),
       f'{len(kills)} killed')
 
+# The swarm in a crowd: at checkpoint 4 (god build) four soldiers pile onto Rastan and
+# fill the SATB. The swarm takes its turn in the walkers' drawing order, so the bats
+# flicker with them instead of vanishing (drawn last, they had an entry 23% of the time).
+from swarm_budget import measure
+m = measure(god, 4, 3500)
+check('in a crowd the bats take turns with the walkers (a SATB entry 85% of the time or more)',
+      m['want'] > 2000 and m['got'] >= 0.85 * m['want'] and m['shown'] >= 0.75 * m['want'],
+      f"{m['got']} / {m['want']} with an entry, {m['shown']} whole")
+
 print(f'{len(fails)} failure(s)')
 sys.exit(1 if fails else 0)

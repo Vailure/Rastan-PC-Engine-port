@@ -53,6 +53,7 @@ from the ROMs (`*.bin`, snapshots, renders, disassembly) is git-ignored.
 | `tools/census_all.py`, `tools/track.py` | Every arcade object of a run with its sprite pieces; one slot over time |
 | `tools/test_enemies.py` | Headless checks for hits, kills and frame budget |
 | `tools/test_monsters.py` | Checks round 1's later enemies (chimeras, ...) |
+| `tools/swarm_budget.py` | How often the swarm's bats go undrawn (SATB entries, the 16-a-line limit) |
 | `tools/test_items.py`, `tools/peek.py` | Checks weapons, items and bats; reads named RAM variables from a headless run |
 | `sim/` | Headless Rastan main-CPU simulator (Musashi 68000) and a linear disassembler |
 | `sim/scripts/` | Input scripts for the simulator |
@@ -458,7 +459,10 @@ music gets the channel back, and that the voice shows in the audio.
 - **Sprites:** the SATB is packed (the HUD's 12 entries, then Rastan's, the props', the objects'), so
   three castle soldiers no longer run out of entries. The VDC fetches only 16 sprite cells (16 px wide)
   a line; where walkers crowd onto one line, `enemies_draw` turns the order they are drawn in every
-  frame, so the one that loses its cells there takes turns (flicker) instead of always the same.
+  frame, so the one that loses its cells there takes turns (flicker) instead of always the same. The
+  hurry-up swarm takes its turn as a fifth walker: drawn last, its bats had vanished behind a crowd of
+  soldiers (a SATB entry 23% of the time at checkpoint 4 in god mode, where four soldiers pile on); now
+  94% (`tools/swarm_budget.py`), the soldiers sharing the loss.
 - **`make audit`** (`tools/audit.py`): every checkpoint played through in god mode (the castle on the
   test routes, elsewhere running right holding UP, jumping and swinging), with contact sheets
   (`build/audit/cpN.png`) and per-frame checks: object poses that their kind doesn't have, slowdown,

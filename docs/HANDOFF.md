@@ -264,8 +264,9 @@ Entries 0–11 are the HUD (`hud_satb`). The other sprites follow in this order:
 
 `satb_n` is the next free entry, and `en_cap` = 64 − `satb_n`. `en_satb_prev` remembers last frame's count so stale entries get cleared.
 
-**Order of the object slots.** The walkers (slots 0–3) are drawn last, in an order that rotates every frame (`en_rot`).
-- If the 64 entries or the VDC's 16-cells-a-line limit run out, a walker loses pieces for one frame (it flickers), not the same one forever.
+**Order of the object slots.** The walkers (slots 0–3) and the swarm (as a fifth) are drawn last, in an order that rotates every frame (`en_rot`, 0–4). The traps come after them.
+- If the 64 entries or the VDC's 16-cells-a-line limit run out, a walker (or the swarm) loses pieces for one frame (it flickers), not the same one forever.
+- `tools/swarm_budget.py god.pce <cp>` measures it for the bats: before the swarm joined the rotation, at checkpoint 4 (four soldiers on Rastan in god mode) they had a SATB entry 23% of the time; now 94% (86% whole on every line), at the cost of about 1,100 soldier pieces over the run.
 - The audit reports these frames but does not fail on them, since they are a hardware limit.
 
 **Object slots:**
@@ -414,7 +415,7 @@ tgrun rom.pce frames out.ppm [from to padhex]...
 | `test_effects.py` | Waterfall cycle, sky switch, hazards, death animation |
 | `test_debug.py` | The menu needs a hold; the screen comes back exactly; warps, invincibility, checkpoint restart |
 | `test_items.py` | Weapons, items, bats (weapon drawing is sampled over 4 frames: the fire sword's flame hides behind the blade on some) |
-| `test_monsters.py` | Chimeras, boulders, gargoyle, woman, boss; the round-clear screen and jingle; the hurry-up swarm (arrives after 40 counts, closes in, bites every 45 frames at most, dies to the sword for 100) |
+| `test_monsters.py` | Chimeras, boulders, gargoyle, woman, boss; the round-clear screen and jingle; the hurry-up swarm (arrives after 40 counts, closes in, bites every 45 frames at most, dies to the sword for 100; in a crowd, drawn 85% of the time or more) |
 | `test_castle.py` | Soldiers, spears, jets, vines, doors, camera walls; the round is cleared within 4400 frames; the hanging column's cycle and its blocking; the sealing wall's timing and push; shaft 2's weights: when they appear, their 147-frame cycle, the kill standing and the crouch under them; colour bank 48 / 64 (VCE) |
 | `test_sound.py` | PSG writes match the streams; notes are in the audio spectrum; the voices' levels in order on channel 5 |
 | `test_demo.py` | The image is a 2.5 MB SF2 card; title, blink, RUN starts, pause; no debug menu after RUN; UP+SELECT on the title opens it (on screen, warp works) and unlocks it in the game; GAME OVER → title → new game |
@@ -526,24 +527,23 @@ Then:
 
 The order is roughly by the value it adds to the demo for the effort.
 
-1. **The swarm's sprite budget.** Nine bats on top of a crowd hit the 64-entry and 16-cells-a-line limits. They are drawn last and rotate, so they flicker first. The audit reports this, as it does for the walkers.
-2. **The bite and push details.** The bats' touch box (16×16), the column's and wall's push distances and the weights' kill range were derived from positions, not read from the arcade's collision code (the hit list at `$10D2A8` comes from `$0449xx`).
-3. **The lava hall's vines and the fire's sparks.** The three vines swing together, and their grab box is a guess. Measure them like the chasm vine (`vine.snp`).
-4. **More compression, if needed.**
+1. **The bite and push details.** The bats' touch box (16×16), the column's and wall's push distances and the weights' kill range were derived from positions, not read from the arcade's collision code (the hit list at `$10D2A8` comes from `$0449xx`).
+2. **The lava hall's vines and the fire's sparks.** The three vines swing together, and their grab box is a guess. Measure them like the chasm vine (`vine.snp`).
+3. **More compression, if needed.**
    - The stage stream is now 206 KB (dictionaries; §4.7). The 3,645 raw patterns are 57% of it.
    - A cheap per-pattern code would save about 15%: a bit mask for zero bytes and for rows that repeat the row above.
    - zlib-class LZ would save about 35%, but would need a RAM window and more CPU time in the frame.
    - At the current size, two rounds fit in each free page, so this is not urgent.
-5. **Rounds 2–6.**
+4. **Rounds 2–6.**
    - The world decoder, segment layout and converter are generic. The bot needs to reach those rounds to capture their palettes.
    - Each round needs its own stage outputs, placed in a free page (0, 2 or 3).
    - Make `sf2_round` and the `^stage_*` bank references per round: a small table of page, banks and line count, indexed by the round.
    - `$10D2A6` is only a candidate health counter. Poke invincibility, or jump straight to a round via the continue table.
-6. **The exact port of the player.**
+5. **The exact port of the player.**
    - `tools/m68k` and `tools/lockstep.py` reproduce the arcade's player update call for call (9,215/9,215 calls).
    - A HuC6280 back end translating those routines would replace the hand-written `player.asm`.
    - PR #5 is the owner's work in this direction. Coordinate before touching it.
-7. **Parallax.** See `docs/parallax-feasibility.md`. Round 1's BG strips could come back with raster splits, or with the SuperGrafx's second layer.
+6. **Parallax.** See `docs/parallax-feasibility.md`. Round 1's BG strips could come back with raster splits, or with the SuperGrafx's second layer.
 
 ---
 

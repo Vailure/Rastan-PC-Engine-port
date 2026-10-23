@@ -1209,19 +1209,29 @@ enemies_draw:	php				; VDC writes: IRQ held off (see stream_line).
 		dex
 		cpx	#NUM_EN
 		bcs	.slot
-		inc	<en_rot			; then the walkers, the first of them
-		lda	#NUM_EN			; changing every frame. The VDC shows 16
-		sta	<en_wk			; sprite cells a line: where walkers crowd
-.walker:	lda	<en_rot			; one (or the HUD) the one drawn last loses
-		clc				; its cells there, and this way the loss
-		adc	<en_wk			; takes turns (flicker) instead of always
-		and	#NUM_EN - 1		; cutting the same one.
-		tax
+		lda	<en_rot			; then the walkers and the hurry-up swarm
+		inc	a			; (src/swarm.asm, as a fifth), the first of
+		cmp	#NUM_EN + 1		; them changing every frame. The SATB holds
+		bcc	!+			; 64 entries and the VDC shows 16 sprite
+		cla				; cells a line: where they crowd, the one
+!:		sta	<en_rot			; drawn last loses its entries or its cells,
+		lda	#NUM_EN + 1		; and this way the loss takes turns (flicker)
+		sta	<en_wk			; instead of always cutting the same one -
+.walker:	lda	<en_rot			; the bats, drawn last, used to vanish
+		clc				; behind a crowd of soldiers.
+		adc	<en_wk
+		cmp	#NUM_EN + 1
+		bcc	!+
+		sbc	#NUM_EN + 1
+!:		cmp	#NUM_EN
+		bne	!+
+		jsr	swarm_draw
+		bra	.wnext
+!:		tax
 		jsr	draw_slot
-		dec	<en_wk
+.wnext:		dec	<en_wk
 		bne	.walker
 		jsr	traps_draw		; The castle's floor spears.
-		jsr	swarm_draw		; The hurry-up swarm (src/swarm.asm).
 		; Clear entries the last frame used beyond this frame's.
 		lda	<en_satb
 		clc

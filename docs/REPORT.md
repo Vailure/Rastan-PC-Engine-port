@@ -85,8 +85,8 @@ The results below are from the run on 2026-10-23, with the swarm, the hanging co
 | Section (start) | Distance covered (world x) | Slow frames | Bad poses | Tile-map frames wrong | SATB full¹ | Frames with a sprite lost to the 16-a-line limit¹ |
 |---|---|---|---|---|---|---|
 | cp0: round start | 49 → 1830 | 0 | 0 | 0 / 240 | 0 | 174 |
-| cp1: segment 4 | 2097 → 4708 | 0 | 0 | 0 / 240 | 114 | 292 |
-| cp2: segment 8 (waterfall) | 4145 → 5638 | 0 | 0 | 0 / 240 | 120 | 159 |
+| cp1: segment 4 | 2097 → 4708 | 0 | 0 | 0 / 240 | 114 | 288 |
+| cp2: segment 8 (waterfall) | 4145 → 5638 | 0 | 0 | 0 / 240 | 120 | 157 |
 | cp3: segment 12 → castle | 6193 → 8662 | 0 | 0 | 0 / 240 | 0 | 242 |
 | cp4: segment 16 (castle) | 8253 → 9300 | 0 | 0 | 0 / 411 | 0 | 273 |
 | cp5: lava hall → boss | 9306 → 11728 | 0 | 0 | 0 / 377 | 0 | 704² |
@@ -94,7 +94,7 @@ The results below are from the run on 2026-10-23, with the swarm, the hanging co
 
 ² Up from 502: the weights' 32 px bars (two cells a line each) share the corridor's lines with Rastan and the soldiers.
 
-¹ These are reported, not failed: they are the PC Engine's hardware limits, 64 sprites and 16 sprite cells per scanline. When either runs out, the walkers take turns losing pieces, which shows as flicker, as many PC Engine games do. No single enemy disappears for good.
+¹ These are reported, not failed: they are the PC Engine's hardware limits, 64 sprites and 16 sprite cells per scanline. When either runs out, the walkers and the swarm take turns losing pieces, which shows as flicker, as many PC Engine games do. No single enemy disappears for good.
 
 **Deaths:** cp0 and cp2 each show one death. In both, the bot fell off the map, which kills even in god mode. They exercise the restart path.
 
@@ -154,7 +154,7 @@ All of these are fixed, and each now has a check:
 | Gap | Effect on the demo | Notes |
 |---|---|---|
 | Shaft 2's spiked weights: their hit box | Measured, not read | The kill range (-26 .. +30 px of a weight, the bar's bottom a frame late) is measured from bot runs; the crouched case only shows he lives |
-| Sprite flicker in crowds | Visible when 3–4 walkers share a line, or with the swarm | Hardware limit; mitigated by rotation (walkers and bats) |
+| Sprite flicker in crowds | Visible when 3–4 walkers share a line, or with the swarm | Hardware limit; mitigated by rotation (walkers and the swarm take turns, and the bats among themselves) |
 | Fire sparks | Not drawn | Cosmetic |
 
 ---
@@ -179,7 +179,7 @@ All of these are fixed, and each now has a check:
 
 ## 6. Phase history
 
-The project spans 39 commits (2026-10-20 → 2026-10-23).
+The project spans 40 commits (2026-10-20 → 2026-10-23).
 
 1. **Tools:**
    - arcade graphics decoder;
@@ -211,10 +211,11 @@ The project spans 39 commits (2026-10-20 → 2026-10-23).
    - the camera clamp fix;
    - stage compression (513 KB → 206 KB) and the move to the Street Fighter II mapper.
    - the hurry-up swarm, the sprite colour bank (soldiers' colours), the hanging column and the sealing wall;
-   - shaft 2's spiked weights (marker `$45`), from an arcade bot that now climbs shaft 2.
+   - shaft 2's spiked weights (marker `$45`), from an arcade bot that now climbs shaft 2;
+   - the swarm's share of the sprites: it takes turns with the walkers, so its bats no longer vanish behind a crowd.
 
 The next steps, in order, are in `docs/HANDOFF.md` §8:
-1. the swarm's sprite budget and the measured-not-read collision details;
+1. the measured-not-read collision details;
 2. the lava hall's vines and fire sparks;
 3. more compression, if needed;
 4. rounds 2–6;
