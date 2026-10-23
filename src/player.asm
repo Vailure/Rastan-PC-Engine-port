@@ -45,6 +45,7 @@ ST_CLIMB	=	6
 ST_HURT		=	7
 ST_DEAD		=	8
 ST_SWING	=	9		; Hanging from a swinging vine (vines.asm moves him).
+ST_UATK		=	10		; UP+attack standing: a swing over his head.
 
 PLAYER_HP	=	48		; Health bar units: arcade 12288 / 256.
 HIT_DAMAGE	=	12		; A lizardman hit: arcade 3072.
@@ -191,13 +192,16 @@ player_update:	lda	#COLL_BANK		; Collision data at $A000.
 		dw	st_hurt
 		dw	st_dead
 		dw	st_swing
+		dw	st_uatk
 
 ; --- Standing / walking.
 st_ground:	bbr0	<padtrg, .no_jump	; JOY_B1: jump.
 		jmp	start_jump
 .no_jump:	bbr1	<padtrg, .no_atk	; JOY_B2: attack.
-		bbr6	<pad, .stand_atk	; JOY_D held: crouch attack.
+		bbr6	<pad, .up_atk		; JOY_D held: crouch attack.
 		jmp	enter_catk
+.up_atk:	bbr4	<pad, .stand_atk	; JOY_U held: over his head.
+		jmp	enter_uatk
 .stand_atk:	jmp	enter_attack
 .no_atk:	bbr6	<pad, .no_crouch
 		jmp	enter_crouch
@@ -270,6 +274,11 @@ st_attack:	lda	<p_animend
 st_catk:	lda	<p_animend
 		beq	ground_check
 		jmp	enter_crouch
+
+; --- UP+attack standing: the sword goes over his head.
+st_uatk:	lda	<p_animend
+		beq	ground_check
+		jmp	enter_stand
 
 ; --- In the air.
 st_air:		bbr1	<padtrg, .no_atk	; Air attack (once per jump):
@@ -394,7 +403,9 @@ st_dead:	lda	<p_animend
 		jmp	player_died
 !:		rts
 
-enter_dead:	lda	#ST_DEAD
+enter_dead:	lda	#VOICE_DIE		; His death cry (an ADPCM voice).
+		jsr	voice_play
+		lda	#ST_DEAD
 		sta	<p_state
 		stz	<p_jatk
 		stz	<p_invuln
@@ -511,6 +522,8 @@ player_drain:
 sword_box:	lda	<p_state
 		cmp	#ST_ATTACK
 		beq	.stand
+		cmp	#ST_UATK
+		beq	.uatk
 		cmp	#ST_CATK
 		beq	.crouch
 		cmp	#ST_AIR
@@ -535,6 +548,11 @@ sword_box:	lda	<p_state
 		bcs	.none
 		ldy	#0
 		bra	.front
+.uatk:		lda	<p_pose			; Over his head: sword out in uatk2/uatk3,
+		cmp	#POSE_UATK2		; where the arcade's sprite holds it up.
+		bcc	.none
+		ldy	#3
+		bra	.vert
 .crouch:	lda	<p_pose
 		cmp	#POSE_CATK4
 		bcc	.none
@@ -794,6 +812,14 @@ enter_attack:	pha
 		ldx	#>anim_attack
 		jmp	set_anim
 
+enter_uatk:	lda	#SFX_SWING
+		jsr	sound_sfx
+		lda	#ST_UATK
+		sta	<p_state
+		lda	#<anim_uattack
+		ldx	#>anim_uattack
+		jmp	set_anim
+
 enter_catk:	lda	#SFX_SWING
 		jsr	sound_sfx
 		lda	#ST_CATK
@@ -803,7 +829,9 @@ enter_catk:	lda	#SFX_SWING
 		jmp	set_anim
 
 ; start_jump: UP held = high jump; a direction held = forward jump.
-start_jump:	stz	<p_jdir
+start_jump:	lda	#VOICE_JUMP		; The arcade's grunt (an ADPCM voice
+		jsr	voice_play		; there, not an FM effect).
+		stz	<p_jdir
 		bbr5	<pad, !+
 		stz	<p_face
 		lda	#1

@@ -2,6 +2,10 @@
 #ifndef _PSG_H_
 #define _PSG_H_
 
+/* Levels a channel can be given in direct D/A mode between two updates (the
+   H6280 timer, the fastest thing that feeds one, ticks 117 times a frame) */
+#define PSG_DDA_MAX 1024
+
 /* Macro to access currently selected PSG channel */
 #define PSGCH   psg.channel[psg.select]
 
@@ -19,6 +23,8 @@ typedef struct {
         uint8 balance;          /* Channel balance */
         uint8 waveform[32];     /* Waveform data */
         uint8 waveform_index;   /* Waveform data index */
+        uint8 dda[PSG_DDA_MAX]; /* Levels written in direct D/A mode, this frame */
+        int dda_count;
     } channel[8];
 }t_psg;
 

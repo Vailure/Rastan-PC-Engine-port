@@ -52,6 +52,15 @@ n = sum(1 for s in atk if s == 4)
 check('attack lasts 21 frames', abs(n - 21) <= 1, f'{n}')
 check('attack returns to idle', r[-1]['state'] == 0)
 
+# UP+attack standing: the sword over his head (arcade bodies 12, 13, 14, 13, 12 for
+# 4, 4, 8, 2, 4 frames), then idle.
+r = run(160, 100, 101, '81')
+up = [x['pose'] for x in r[100:140] if x['state'] == 10]
+seq = [p for i, p in enumerate(up) if i == 0 or up[i - 1] != p]
+check('UP+attack swings over his head: 3 poses there and back, 22 frames',
+      abs(len(up) - 22) <= 1 and len(seq) == 5 and seq == seq[::-1], f'{len(up)} frames, poses {seq}')
+check('UP+attack returns to idle', r[-1]['state'] == 0)
+
 # Down thrust: jump, then DOWN+II - sword-down pose held through the fall, lands crouched.
 r = run(200, 100, 102, '40', 110, 113, '82', 113, 160, '02')
 air = [x for x in r[120:160] if x['state'] == 3]

@@ -36,6 +36,9 @@ snd_ch:		ds	1
 sfx_f0:		ds	1
 sfx_f1:		ds	1
 sfx_v:		ds	1
+psg_ar:		ds	1		; The channel PSG_AR is left selecting: the port
+				; cannot be read, and the voice interrupt has to
+				; put it back (src/voice.asm).
 
 		.bss
 snd_freq_l:	ds	6		; What the music last set each channel to, so an
@@ -50,11 +53,14 @@ snd_vol:	ds	6
 sound_init:	stz	<snd_track
 		stz	<sfx_on
 		stz	<snd_acc
+		php
+		sei
 		lda	#$FF			; Main volume, both sides.
 		sta	PSG_VOL
 		stz	PSG_LFO_CTRL
 		clx
 .ch:		stx	PSG_AR
+		stx	<psg_ar
 		stz	PSG_CTRL		; Channel off: the waveform index resets.
 		lda	#$FF
 		sta	PSG_PAN
@@ -70,6 +76,7 @@ sound_init:	stz	<snd_track
 		cpx	#6
 		bne	.ch
 		stz	PSG_NOISE
+		plp
 		rts
 
 ; A 32-step wave, one period: the arcade's FM voices become this one timbre.
@@ -99,10 +106,18 @@ sound_music:	cmp	#SND_MUSIC_COUNT
 sound_stop:	stz	<snd_track
 		stz	<sfx_on
 snd_silence:	clx
-.ch:		stx	PSG_AR
+.ch:		stz	snd_vol, x
+		cpx	#VOICE_CH
+		bne	!+
+		lda	<voice_on		; (a voice keeps its channel)
+		bne	.next
+!:		php
+		sei
+		stx	PSG_AR
+		stx	<psg_ar
 		stz	PSG_CTRL
-		stz	snd_vol, x
-		inx
+		plp
+.next:		inx
 		cpx	#6
 		bne	.ch
 		rts
@@ -128,7 +143,14 @@ sound_sfx:	cmp	#SND_SFX_COUNT
 ; sound_update - once a frame (in VBLANK). The streams run at the arcade
 ; driver's tick rate, so a fraction of a tick is carried frame to frame.
 
-sound_update:	lda	<snd_acc
+sound_update:	lda	<voice_held		; A voice that has ended gives the
+		beq	!+			; music its channel back.
+		lda	<voice_on
+		bne	!+
+		stz	<voice_held
+		ldx	#VOICE_CH
+		jsr	snd_write_ch
+!:		lda	<snd_acc
 		clc
 		adc	#<SND_TICK_RATE
 		sta	<snd_acc
@@ -245,7 +267,14 @@ sfx_read_ch:	lda	[sfx_ptr]
 		lda	[sfx_ptr]
 		sta	<sfx_v
 		jsr	sfx_next
+		cpx	#VOICE_CH
+		bne	!+
+		lda	<voice_on		; A voice has the channel.
+		bne	.r
+!:		php
+		sei
 		stx	PSG_AR
+		stx	<psg_ar
 		lda	<sfx_v
 		beq	.off
 		lda	<sfx_f1
@@ -258,12 +287,21 @@ sfx_read_ch:	lda	[sfx_ptr]
 		lda	<sfx_v
 		ora	#$80
 		sta	PSG_CTRL
-		rts
+		plp
+.r:		rts
 .off:		stz	PSG_CTRL
+		plp
 		rts
 
 ; snd_write_ch - X = channel: play what the music last set there.
-snd_write_ch:	stx	PSG_AR
+snd_write_ch:	cpx	#VOICE_CH
+		bne	!+
+		lda	<voice_on		; A voice has the channel.
+		bne	.r
+!:		php				; (a PSG write an interrupt must not
+		sei				; break into: see src/voice.asm)
+		stx	PSG_AR
+		stx	<psg_ar
 		lda	snd_vol, x
 		beq	.off
 		pha
@@ -277,8 +315,10 @@ snd_write_ch:	stx	PSG_AR
 		pla
 		ora	#$80
 		sta	PSG_CTRL
-		rts
+		plp
+.r:		rts
 .off:		stz	PSG_CTRL
+		plp
 		rts
 
 ; snd_next / sfx_next - step a stream pointer, following it into the next bank.

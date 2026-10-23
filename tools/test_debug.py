@@ -16,7 +16,8 @@ rom, noen = sys.argv[1], sys.argv[2]
 tmp = os.environ.get('TMPDIR', '/tmp')
 fails = []
 SEL, I, RIGHT, DOWN = '10', '40', '04', '02'
-OPEN = '11'                   # UP + SELECT opens the menu; SELECT alone closes it
+OPEN = '11'                   # UP + SELECT, held, opens the menu; SELECT alone closes it
+HOLD = 50                     # frames to hold them (src/debug.asm: DBG_HOLD)
 # Checkpoint 5 is in the lava hall, square ($12, -1) of the world (tools/world.py): y -57.
 CP = [(48, 295), (2096, 263), (4144, 295), (6192, 295), (8240, 455), (9296, 65536 - 57)]
 
@@ -41,26 +42,33 @@ def press(frames_keys):
     return a
 
 
+def hold_open(f):
+    """tgrun args that hold UP + SELECT from frame f until the menu opens."""
+    return [f, f + HOLD, OPEN]
+
+
 # 1. Menu open/close restores the screen (no enemies, Rastan idle).
 plain = shot(noen, 200, [])
-menu = shot(noen, 200, press([(120, OPEN), (140, SEL)]))
+menu = shot(noen, 200, hold_open(100) + press([(170, SEL)]))
 diff = (plain != menu).any(-1).mean() * 100
 check('closing the menu restores the screen exactly', diff == 0, f'{diff:.2f}% pixels differ')
-inmenu = shot(noen, 130, press([(120, OPEN)]))
-check('SELECT alone does not open it', (shot(noen, 130, press([(120, SEL)])) == shot(noen, 130, [])).all())
+inmenu = shot(noen, 130, hold_open(60))
+check('SELECT alone does not open it', (shot(noen, 130, [60, 125, SEL]) == shot(noen, 130, [])).all())
+check('UP + SELECT tapped does not open it',
+      (shot(noen, 130, press([(60, OPEN), (90, OPEN)])) == shot(noen, 130, [])).all())
 check('the menu is drawn while open', (inmenu != shot(noen, 130, [])).any(-1).mean() > 0.3)
 
 # 2. Warp to each checkpoint: Rastan at the arcade's restart point, standing still.
 for cp in range(1, 6):
-    keys = [(100, OPEN)] + [(110 + 6 * k, RIGHT) for k in range(cp)] + [(150, I)]
-    r = trace(noen, 400, press(keys))
+    keys = [(120 + 6 * k, RIGHT) for k in range(cp)] + [(160, I)]
+    r = trace(noen, 400, hold_open(60) + press(keys))
     end = r[-1]
     stood = all(x['state'] == 0 and (x['x'], x['y']) == CP[cp] for x in r[-60:])
     check(f'warp to checkpoint {cp} puts Rastan at {CP[cp]}, standing', stood,
           f"at ({end['x']},{end['y']}) state {end['state']}")
 
 # 3. INVINCIBLE: passive Rastan, lizardmen attack; no health lost.
-args = press([(60, OPEN), (66, DOWN), (72, I), (80, SEL)])
+args = hold_open(20) + press([(80, DOWN), (86, I), (94, SEL)])
 import re
 LST = os.path.join(os.path.dirname(__file__), '..', 'src', 'main.lst')
 sym = {}
@@ -83,7 +91,7 @@ check('INVINCIBLE: lizardmen do no damage', min(hp_god[100:]) == 48 and min(hp_p
 
 # 4. Death restarts at the checkpoint: warp to 2, run right (UP+RIGHT, jumping) into
 #    the second waterfall (x 5568-5919, before checkpoint 3); he must come back at 2.
-args = press([(100, OPEN), (110, RIGHT), (116, RIGHT), (150, I)]) + [200, 2000, '05']
+args = hold_open(60) + press([(120, RIGHT), (126, RIGHT), (160, I)]) + [200, 2000, '05']
 for f in range(220, 2000, 60):
     args += [f, f + 3, I]
 r = trace(noen, 2000, args)

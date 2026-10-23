@@ -34,7 +34,7 @@ EK_LIZARD, EK_BLUE, EK_CHIM, EK_FIRE, EK_ROCK, EK_GARG, EK_WOMAN, EK_SWORD, EK_M
 ES_WALK, ES_ATTACK, ES_DYING = 1, 2, 4
 OBJ = {'e_state': 17, 'e_kind': 17, 'e_xl': 17, 'e_xh': 17, 'e_yl': 17, 'e_yh': 17, 'e_alt': 17}
 SEL, I, RIGHT = '10', '40', '04'
-OPEN = '11'                   # UP + SELECT opens the debug menu
+OPEN = '11'                   # UP + SELECT, held, opens the debug menu (DBG_HOLD)
 
 
 def run(r, frames, keys):
@@ -64,7 +64,7 @@ def lives(r, kind):
 
 
 # Warp to checkpoint 1, then the jumping route right (god build).
-keys = [100, 100, OPEN, 110, 110, RIGHT, 150, 150, I, 200, 1400, '05']
+keys = [40, 90, OPEN, 100, 100, RIGHT, 150, 150, I, 200, 1400, '05']
 for f in range(220, 1400, 60):
     keys += [f, f + 3, I]
 r = run(god, 1400, keys)
@@ -98,7 +98,7 @@ v = (fl[0][1] - fl[-1][1]) / (len(fl) - 1) if len(fl) > 20 else 0
 check('fireballs fly left at 1.75 px/frame', abs(v - 1.75) < 0.1, f'{v:.2f}')
 
 # A chimera dies in one hit for 300 (the same route, with a down thrust in each jump).
-keys = [100, 100, OPEN, 110, 110, RIGHT, 150, 150, I, 200, 1400, '05']
+keys = [40, 90, OPEN, 100, 100, RIGHT, 150, 150, I, 200, 1400, '05']
 for f in range(220, 1400, 60):
     keys += [f, f + 3, I, f + 8, f + 10, '82']
 r = run(god, 1400, keys)
@@ -114,7 +114,7 @@ gain = [bcd(r[i]['score']) - bcd(r[i - 1]['score']) for i, _ in kills]
 check('a sword hit kills a chimera, worth 300', kills and 300 in gain, f'{len(kills)} killed, score steps {gain}')
 
 # Boulder at 4601 (checkpoint 2, the same jumping route).
-keys = [100, 100, OPEN, 110, 110, RIGHT, 116, 116, RIGHT, 150, 150, I, 200, 1100, "05"]
+keys = [40, 90, OPEN, 100, 100, RIGHT, 106, 106, RIGHT, 150, 150, I, 200, 1100, "05"]
 for f in range(220, 1100, 60):
     keys += [f, f + 3, I]
 r = run(god, 1100, keys)
@@ -147,7 +147,7 @@ turn = next(((x, px) for _, x, _, px, m in w if m == 2), None)
 check('she turns about 50 px past him', turn and 45 <= turn[1] - turn[0] <= 60, f'{turn}')
 
 # Castle soldiers: warp to checkpoint 4 and walk right (they hurt; no god mode).
-keys = [100, 100, OPEN] + sum([[110 + 6 * k, 110 + 6 * k, RIGHT] for k in range(4)], []) + [150, 150, I, 200, 900, '04']
+keys = [40, 90, OPEN] + sum([[100 + 6 * k, 100 + 6 * k, RIGHT] for k in range(4)], []) + [150, 150, I, 200, 900, '04']
 r = run(rom, 900, keys)
 r2 = peek(rom, 900, keys, {'p_hp': 1})
 kinds = []
@@ -166,7 +166,7 @@ check('a swing that reaches costs 12 units', drops and set(drops) == {12}, f'{dr
 
 # Fire jets: checkpoint 5 (god build): up the rope and along the top of the lava
 # hall, down into the jets' room, jumping its three pits.
-CASTLE_ROUTE = [100, 100, OPEN] + sum([[110 + 6 * k, 110 + 6 * k, RIGHT] for k in range(5)], []) + [150, 150, I, 200, 830, '05']
+CASTLE_ROUTE = [40, 90, OPEN] + sum([[100 + 6 * k, 100 + 6 * k, RIGHT] for k in range(5)], []) + [150, 150, I, 200, 830, '05']
 for f in range(220, 830, 60):
     CASTLE_ROUTE += [f, f + 3, I]
 CASTLE_ROUTE += [831, 1100, RIGHT, 864, 867, I, 914, 917, I, 964, 967, I]
@@ -180,7 +180,7 @@ check('fire jets erupt when Rastan is 172 px left of them', len(starts) == 3
       and all(abs(px - (jx - 172)) <= 3 for jx, px in starts.items()), f'{starts}')
 
 # The boss: the debug warp to the boss room (7th line), swinging every 25 frames.
-keys = [100, 100, OPEN] + sum([[110 + 6 * k, 110 + 6 * k, RIGHT] for k in range(6)], []) + [150, 150, I]
+keys = [40, 90, OPEN] + sum([[100 + 6 * k, 100 + 6 * k, RIGHT] for k in range(6)], []) + [150, 150, I]
 for f in range(300, 1000, 25):
     keys += [f, f + 1, '80']
 r = run(god, 1000, keys)

@@ -49,6 +49,7 @@ dbg_digits:	ds	1
 dbg_t:		ds	1		; put_char scratch.
 dbg_line:	ds	1
 dbg_rebuilt:	ds	1		; A warp redrew the map: the menu box must not be put back.
+dbg_hold:	ds	1		; Frames UP + SELECT have been held together.
 
 		.bss
 dbg_save:	ds	MENU_W * MENU_H * 2	; The tile map under the menu.
@@ -208,14 +209,24 @@ door_enter:	stz	<p_door
 .no:		rts
 
 ; ---------------------------------------------------------------------------
-; debug_check - once a frame, before the game logic: SELECT opens the menu.
+; debug_check - once a frame, before the game logic. UP and SELECT held
+; together for DBG_HOLD frames open the menu: a press, however it arrives
+; (a stray bit from the pad, a turbo switch, a controller mapping of its own),
+; is not enough to interrupt play.
 
-debug_check:	lda	joytrg			; SELECT pressed
-		and	#JOY_SEL
-		beq	!+
-		lda	joynow			; while UP is held.
-		and	#JOY_U
-		beq	!+
+DBG_HOLD	=	45		; Three quarters of a second.
+
+debug_check:	lda	joynow
+		and	#JOY_SEL | JOY_U
+		cmp	#JOY_SEL | JOY_U
+		beq	.held
+		stz	<dbg_hold
+		rts
+.held:		inc	<dbg_hold
+		lda	<dbg_hold
+		cmp	#DBG_HOLD
+		bcc	!+
+		stz	<dbg_hold
 		jmp	debug_menu
 !:		rts
 

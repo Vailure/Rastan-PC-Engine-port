@@ -73,12 +73,15 @@ The build:
 - LEFT/RIGHT: walk
 - DOWN: crouch
 - I: jump (UP+I for the high jump; a direction for a forward jump)
-- II: attack, standing or crouched; in a jump, DOWN+II is the down thrust and UP+II the up thrust
+- II: attack, standing or crouched; UP+II standing swings the sword over his head; in a jump,
+  DOWN+II is the down thrust and UP+II the up thrust
 - UP: grab a rope; UP and DOWN climb it, and I jumps off
 
 The camera only scrolls forward. A death restarts at the last checkpoint reached, as in the arcade.
 
-**Debug menu:** UP + SELECT opens it and freezes the game (RUN held + SELECT is still the core's soft reset).
+**Debug menu:** hold UP + SELECT together for about ¾ s to open it (a press, or a stray SELECT bit
+from a pad or emulator mapping, is not enough); it freezes the game (RUN held + SELECT is still the
+core's soft reset).
 UP/DOWN pick a line, LEFT/RIGHT change a value, I applies, SELECT or II closes.
 
 | Line | What it does |
@@ -321,14 +324,32 @@ Each tune and effect becomes a stream of per-channel PSG periods and volumes; `s
 plays it on the PSG's 6 channels, pacing itself with an 8.8 fixed-point tick counter, with an
 effect borrowing channels 4 and 5 and handing them back when it ends.
 
-What is lost: each FM voice becomes one PSG waveform (one shared 32-step wave), notes below the
-PSG's range move up an octave, and the MSM5205 voice samples (Rastan's jump grunt and death cry,
-commands `$0A` and `$0D`) are not converted - they would need the ADPCM decoded and played
-through the PSG's direct D/A.
+What is lost: each FM voice becomes one PSG waveform (one shared 32-step wave), and notes below the
+PSG's range move up an octave.
+
+**Voices** (`tools/pce_voice.py`, `src/voice.asm`). Rastan's jump grunt and death cry (commands `$0A`
+and `$0D`) are MSM5205 ADPCM samples, not FM. The ADPCM ROM holds the samples back to back, so each
+runs from its start page to the next one's; `sim/snd` shows the driver starting and stopping them,
+and the two long samples ($28→$63: 30208 nibbles in 253 frames, $63→$B1: 39936 in 335) put the
+MSM5205 at about 7158 Hz. `pce_voice.py` decodes them (high nibble first), cuts each where the
+driver stops it, resamples to the H6280 timer's 6991 Hz (7.16 MHz / 1024, `TIMER_DR` 0) and
+quantises to the PSG's 5-bit levels: 2330 bytes for the jump, 16080 for the death cry, banks
+$7A-$7C. The timer interrupt writes one level a tick to PSG channel 5 in direct D/A mode, which the
+music gets back the frame after the voice ends. The PSG's channel-select port cannot be read back,
+so every other PSG write runs with interrupts held off and keeps a shadow (`psg_ar`) the interrupt
+restores. The interrupt costs about 90 cycles a tick (about 9% of the CPU while a voice plays);
+the frame budget checks (`test_player`, `test_castle`) still pass on routes full of jumps.
+
+`tools/tgemu` needed two fixes for this: its H6280 timer fired once and stopped (an old workaround
+for one game; the real counter reloads itself and keeps running), and its PSG ignored direct D/A
+mode, so writes went into the channel's waveform instead. It now keeps the levels written each frame
+and spreads them evenly over that frame's samples.
 
 `tools/test_sound.py` checks it without listening: `tools/tgrun` can write a WAV of the emulated
 PSG and a log of every PSG register write, so the test compares what the ROM writes against the
-stream, and checks the notes in the audio's spectrum are the ones the stream asks for.
+stream, and checks the notes in the audio's spectrum are the ones the stream asks for. For the
+voices it checks a jump writes the jump sample's levels to channel 5, every one in order, that the
+music gets the channel back, and that the voice shows in the audio.
 
 ## Arcade notes (reverse engineering)
 
@@ -373,7 +394,9 @@ stream, and checks the notes in the audio's spectrum are the ones the stream ask
 - [x] Swinging vines (the chasm at x 2750, the lava hall)
 - [x] The castle's floor spears (markers `$46`)
 - [x] Music and sound effects on the PSG (`$1A`/`$1B`/`$1C` and the FM effects)
-- [ ] The MSM5205 voice samples (jump, death)
+- [x] The MSM5205 voice samples (jump, death), through the PSG's direct D/A
+- [x] Standing UP+II: the sword over his head (arcade bodies 12-14, `sim/scripts/upatk.txt`); its hit
+      box is the up thrust's, which has not been measured against the arcade for this attack
 - [ ] The lava hall's flames (markers `$4C`, `$52-$55`: 80x32 px flames standing on the lava,
       five of them, and the sparks that drift up off them). They need 16 resident cells, about
       1 KB of VRAM words, and the stage's tile pool is already at 929 of 944 slots.
@@ -381,7 +404,7 @@ stream, and checks the notes in the audio's spectrum are the ones the stream ask
 (Checked and not needed: Rastan shows no score popups when anything dies, and the "small castle
 flyers" seen in an early census are the blue throwers' clubs, which the port already has.)
 - [x] Restart at the arcade's checkpoints after a death (stream fast-forward, no preload data)
-- [x] Debug menu (UP + SELECT): checkpoint warp, invincible, enemies on/off, health, lives, slow motion, weapon
+- [x] Debug menu (UP + SELECT, held): checkpoint warp, invincible, enemies on/off, health, lives, slow motion, weapon
 
 ## Licenses
 

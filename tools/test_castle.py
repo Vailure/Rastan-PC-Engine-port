@@ -23,7 +23,7 @@ rom, god, noen = sys.argv[1:4]
 tmp = os.environ.get('TMPDIR', '/tmp')
 fails = []
 SEL, RIGHT, I = '10', '04', '40'
-OPEN = '11'                   # UP + SELECT opens the debug menu
+OPEN = '11'                   # UP + SELECT, held, opens the debug menu (DBG_HOLD)
 ST_CLIMB, ST_DEAD, ST_SWING = 6, 8, 9
 
 
@@ -42,7 +42,8 @@ def s16(v):
 
 
 def warp(cp):
-    return [100, 100, OPEN] + sum([[110 + 6 * k, 110 + 6 * k, RIGHT] for k in range(cp)], []) + [150, 150, I]
+    return ([40, 90, OPEN] + sum([[100 + 6 * k, 100 + 6 * k, RIGHT] for k in range(cp)], [])
+            + [150, 150, I])
 
 
 VARS = {'p_x': 2, 'p_y': 2, 'p_state': 1, 'p_vine': 1, 'scroll_x': 2, 'scroll_y': 2, 'cam_region': 1,
@@ -135,7 +136,7 @@ def shot(keys, frame):
 
 base = warp(4) + ROUTE_SHAFT                   # (hanging still at a rope's top, nothing moving)
 plain = shot(base, 2520)
-menu = shot(base + [2480, 2480, OPEN, 2490, 2490, SEL], 2520)
+menu = shot(base + [2430, 2480, OPEN, 2490, 2490, SEL], 2520)
 diff = (plain != menu).any(-1).mean() * 100
 check('in a shaft, closing the debug menu restores the screen', diff == 0, f'{diff:.2f}% pixels differ')
 

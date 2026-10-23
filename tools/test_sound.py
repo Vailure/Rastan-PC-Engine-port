@@ -132,12 +132,50 @@ check('swinging the sword plays an effect', swung > quiet, f'{swung} writes to c
 
 # 4. The castle and the boss room have their own tunes (the debug menu's warps).
 for cp, track, name in ((4, 'SND_CASTLE', 'castle'), (6, 'SND_BOSS', 'boss room')):
-    keys = [100, 100, SEL] + sum([[110 + 6 * k, 110 + 6 * k, RIGHT] for k in range(cp)], []) + [150, 150, I]
+    keys = [40, 90, SEL] + sum([[100 + 6 * k, 100 + 6 * k, RIGHT] for k in range(cp)], []) + [150, 150, I]
     run(god, 900, keys, psg=psg)   # (each tune starts with the arcade's own lead-in)
     played = [(ch, p, v) for _, ch, p, v in psg_notes(psg)]
     want = [(ch, p, v) for _, ch, p, v in stream(equ(track))[:4]]
     ok = any(played[i:i + len(want)] == want for i in range(len(played)))
     check(f'the {name} plays its own tune', ok, f'wanted {want[:2]}, got {played[-4:]}')
+
+# 5. Jumping and dying play the arcade's voice samples on channel 5's direct D/A:
+# exactly the levels tools/pce_voice.py made, one per timer tick, and the music has
+# its channel back afterwards.
+def dda(path):
+    """[(write index, channel, level)] for waveform-port writes in D/A mode, and the
+    index of the first ordinary note written to channel 5 after them."""
+    mode, out, back = {}, [], None
+    for n, line in enumerate(open(path)):
+        ch, a, d = line.split()
+        ch, a, d = int(ch), int(a, 16), int(d, 16)
+        if a == 0x804:
+            mode[ch] = d & 0xC0
+            if ch == 5 and out and d & 0xC0 == 0x80 and back is None:
+                back = n
+        elif a == 0x806 and mode.get(ch) == 0xC0:
+            out.append((n, ch, d))
+    return out, back
+
+
+voice = open(os.path.join(build, 'voice', 'voice.bin'), 'rb').read()
+jump = voice[:voice.index(0x80)]
+run(rom, 460, [360, 363, I], psg=psg)
+got, back = dda(psg)
+check('a jump plays the jump voice on channel 5, level for level',
+      [d for _, _, d in got] == list(jump) and {ch for _, ch, _ in got} == {5},
+      f'{len(got)} of {len(jump)} levels, channels {sorted({ch for _, ch, _ in got})}')
+check('the music gets channel 5 back after it', back is not None, f'write {back}')
+wav2 = os.path.join(tmp, f'snd_v_{os.getpid()}.wav')
+run(rom, 460, [360, 363, I], wav=wav2)
+w = wave.open(wav2)
+b = np.frombuffer(w.readframes(w.getnframes()), np.int16).reshape(-1, 2).mean(1)
+run(rom, 460, [], wav=wav)
+w = wave.open(wav)
+q = np.frombuffer(w.readframes(w.getnframes()), np.int16).reshape(-1, 2).mean(1)
+seg = slice(int(361 / 60 * 44100), int(380 / 60 * 44100))
+extra = np.sqrt(((b[seg] - q[seg]) ** 2).mean())
+check('the voice is heard over the music', extra > 300, f'rms difference {extra:.0f}')
 
 print(f'{len(fails)} failure(s)')
 sys.exit(1 if fails else 0)

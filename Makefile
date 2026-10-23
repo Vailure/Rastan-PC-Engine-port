@@ -12,7 +12,7 @@ BUILD      := build
 STAGE      := $(BUILD)/stage1
 PLAYER     := $(BUILD)/player
 
-export PCE_INCLUDE := $(abspath $(STAGE)):$(abspath $(PLAYER)):$(abspath $(BUILD)/objects):$(abspath $(BUILD)/hud):$(abspath $(BUILD)/props):$(abspath $(BUILD)/traps):$(abspath $(BUILD)/sound):$(abspath $(BUILD)/debug):$(abspath src):$(abspath $(HUC))/include/hucc
+export PCE_INCLUDE := $(abspath $(STAGE)):$(abspath $(PLAYER)):$(abspath $(BUILD)/objects):$(abspath $(BUILD)/hud):$(abspath $(BUILD)/props):$(abspath $(BUILD)/traps):$(abspath $(BUILD)/sound):$(abspath $(BUILD)/voice):$(abspath $(BUILD)/debug):$(abspath src):$(abspath $(HUC))/include/hucc
 export RASTAN_ROMS := $(abspath $(ROMS))
 
 all: $(BUILD)/rastan.pce
@@ -73,8 +73,13 @@ $(BUILD)/vine.txt: $(BUILD)/bot1.txt
 $(BUILD)/vine.snp: sim/sim sim/maincpu.bin $(BUILD)/vine.txt
 	sim/sim sim/maincpu.bin $(BUILD)/vine.txt $@ 1 10700
 
-$(PLAYER)/player.bin: tools/pce_player.py tools/player_frames.py tools/fgmap.py tools/world.py sim/maincpu.bin $(BUILD)/actions.snp $(BUILD)/attract.snp $(BUILD)/thrusts.snp $(BUILD)/lizard.snp $(BUILD)/waterfall.snp $(BUILD)/vine.snp
-	cd tools && python3 pce_player.py ../sim/maincpu.bin ../$(BUILD)/actions.snp ../$(BUILD)/attract.snp ../$(BUILD)/thrusts.snp ../$(BUILD)/lizard.snp ../$(BUILD)/waterfall.snp ../$(BUILD)/vine.snp ../$(PLAYER)
+$(PLAYER)/player.bin: tools/pce_player.py tools/player_frames.py tools/fgmap.py tools/world.py sim/maincpu.bin $(BUILD)/actions.snp $(BUILD)/attract.snp $(BUILD)/thrusts.snp $(BUILD)/lizard.snp $(BUILD)/waterfall.snp $(BUILD)/vine.snp $(BUILD)/upatk.snp
+	cd tools && python3 pce_player.py ../sim/maincpu.bin ../$(BUILD)/actions.snp ../$(BUILD)/attract.snp ../$(BUILD)/thrusts.snp ../$(BUILD)/lizard.snp ../$(BUILD)/waterfall.snp ../$(BUILD)/vine.snp ../$(BUILD)/upatk.snp ../$(PLAYER)
+
+# Standing UP+attack: the arcade swings the sword over Rastan's head.
+$(BUILD)/upatk.snp: sim/sim sim/maincpu.bin sim/scripts/upatk.txt
+	@mkdir -p $(BUILD)
+	sim/sim sim/maincpu.bin sim/scripts/upatk.txt $@ 1 500
 
 # Blue club throwers at checkpoint 2: they throw at a passive Rastan, then he
 # walks into them swinging.
@@ -132,6 +137,11 @@ $(BUILD)/sound/sound.bin: tools/pce_sound.py tools/ym2151.py sim/snd sim/audiocp
 	@mkdir -p $(BUILD)/sound
 	cd tools && python3 pce_sound.py ../sim/audiocpu.bin ../sim/adpcm.bin ../$(BUILD)/sound
 
+# Rastan's jump grunt and death cry: MSM5205 voice samples on the arcade.
+$(BUILD)/voice/voice.bin: tools/pce_voice.py sim/adpcm.bin
+	@mkdir -p $(BUILD)/voice
+	cd tools && python3 pce_voice.py ../sim/adpcm.bin ../$(BUILD)/voice
+
 sim/audiocpu.bin sim/adpcm.bin: sim/maincpu.bin
 
 # The castle's lava hall: its flames and the sparks drifting off them.
@@ -160,7 +170,7 @@ $(BUILD)/debug/font.bin: $(HUC)/examples/asm/elmer/font/font8x8-ascii-bold-short
 	@mkdir -p $(BUILD)/debug
 	dd if=$< of=$@ bs=8 skip=16 count=64 status=none
 
-GAME_DEPS  := $(wildcard src/*.asm) $(BUILD)/debug/font.bin $(STAGE)/stage.bin $(PLAYER)/player.bin $(OBJECTS)/objcells.bin $(BUILD)/hud/hud.bin $(BUILD)/props/props.bin $(BUILD)/traps/traps.bin $(BUILD)/sound/sound.bin
+GAME_DEPS  := $(wildcard src/*.asm) $(BUILD)/debug/font.bin $(STAGE)/stage.bin $(PLAYER)/player.bin $(OBJECTS)/objcells.bin $(BUILD)/hud/hud.bin $(BUILD)/props/props.bin $(BUILD)/traps/traps.bin $(BUILD)/sound/sound.bin $(BUILD)/voice/voice.bin
 
 $(BUILD)/rastan.pce: $(GAME_DEPS)
 	@mkdir -p $(BUILD)/opt

@@ -42,6 +42,9 @@ POSES_ATTRACT = {'climb1': 4455, 'climb2': 4459, 'climb3': 4463, 'climb4': 4493}
 # transition poses, then the sword-down pose held until landing), and
 # UP+attack in a high jump.
 POSES_THRUSTS = {'dthr1': 532, 'dthr2': 536, 'dthr3': 540, 'uthr': 731}
+# Standing UP+attack, a swing over his head (sim/scripts/upatk.txt): three poses,
+# the arcade's bodies 12-14, held 4, 4, 8, 2, 4 frames.
+POSES_UATK = {'uatk1': 522, 'uatk2': 526, 'uatk3': 530}
 # Being hit by a lizardman (sim/scripts/lizard.txt, passive Rastan): 3 poses, 23 frames.
 POSES_HURT = {'hurt1': 667, 'hurt2': 674, 'hurt3': 682}
 # Dying (arcade state 8), from the bot's death on the first waterfall's lip: 9 poses, 57 frames.
@@ -65,6 +68,7 @@ ANIMS = {
     'climb': [('climb1', 3), ('climb2', 3), ('climb3', 3), ('climb4', 3)],
     'dthrust': [('dthr1', 4), ('dthr2', 4), ('dthr3', 0)],
     'uthrust': [('uthr', 8)],
+    'uattack': [('uatk1', 4), ('uatk2', 4), ('uatk3', 8), ('uatk2', 2), ('uatk1', 4)],
     'hurt': [('hurt1', 7), ('hurt2', 8), ('hurt3', 8)],
     'death': [('die1', 4), ('die2', 4), ('die3', 8), ('die4', 8), ('die5', 8), ('die6', 8),
               ('die7', 8), ('die8', 8), ('die9', 1)],
@@ -127,7 +131,7 @@ def to9(rgb):
 
 def main():
     rom = open(sys.argv[1], 'rb').read()
-    snapf, attractf, thrustf, lizardf, waterf, vinef, out = sys.argv[2:9]
+    snapf, attractf, thrustf, lizardf, waterf, vinef, uatkf, out = sys.argv[2:10]
     os.makedirs(out, exist_ok=True)
     for w, n in WEAPON_PARTS.items():
         WTAB[w] = part_frames(rom, PARTS[n])
@@ -144,8 +148,10 @@ def main():
     caps.update({n: die[f] for n, f in POSES_DEATH.items()})
     sw = capture(vinef, POSES_SWING)
     caps.update({n: sw[f] for n, f in POSES_SWING.items()})
+    ua = capture(uatkf, POSES_UATK)
+    caps.update({n: ua[f] for n, f in POSES_UATK.items()})
     all_poses = (list(POSES) + list(POSES_ATTRACT) + list(POSES_THRUSTS) + list(POSES_HURT) + list(POSES_DEATH)
-                 + list(POSES_SWING))
+                 + list(POSES_SWING) + list(POSES_UATK))
 
     # Compose each pose into an RGB image around the anchor (anchor at (64, 96)).
     AX, AY, W, H = 96, 112, 192, 176    # canvas around the anchor (death sparkles spread wide)

@@ -36,7 +36,7 @@ ITEM, BAT = 4, 5
 # Break the cave block, drop in, walk right under the axe (x 986).
 CAVE = [60, 448, '04', 450, 453, '40', 460, 463, '82', 463, 540, '02', 560, 655, '04']
 # Debug menu: ENEMIES OFF (walkers only; items still come), then the cave route.
-MENU_OFF = [50, 50, '11', 56, 56, '02', 62, 62, '02', 68, 68, '40', 76, 76, '10']
+MENU_OFF = [10, 60, '11', 66, 66, '02', 72, 72, '02', 78, 78, '40', 86, 86, '10']   # (UP + SELECT held)
 VARS = {'p_weapon': 1, 'p_wtime': 2, 'p_hp': 1, 'p_x': 2, 'p_y': 2, 'items_done': 1, 'score': 3, 'hiscore': 3}
 OBJ = {'e_state': 17, 'e_range': 17, 'e_xl': 17, 'e_xh': 17, 'e_yl': 17, 'e_yh': 17}
 
@@ -113,7 +113,7 @@ check('after a death the items can come again', r[1000]['items_done'][0] == 1 an
 
 # 5. Each weapon is drawn: debug menu WEAPON (line 6), then a swing.
 def shot(w, frame):
-    keys = [60, 60, '11'] + sum([[66 + 6 * k, 66 + 6 * k, '02'] for k in range(6)], [])
+    keys = [10, 60, '11'] + sum([[66 + 6 * k, 66 + 6 * k, '02'] for k in range(6)], [])
     keys += sum([[110 + 6 * k, 110 + 6 * k, '04'] for k in range(w - 1)], []) + [140, 140, '10', 160, 161, '80']
     out = os.path.join(tmp, f'items_{os.getpid()}.ppm')
     subprocess.run([TGRUN, noen, str(frame), out] + [str(k) for k in keys], check=True, capture_output=True)
