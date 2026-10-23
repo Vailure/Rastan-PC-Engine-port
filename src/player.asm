@@ -1315,8 +1315,9 @@ camera_update:	lda	<p_x			; cv = p_x - 136
 		sta	<scroll_y + 1
 		; (fall through)
 
-; camera_clamp - scroll_x, scroll_y into the box of cam_region; scroll_y also
-; stays <= row_top + STAGE_ROW_REACH (the BAT rows a shaft took over).
+; camera_clamp - scroll_x, scroll_y into the box of cam_region. The BAT holds
+; 512 px each way, so the camera also stays inside the last 512 px streamed:
+; scroll_x >= col_last - STAGE_COL_REACH and scroll_y <= row_top + STAGE_ROW_REACH.
 camera_clamp:	ldx	<cam_region
 		lda	<scroll_x
 		sta	<cv
@@ -1327,6 +1328,16 @@ camera_clamp:	ldx	<cam_region
 		lda	region_x0_h, x
 		sta	<cl + 1
 		jsr	smax
+		lda	<col_last		; Not back past the last column streamed
+		clc				; minus the BAT's 512 px (less a margin).
+		adc	#<-STAGE_COL_REACH
+		sta	<cl
+		lda	<col_last + 1
+		adc	#>-STAGE_COL_REACH
+		bvs	!+			; (no columns yet: $8000 - reach underflows)
+		sta	<cl + 1
+		jsr	smax
+!:
 		lda	region_x1_l, x
 		sta	<cl
 		lda	region_x1_h, x

@@ -53,6 +53,7 @@ ln_region:	ds	1		; Camera region while it is the next line.
 cam_region:	ds	1		; Region of the next line to stream (camera box).
 stream_min:	ds	2		; Lines below this stream whatever the camera.
 row_top:	ds	2		; World y of the last row streamed ($7FFF: none).
+col_last:	ds	2		; World x of the last column streamed ($8000: none).
 cv:		ds	2		; smin/smax operands.
 cl:		ds	2
 
@@ -225,6 +226,9 @@ stream_reset:	stz	<next_col
 		sta	<row_top
 		lda	#$7F
 		sta	<row_top + 1
+		stz	<col_last
+		lda	#$80
+		sta	<col_last + 1
 		stz	<cam_region
 		rts
 
@@ -405,7 +409,12 @@ stream_line:
 .bat:		lda	<ln_flags
 		lsr	a
 		bcs	.row
-		; BAT column: VRAM increment 64, MAWR = column.
+		; BAT column: VRAM increment 64, MAWR = column. The BAT holds 512 px:
+		; the camera may not go back past this column minus that (camera_clamp).
+		lda	<ln_trig
+		sta	<col_last
+		lda	<ln_trig + 1
+		sta	<col_last + 1
 		st0	#VDC_CR
 		lda	<vdc_crl
 		sta	VDC_DL
@@ -545,6 +554,7 @@ DEBUG_BANK	=	$05
 		include	"woman.asm"
 		include	"jets.asm"
 		include	"vines.asm"
+		include	"traps.asm"
 		include	"boss.asm"
 
 ; ---------------------------------------------------------------------------
@@ -559,6 +569,8 @@ obj_palettes:	incbin	"objpal.bin"
 hud_palette:	incbin	"hudpal.bin"
 prop_palette:	incbin	"proppal.bin"
 debug_font:	incbin	"font.bin"		; HuC's 8x8 bold font, $20-$5F (build/debug).
+trap_palettes:	incbin	"trappal.bin"		; The floor spears (build/traps).
+trap_cells:	incbin	"traps.bin"
 
 		.bank	$10
 		.page	3

@@ -12,7 +12,7 @@ BUILD      := build
 STAGE      := $(BUILD)/stage1
 PLAYER     := $(BUILD)/player
 
-export PCE_INCLUDE := $(abspath $(STAGE)):$(abspath $(PLAYER)):$(abspath $(BUILD)/objects):$(abspath $(BUILD)/hud):$(abspath $(BUILD)/props):$(abspath $(BUILD)/debug):$(abspath src):$(abspath $(HUC))/include/hucc
+export PCE_INCLUDE := $(abspath $(STAGE)):$(abspath $(PLAYER)):$(abspath $(BUILD)/objects):$(abspath $(BUILD)/hud):$(abspath $(BUILD)/props):$(abspath $(BUILD)/traps):$(abspath $(BUILD)/debug):$(abspath src):$(abspath $(HUC))/include/hucc
 export RASTAN_ROMS := $(abspath $(ROMS))
 
 all: $(BUILD)/rastan.pce
@@ -122,6 +122,14 @@ $(OBJECTS)/objcells.bin: tools/pce_objects.py tools/object_specs.py tools/census
 $(BUILD)/hud/hud.bin: tools/pce_hud.py $(BUILD)/actions.snp
 	cd tools && python3 pce_hud.py ../$(BUILD)/actions.snp ../$(BUILD)/hud
 
+# The castle's floor spears (sprite cells resident in VRAM).
+$(BUILD)/spikes.snp: sim/sim sim/maincpu.bin sim/scripts/spikes.txt
+	@mkdir -p $(BUILD)
+	sim/sim sim/maincpu.bin sim/scripts/spikes.txt $@ 1 1470
+
+$(BUILD)/traps/traps.bin: tools/pce_traps.py $(BUILD)/spikes.snp
+	cd tools && python3 pce_traps.py ../$(BUILD)/spikes.snp ../$(BUILD)/traps
+
 # Stage props (the cave block) from a bot run that breaks it with a down thrust.
 $(BUILD)/block.snp: sim/sim sim/maincpu.bin sim/scripts/block.txt
 	@mkdir -p $(BUILD)
@@ -135,7 +143,7 @@ $(BUILD)/debug/font.bin: $(HUC)/examples/asm/elmer/font/font8x8-ascii-bold-short
 	@mkdir -p $(BUILD)/debug
 	dd if=$< of=$@ bs=8 skip=16 count=64 status=none
 
-GAME_DEPS  := $(wildcard src/*.asm) $(BUILD)/debug/font.bin $(STAGE)/stage.bin $(PLAYER)/player.bin $(OBJECTS)/objcells.bin $(BUILD)/hud/hud.bin $(BUILD)/props/props.bin
+GAME_DEPS  := $(wildcard src/*.asm) $(BUILD)/debug/font.bin $(STAGE)/stage.bin $(PLAYER)/player.bin $(OBJECTS)/objcells.bin $(BUILD)/hud/hud.bin $(BUILD)/props/props.bin $(BUILD)/traps/traps.bin
 
 $(BUILD)/rastan.pce: $(GAME_DEPS)
 	@mkdir -p $(BUILD)/opt
@@ -171,7 +179,7 @@ test: $(BUILD)/camtest.pce $(BUILD)/noenemy.pce $(BUILD)/rastan.pce $(BUILD)/god
 	python3 tools/test_debug.py $(BUILD)/rastan.pce $(BUILD)/noenemy.pce
 	python3 tools/test_items.py $(BUILD)/rastan.pce $(BUILD)/god.pce $(BUILD)/noenemy.pce
 	python3 tools/test_monsters.py $(BUILD)/rastan.pce $(BUILD)/god.pce
-	python3 tools/test_castle.py $(BUILD)/rastan.pce $(BUILD)/god.pce
+	python3 tools/test_castle.py $(BUILD)/rastan.pce $(BUILD)/god.pce $(BUILD)/noenemy.pce
 
 tools/tgrun/tgrun: tools/tgrun/tgrun.c
 	HUC=$(abspath $(HUC)) tools/tgrun/build.sh

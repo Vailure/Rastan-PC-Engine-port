@@ -38,6 +38,7 @@ LEAD_Y = 32             # a row at y streams once scroll_y - LEAD_Y <= y (just i
                         # rows it takes over are those of the square below)
 SCREEN_W, SCREEN_H = 256, 224
 ROW_REACH = 512 - SCREEN_H     # scroll_y stays <= (y of the last row streamed) + this
+COL_REACH = 512 - 8            # scroll_x stays >= (x of the last column streamed) - this
 
 # map segment -> (square x, square y, orientation), in play order
 LAYOUT = {s: (s, 0, H) for s in range(0x11)}
@@ -118,18 +119,24 @@ def camera_reach(lines):
       - in a horizontal square, scroll_x never decreases (and a column at x has
         streamed only once scroll_x >= x - LEAD);
       - in a shaft and in the boss room (FREE), scroll_x is free inside the box;
+      - the BAT holds 512 px each way, so scroll_x never goes back past the last
+        column streamed minus COL_REACH (a square's columns overwrite the BAT
+        cells of the square 512 px before it);
       - scroll_y <= min(box y1, y of the last row streamed + 512 - SCREEN_H - LEAD_Y... )
         i.e. the rows a shaft took over from the square below never show.
     Boxes are those of world.BOXES for the segment of the next line."""
     n = len(lines)
     out = [None] * n
     xfwd = -10 ** 9
+    xcol = -10 ** 9
     row_top = 10 ** 9
     for c, ln in enumerate(lines):
         if ln['stop']:
             row_top = 10 ** 9
+            xcol = -10 ** 9
         if not ln['row']:
             xfwd = max(xfwd, ln['trigger'] - LEAD)
+            xcol = ln['trigger'] - COL_REACH
         else:
             row_top = ln['pos']
         # Regions still to come (the next line's on): the lowest x0 of a shaft among them,

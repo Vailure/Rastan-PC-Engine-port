@@ -48,6 +48,7 @@ dbg_num:	ds	2
 dbg_digits:	ds	1
 dbg_t:		ds	1		; put_char scratch.
 dbg_line:	ds	1
+dbg_rebuilt:	ds	1		; A warp redrew the map: the menu box must not be put back.
 
 		.bss
 dbg_save:	ds	MENU_W * MENU_H * 2	; The tile map under the menu.
@@ -214,6 +215,7 @@ debug_menu:	php
 		lda	<cur_cp
 		sta	<dbg_cp
 		stz	<dbg_sel
+		stz	<dbg_rebuilt
 		jsr	menu_origin
 		jsr	menu_save
 		jsr	menu_draw
@@ -350,6 +352,8 @@ menu_apply:	lda	<dbg_sel
 		bne	.health
 		lda	<dbg_cp			; Warp: restart at that checkpoint.
 		sta	<cur_cp
+		lda	#1			; (it streams the map again: nothing to put back)
+		sta	<dbg_rebuilt
 		jsr	menu_close_quiet
 		jsr	checkpoint_start
 		sec
@@ -372,7 +376,10 @@ menu_apply:	lda	<dbg_sel
 ; menu_close - put the stage back and carry on.
 menu_close:	php
 		sei
-		jsr	menu_restore		; Tile map back as it was.
+		lda	<dbg_rebuilt		; Tile map back as it was (unless a warp
+		bne	!+			; has streamed it again).
+		jsr	menu_restore
+!:
 		jsr	menu_close_quiet
 		plp
 		lda	<dbg_noenemy		; Enemies switched off: clear them.

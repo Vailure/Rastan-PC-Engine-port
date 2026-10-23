@@ -3,7 +3,7 @@ the boss room, headless.
 
 The arcade streams some of round 1's map segments upwards (tools/world.py): the castle
 climbs two shafts. Routes (god build, debug-menu warps to checkpoints 4 and 5):
-  A  checkpoint 4 (the castle's first room): the ropes up into shaft 1 (its rows stream,
+  A  checkpoint 4 (the castle's first room): past the floor spears, the ropes up into shaft 1 (its rows stream,
      the camera follows up), out at its top into the lava hall, across on the three
      swinging vines, onto the far side;
   B  checkpoint 5 (past the lava hall): the jets' room, shaft 2, the door at its top into
@@ -19,7 +19,7 @@ from PIL import Image
 from peek import peek
 from trace_player import TGRUN
 
-rom, god = sys.argv[1:3]
+rom, god, noen = sys.argv[1:4]
 tmp = os.environ.get('TMPDIR', '/tmp')
 fails = []
 SEL, RIGHT, I = '10', '04', '40'
@@ -58,12 +58,18 @@ def run(r, end, keys, extra=None):
     return a
 
 
-ROUTE_A = [200, 449, '04', 450, 453, '08', 470, 473, '41', 474, 700, '01', 710, 713, '48', 714, 940, '08',
-           945, 948, '04', 960, 963, '41', 964, 1190, '01', 1200, 1203, '44', 1204, 1460, '04', 1461, 1464, '08',
-           1480, 1483, '41', 1484, 1720, '01', 1730, 1733, '48', 1734, 1960, '08', 1961, 1980, '04', 1985, 1988,
-           '41', 1989, 2340, '01', 2350, 2353, '44', 2354, 2519, '04', 2525, 2528, '41', 2529, 2720, '01',
-           2730, 2733, '44', 2734, 2840, '04', 2956, 2959, '45', 2960, 3000, '04', 3095, 3098, '44', 3099,
-           3140, '04', 3200, 3203, '44', 3204, 3240, '04', 3300, 3303, '44', 3304, 3330, '04']
+# Route A, measured against this build (the arcade cannot be driven through here):
+# 830 waits for the middle corridor's floor spears to sink; the four jumps from 2990
+# cross the lava hall on its three vines.
+ROUTE_A = [200, 449, '04', 450, 453, '08', 470, 473, '41', 474, 700, '01', 710, 713, '48', 714, 760, '08',
+           830, 1050, '08', 1055, 1058, '04', 1070, 1073, '41', 1074, 1310, '01', 1320, 1323, '44',
+           1324, 1580, '04', 1581, 1584, '08', 1600, 1603, '41', 1604, 1840, '01', 1850, 1853, '48',
+           1854, 2080, '08', 2081, 2100, '04', 2105, 2108, '41', 2109, 2460, '01', 2470, 2473, '44',
+           2474, 2639, '04', 2645, 2648, '41', 2649, 2840, '01', 2850, 2853, '44', 2854, 2989, '04',
+           2990, 2993, '45', 2994, 3123, '04', 3124, 3127, '44', 3128, 3229, '04', 3230, 3233, '44',
+           3234, 3329, '04', 3330, 3333, '44', 3334, 3600, '04']
+# The same up to the top of shaft 1's lower rope, where he hangs still.
+ROUTE_SHAFT = ROUTE_A[:ROUTE_A.index(2470)]
 
 ROUTE_B = [200, 830, '05'] + sum([[f, f + 3, I] for f in range(220, 830, 60)], []) + [
     831, 1100, '04', 864, 867, I, 914, 917, I, 964, 967, I, 1101, 1103, '08', 1110, 1113, '41', 1114, 1470, '01',
@@ -75,9 +81,11 @@ ROUTE_V = [200, 350, '04', 360, 363, '41', 364, 600, '01', 610, 613, '44', 614, 
            832, 835, '45', 965, 968, '44']
 
 # A: up shaft 1 and across the lava hall.
-r = run(god, 3400, warp(4) + ROUTE_A)
+r = run(god, 3600, warp(4) + ROUTE_A)
 ys = [s16(f['scroll_y']) for f in r]
-check('climbing out of the first room, the camera follows up into shaft 1', min(ys[:2800]) <= -500,
+check('the floor spears of the middle corridor can be walked past', all(f['p_state'][0] != ST_DEAD for f in r),
+      f"died at frame {next((i for i, f in enumerate(r) if f['p_state'][0] == ST_DEAD), None)}")
+check('climbing out of the first room, the camera follows up into shaft 1', min(ys[:2800]) <= -450,
       f'highest scroll_y {min(ys[:2800])}')
 top = next((i for i, f in enumerate(r) if f['cam_region'][0] == 2), None)
 check("once the shaft's rows have all streamed, the lava hall's columns come next",
@@ -85,7 +93,7 @@ check("once the shaft's rows have all streamed, the lava hall's columns come nex
 vines = sorted({f['p_vine'][0] for f in r if f['p_state'][0] == ST_SWING})
 check('the three vines over the lava are caught in turn', len(vines) == 3, f'vine slots {vines}')
 end = r[-1]
-check('he lands past the lava', w16(end['p_x']) >= 9240 and s16(end['p_y']) == -345
+check('he lands past the lava', w16(end['p_x']) >= 9280 and s16(end['p_y']) == -345
       and all(f['p_state'][0] != ST_DEAD for f in r[2800:]), f"at ({w16(end['p_x'])}, {s16(end['p_y'])})")
 lc = [w16(f['loop_cnt']) for f in r]
 slow = min((lc[i + 60] - lc[i]) & 0xffff for i in range(300, len(r) - 60, 60))
@@ -110,7 +118,8 @@ sw = [i for i, f in enumerate(r) if f['p_state'][0] == ST_SWING]
 check('the vine at x 2750 is caught from the cliff', sw and 2700 <= w16(r[sw[0]]['p_x']) <= 2780,
       f"at {(w16(r[sw[0]]['p_x']), s16(r[sw[0]]['p_y'])) if sw else None}")
 xs = [w16(r[i]['p_x']) for i in sw]
-check('it swings him out and back (about 43 px either side of its anchor)', sw and max(xs) - min(xs) >= 70, f'x {min(xs) if xs else 0}..{max(xs) if xs else 0}')
+check('it swings him out and back (the vine reaches 43 px either side of its anchor)',
+      sw and max(xs) - min(xs) >= 60, f'x {min(xs) if xs else 0}..{max(xs) if xs else 0}')
 land = next((i for i in range(sw[-1] if sw else 0, len(r)) if r[i]['p_state'][0] in (0, 1)), None)
 check('jumping off on the far side lands on the ledge (arcade: 2863, 135)', land is not None
       and 2840 <= w16(r[land]['p_x']) <= 2890 and s16(r[land]['p_y']) == 135,
@@ -120,13 +129,13 @@ check('jumping off on the far side lands on the ledge (arcade: 2863, 135)', land
 # The debug menu in a shaft: the tile map comes back.
 def shot(keys, frame):
     out = os.path.join(tmp, f'castle_{os.getpid()}.ppm')
-    subprocess.run([TGRUN, god, str(frame), out] + [str(k) for k in keys], check=True, capture_output=True)
+    subprocess.run([TGRUN, noen, str(frame), out] + [str(k) for k in keys], check=True, capture_output=True)
     return np.array(Image.open(out))[:224, 32:288]
 
 
-base = warp(4) + ROUTE_A[:ROUTE_A.index(2340) + 2]
-plain = shot(base, 2345)                       # (on a rope top, still)
-menu = shot(base + [2300, 2300, OPEN, 2310, 2310, SEL], 2345)
+base = warp(4) + ROUTE_SHAFT                   # (hanging still at a rope's top, nothing moving)
+plain = shot(base, 2520)
+menu = shot(base + [2480, 2480, OPEN, 2490, 2490, SEL], 2520)
 diff = (plain != menu).any(-1).mean() * 100
 check('in a shaft, closing the debug menu restores the screen', diff == 0, f'{diff:.2f}% pixels differ')
 

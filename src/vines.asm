@@ -28,6 +28,10 @@ vine_x_h:	db	>2750, >8830, >8990, >9150
 vine_y_l:	db	<-16, <-496, <-496, <-496
 vine_y_h:	db	>-16, >-496, >-496, >-496
 vine_bit:	db	1, 2, 4, 8
+; Phase offset (frames) within the 180-frame swing. The lava hall's middle vine
+; swings opposite its neighbours, so a hop always meets the next vine coming
+; back: measured only for the chasm's vine, chosen for the hall's.
+vine_phase:	db	0, 0, 90, 0
 
 ; Per phase: the swing's half-step (signed), Rastan's x and y from the anchor.
 vine_h:		db	0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14
@@ -92,25 +96,29 @@ vines_spawn:	cly
 		ply
 		tya				; Which vine (after start_walk, which
 		sta	e_range, x		; sets e_range).
-		stz	e_timer, x
 .next:		iny
 		cpy	#NUM_VINES
 		bne	.loop
 		rts
 
-; vine_think - X = vine: swing; carry Rastan, or catch him; go when he is far.
-vine_think:	lda	e_timer, x		; Frames since it came, mod 180.
-		inc	a
+; vines_tick - the shared swing clock, once a frame (enemies_update).
+vines_tick:	inc	vine_t
+		lda	vine_t
 		cmp	#180
 		bcc	!+
-		cla
-!:		sta	e_timer, x
-		lsr	a			; Phase = (frames >> 1) + 1, mod 90.
-		inc	a
-		cmp	#90
+		stz	vine_t
+!:		rts
+
+; vine_think - X = vine: swing; carry Rastan, or catch him; go when he is far.
+vine_think:	ldy	e_range, x		; Phase = (clock + its offset) / 2, mod 90.
+		lda	vine_t
+		clc
+		adc	vine_phase, y
+		cmp	#180
 		bcc	!+
-		cla
-!:		tay
+		sbc	#180
+!:		lsr	a
+		tay
 		lda	vine_dx, y		; ex = hanging point x
 		clc
 		adc	e_xl, x

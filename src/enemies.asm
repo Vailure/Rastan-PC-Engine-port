@@ -113,6 +113,8 @@ gargs_done:	ds	1		; Gargoyles spawned this life.
 woman_done:	ds	1		; The woman warrior spawned this life.
 jet_wait:	ds	3		; Frames before each fire jet may erupt again.
 vines_done:	ds	1		; Vines present (bits, vines.asm).
+trap_t:		ds	1		; The floor spears' clock (traps.asm).
+vine_t:		ds	1		; The vines' swing clock (vines.asm).
 boss_done:	ds	1		; The boss has come this life.
 boss_clear:	ds	1		; Frames to the round clear (0: not counting).
 ram_tia:	ds	8		; tia src, VDC_DL, 128 / rts (source patched per cell).
@@ -136,7 +138,8 @@ enemies_init:	ldx	#7			; The RAM copy of "tia cell, VDC_DL, 128".
 		db	$60			; rts
 
 ; enemies_load - the objects' sprite palettes (cells come with each pose).
-enemies_load:	php
+enemies_load:	jsr	traps_load
+		php
 		sei
 		lda	#^obj_palettes
 		tam3
@@ -199,6 +202,8 @@ enemies_reset:	ldx	#NUM_OBJ - 1
 		stz	jet_wait + 1
 		stz	jet_wait + 2
 		stz	vines_done
+		stz	trap_t
+		stz	vine_t
 		lda	#SPAWN_FIRST
 		sta	<spawn_timer
 		stz	<spawn_step
@@ -216,7 +221,9 @@ enemies_update:	lda	<dbg_noenemy		; Debug menu: no walkers (items still come).
 		jsr	garg_spawn
 		jsr	woman_spawn
 		jsr	jets_spawn
+		jsr	vines_tick
 		jsr	vines_spawn
+		jsr	traps_update
 		jsr	boss_spawn
 		lda	boss_clear		; The boss is dead: the round is clear soon.
 		beq	!+
@@ -1171,6 +1178,7 @@ enemies_draw:	php				; VDC writes: IRQ held off (see stream_line).
 		plx
 .next:		dex
 		bpl	.slot
+		jsr	traps_draw		; The castle's floor spears.
 		; Clear entries the last frame used beyond this frame's.
 		lda	<en_satb
 .clr:		cmp	<en_satb_prev
