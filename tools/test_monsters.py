@@ -12,7 +12,7 @@ Arcade values (round 1 census, sim/scripts/chimera.txt; see README):
 - The woman warrior appears at (4523, 304) when Rastan reaches 4355, runs left
   hopping down 32 px steps, and turns about 50 px past him.
 - In the castle (x 8200 on) sword and mace soldiers come in turn, stop about
-  60 px away and swing; a swing that reaches costs 12 units.
+  60 px away and swing; a swing that reaches costs 12 units, a touch 8.
 - Fire jets at 9870, 9966, 10062 (lava hall, arcade census 10382-10574) erupt when Rastan is 172 px left of them.
 - The boss drops in when Rastan enters the last room and lands at y 446; ten
   hits kill it for 5000; the arcade's round-clear screen ("YOU ARE A BRAVE
@@ -167,7 +167,8 @@ att = [(i, k) for i in range(1, len(r)) for k in range(4) if r[i]['e_state'][k] 
 dist = [x_of(r[i], k) - w16(r[i]['p_x']) for i, k in att]
 check('they stop about 60 px away to swing', att and all(50 <= abs(d) <= 62 for d in dist), f'{dist}')
 drops = [r2[i - 1]['p_hp'][0] - r2[i]['p_hp'][0] for i in range(1, len(r2)) if r2[i]['p_hp'][0] < r2[i - 1]['p_hp'][0]]
-check('a swing that reaches costs 12 units', drops and set(drops) == {12}, f'{drops}')
+check('a swing that reaches costs 12 units, a soldier\'s touch 8 (castle.snp: 3072 and 2048)',
+      drops and set(drops) == {8, 12}, f'{drops}')
 
 # Fire jets: checkpoint 5 (god build): up the rope and along the top of the lava
 # hall, down into the jets' room, jumping its three pits.

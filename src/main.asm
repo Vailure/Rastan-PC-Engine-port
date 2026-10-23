@@ -799,7 +799,7 @@ weights_data:	incbin	"weights.bin"		; Shaft 2's spiked weights (build/traps).
 
 		.bank	$09
 		.page	3
-player_data:	incbin	"player.bin"		; ($09-$0E)
+player_data:	incbin	"player.bin"		; ($09-$0F: weapon_tab.inc follows it)
 
 		.bank	$0F
 		.page	3

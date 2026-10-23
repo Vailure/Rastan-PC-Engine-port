@@ -108,11 +108,8 @@ garg_spawn:	cly
 		rts
 
 ; garg_think - X = body or wings: the next step of the path.
-garg_think:	lda	e_kind, x
-		cmp	#EK_GARG
-		bne	!+
-		jsr	touch_hurts
-!:		lda	e_timer, x
+garg_think:	jsr	touch_hurts		; (body and wings: the arcade's both drain 8)
+		lda	e_timer, x
 		bne	.step
 		lda	e_range, x		; Next run: dx, dy, frames (0: the end).
 		sta	<ep

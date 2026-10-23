@@ -57,18 +57,17 @@ chim_think:	jsr	touch_hurts
 		jmp	enemy_set_anim
 .r:		rts
 
-; touch_hurts - X's body touching Rastan's hurts him (knocked away from it).
-touch_hurts:	jsr	body_vs_enemy
+; touch_hurts - X's body touching Rastan's: the effect of its kind's touch
+; type (kind_touch, the arcade's: player_touch).
+touch_hurts:	ldy	e_kind, x
+		lda	kind_touch, y
+		beq	.r
+		pha
+		jsr	body_vs_enemy
+		pla
 		bcc	.r
 		phx
-		lda	<p_x			; Rastan right of it: knocked right.
-		cmp	e_xl, x
-		lda	<p_x + 1
-		sbc	e_xh, x
-		lda	#1
-		bcs	!+
-		lda	#$FF
-!:		jsr	player_hit
+		jsr	player_touch
 		plx
 .r:		rts
 
@@ -130,6 +129,7 @@ fire_think:	jsr	sword_vs_enemy		; Knocked away.
 		bcc	.r
 		phx
 		lda	#$FF
+		ldy	#HIT_DAMAGE
 		jsr	player_hit
 		plx
 .gone:		stz	e_state, x

@@ -476,7 +476,8 @@ enemy_think:	lda	e_kind, x
 !:		cmp	#EK_WOMAN
 		bne	!+
 		jmp	woman_think
-!:		lda	e_state, x
+!:		jsr	touch_hurts		; (walkers: lizardmen, throwers, soldiers)
+		lda	e_state, x
 		cmp	#ES_ATTACK
 		bne	!+
 		jmp	.attack
@@ -576,7 +577,8 @@ enemy_think:	lda	e_kind, x
 		lda	#1
 		bra	.hit
 !:		lda	#$FF
-.hit:		jsr	player_hit
+.hit:		ldy	#HIT_DAMAGE
+		jsr	player_hit
 		plx
 		bra	.wait
 .armed:		stz	e_struck, x
@@ -708,6 +710,11 @@ kind_keep:	db	0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 0, 1	; No off-scre
 ; Arcade: lizardman 300, blue thrower 200, bat 200, chimera 300.
 ; Castle soldiers: the arcade gave 900 for a sword and a mace soldier dying together.
 kind_score:	db	$03, $02, 0, 0, $02, $03, 0, 0, 0, 0, $03, $03, $06, 0, 0, 0, 0, 0
+; Touching Rastan (the arcade's ($29,A4), player_touch): 1, 2 drain 4, 8 units;
+; 3 knocks him back, 12 units; 0 nothing (the woman warrior: only her sword).
+; (The item and its bat, the boss's second half and the vines: their own code;
+; the jets' type is not measured.)
+kind_touch:	db	1, 1, 3, 0, 0, 2, 3, 3, 2, 2, 0, 2, 2, 3, 3, 0, 3, 0
 kind_bank:	db	GRP_SECT1_BANK, GRP_SECT1_BANK, GRP_SECT1_BANK, GRP_ITEMS_BANK, GRP_ITEMS_BANK
 		db	GRP_CHIMERA_BANK, GRP_CHIMERA_BANK, GRP_ROCKS_BANK, GRP_GARGOYLE_BANK, GRP_GARGOYLE_BANK
 		db	GRP_WOMAN_BANK, GRP_CASTLE_BANK, GRP_CASTLE_BANK, GRP_JETS_BANK
@@ -877,7 +884,8 @@ club_think:	jsr	sword_vs_enemy
 		lda	#1
 		bra	!++
 !:		lda	#$FF
-!:		jsr	player_hit
+!:		ldy	#HIT_DAMAGE
+		jsr	player_hit
 		plx
 .gone:		stz	e_state, x
 .r:		rts

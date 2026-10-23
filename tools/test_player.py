@@ -61,6 +61,23 @@ check('UP+attack swings over his head: 3 poses there and back, 22 frames',
       abs(len(up) - 22) <= 1 and len(seq) == 5 and seq == seq[::-1], f'{len(up)} frames, poses {seq}')
 check('UP+attack returns to idle', r[-1]['state'] == 0)
 
+# UP+attack in a jump: the same swing over his head on the jump's legs (the arcade's
+# bodies 12-14 with legs 267-270, sim/scripts/upatk.txt frames 612-633), 4, 4, 8, 2, 4.
+r = run(200, 100, 102, '41', 110, 111, '81')
+up = [x['pose'] for x in r[105:160] if x['state'] == 3]
+runs = []
+for p in up:
+    if runs and runs[-1][0] == p:
+        runs[-1][1] += 1
+    else:
+        runs.append([p, 1])
+sw = runs[1:6]                          # (after the jump pose)
+check('UP+attack in a jump swings over his head (3 poses there and back, 4/4/8/2/4 frames)',
+      len(sw) == 5 and [n for _, n in sw[1:4]] == [4, 8, 2] and abs(sum(n for _, n in sw) - 22) <= 1
+      and [p for p, _ in sw] == [p for p, _ in sw][::-1]
+      and not set(p for p, _ in sw) & set(x['pose'] for x in run(160, 100, 101, '81')[100:140] if x['state'] == 10),
+      f'runs {runs}')
+
 # Down thrust: jump, then DOWN+II - sword-down pose held through the fall, lands crouched.
 r = run(200, 100, 102, '40', 110, 113, '82', 113, 160, '02')
 air = [x for x in r[120:160] if x['state'] == 3]

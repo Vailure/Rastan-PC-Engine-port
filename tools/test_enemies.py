@@ -9,6 +9,7 @@ import os
 import re
 import subprocess
 import sys
+from peek import peek
 
 HERE = os.path.dirname(__file__)
 TGRUN = os.path.join(HERE, 'tgrun', 'tgrun')
@@ -97,6 +98,24 @@ check('lizardmen come at gaps of 49, 81, 65 frames', gaps[:3] == [49, 81, 65] or
 check('they spawn on the lane at his height (y 304)', spawns and {y for _, y in spawns} == {304},
       f'y {sorted({y for _, y in spawns})}, Rastan y {r[-1]["py"]}')
 check('at most 4 alive', max(sum(1 for s in x['es'] if s) for x in r) <= 4)
+
+# 1b. Walking into them (the arcade's hit effects, $0550A8): a lizardman's touch drains 4
+# units, hurting him 11 frames where he stands; a swing 12, knocked back 23 frames; and
+# 56 frames after a swing (33 after a touch's hurt) before he can be hit again.
+r = peek(rom, 900, [100, 900, '04'], {'p_hp': 1, 'p_state': 1, 'p_x': 2})
+hits = []
+for i in range(101, 870):
+    d = r[i - 1]['p_hp'][0] - r[i]['p_hp'][0]
+    if d > 0:
+        hurt = sum(1 for j in range(i, i + 30) if r[j]['p_state'][0] == 7)
+        moved = (r[i + 8]['p_x'][0] | r[i + 8]['p_x'][1] << 8) != (r[i]['p_x'][0] | r[i]['p_x'][1] << 8)
+        hits.append((i, d, hurt, moved))
+check('a lizardman\'s touch drains 4 units without knocking him back, a swing costs 12 and does',
+      {(d, m) for _, d, _, m in hits} == {(4, False), (12, True)}
+      and all(abs(h - (11 if d == 4 else 23)) <= 1 for _, d, h, _ in hits), f'(frame, units, hurt, knocked) {hits}')
+gaps = [b[0] - a[0] for a, b in zip(hits, hits[1:])]
+check('no hit sooner than 44 frames after a touch, 56 after a swing',
+      all(g >= (44 if a[1] == 4 else 56) for a, g in zip(hits, gaps)), f'gaps {gaps}')
 
 # 2. Swinging every 30 frames: lizardmen die in one hit, Rastan stays healthy.
 args = []

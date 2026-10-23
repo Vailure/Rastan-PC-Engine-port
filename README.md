@@ -91,8 +91,8 @@ The build:
 - DOWN: crouch
 - I: jump (UP+I for the high jump; a direction for a forward jump)
 - RUN: pause (sound off) and resume
-- II: attack, standing or crouched; UP+II standing swings the sword over his head; in a jump,
-  DOWN+II is the down thrust and UP+II the up thrust
+- II: attack, standing or crouched; UP+II swings the sword over his head (standing or in a jump);
+  in a jump, DOWN+II is the down thrust
 - UP: grab a rope; UP and DOWN climb it, and I jumps off
 
 The camera only scrolls forward. A death restarts at the last checkpoint reached, as in the arcade.
@@ -206,14 +206,18 @@ Not done yet: slopes, waterfall currents, the other collision codes, rope attack
 ### Damage and enemies (milestone 3, approximate)
 
 - **Health:** Rastan has 12 units of health (the arcade's 12288 at `$10C13A`, 3072 per lizardman hit).
-  Each hit knocks him back with the hurt animation and gives 90 frames of invulnerability.
-  When health runs out, the stage restarts.
+  The arcade's hit effects (`$0550A8`, by the hitter's type): a swing, a club, a fireball, a boulder or the
+  boss costs 12 units and knocks him back (hurt 23 frames); a touch drains 4 (lizardmen, throwers) or 8
+  (chimeras, gargoyles, soldiers) and hurts him 11 frames where he stands, and the next drain waits 80 frames;
+  the woman warrior's touch does nothing. After a hurt he is untouchable 33 frames more (16 if he was hit in an
+  attack, which he keeps on with). He does not flicker meanwhile (the arcade draws him every frame); the HUD's
+  icon flashes. When health runs out, the stage restarts.
 - **Weapon and body boxes** (the arcade's tables, `tools/pce_player.py` `write_boxes`): per weapon frame
   (`$10D244`) the weapon has a box (`$05C9EA`, `$05CAC6`, `$05CBA2`, `$05CC7E` for the four weapons, into
   `$10D254`) and Rastan's body one (`$05C90E`: x −12..12, y −24 or 0 crouched .. 26; −8 behind him with the blade
   out), mirrored when he faces right. The weapon hits (`$054982`: `$10D2F8` = 1) from a swing's 3rd frame
   through its 11th (atk3-atk5, not drawn back), the up-swing's 2nd through 12th, all through a down thrust, all
-  through any attack with the fire sword, and, held up, while he rises in a jump; not in the up thrust's pose.
+  through any attack with the fire sword, and, held up, while he rises in a jump; not while hurt.
   The sword's blade out is 24..56 px ahead and 3 px tall; the morning star's 48..92. Objects' body boxes are the
   arcade's too (`$0446BC`: lizardmen, throwers, the woman and the soldiers x ±12, y −20..16; the chimera ±20,
   −5..14; clubs, fireballs, boulders and the boss's fire ±3, −8..8; the gargoyle's body ±12, −16..24 and wings
@@ -547,7 +551,7 @@ music gets the channel back, and that the voice shows in the audio.
 - [x] Street Fighter II mapper: fixed half for the game, a page per round's data
 - [x] Rastan (approximate): walk, crouch, attacks, jumps, ropes, collision, camera
 - [ ] Rastan (exact): translate the arcade player code (interpreter done and verified)
-- [x] Down thrust and up thrust (DOWN+II / UP+II in a jump)
+- [x] Down thrust (DOWN+II in a jump), and the up-swing in a jump (UP+II)
 - [x] Stage 1 lizardmen (approximate): walk in, club attacks, knockback, death bursts; health and stage restart
 - [x] HUD: lives, icon, health bar (drains like the arcade's), ROUND 1, score and high score
 - [x] Enemy spawns on the arcade's lanes, with its timing; blue club throwers
@@ -560,8 +564,8 @@ music gets the channel back, and that the voice shows in the audio.
 - [x] The castle's floor spears (markers `$46`)
 - [x] Music and sound effects on the PSG (`$1A`/`$1B`/`$1C` and the FM effects)
 - [x] The MSM5205 voice samples (jump, death), through the PSG's direct D/A
-- [x] Standing UP+II: the sword over his head (arcade bodies 12-14, `sim/scripts/upatk.txt`); its hit
-      box is the up thrust's, which has not been measured against the arcade for this attack
+- [x] UP+II: the sword over his head (arcade bodies 12-14, `sim/scripts/upatk.txt`), standing or on the
+      jump's legs in a jump (the "up thrust" pose taken earlier was Rastan hurt in the air), by the arcade's boxes
 - [x] The lava hall's fire (markers `$4C`, `$52-$55`), baked into the tile map and animated
 - [x] The hurry-up swarm: nine small bats after 42 s in one pair of segments, anywhere but the boss room
       (`src/swarm.asm`)

@@ -160,17 +160,17 @@ def dda(path):
 
 voice = open(os.path.join(build, 'voice', 'voice.bin'), 'rb').read()
 jump = voice[:voice.index(0x80)]
-run(rom, 460, [360, 363, I], psg=psg)
+run(god, 460, [360, 363, I], psg=psg)        # (god: no lizardman's hit stops the jump)
 got, back = dda(psg)
 check('a jump plays the jump voice on channel 5, level for level',
       [d for _, _, d in got] == list(jump) and {ch for _, ch, _ in got} == {5},
       f'{len(got)} of {len(jump)} levels, channels {sorted({ch for _, ch, _ in got})}')
 check('the music gets channel 5 back after it', back is not None, f'write {back}')
 wav2 = os.path.join(tmp, f'snd_v_{os.getpid()}.wav')
-run(rom, 460, [360, 363, I], wav=wav2)
+run(god, 460, [360, 363, I], wav=wav2)
 w = wave.open(wav2)
 b = np.frombuffer(w.readframes(w.getnframes()), np.int16).reshape(-1, 2).mean(1)
-run(rom, 460, [], wav=wav)
+run(god, 460, [], wav=wav)
 w = wave.open(wav)
 q = np.frombuffer(w.readframes(w.getnframes()), np.int16).reshape(-1, 2).mean(1)
 seg = slice(int(361 / 60 * 44100), int(380 / 60 * 44100))

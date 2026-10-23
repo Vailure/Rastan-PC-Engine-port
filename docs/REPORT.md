@@ -24,7 +24,7 @@ The demo ROM is `build/rastan.pce`:
 | **Hurry-up swarm** | Anywhere but the boss room: dawdle 42 s in one pair of segments and nine small bats come for Rastan, faster with each wave. |
 | **Boss** | Drops in, walks, leaps, staff swing, a fan of fire from above. Ten hits kill it. |
 | **Round clear** | The arcade's screen (YOU ARE A BRAVE FIGHTER…) with its jingle for 7 s (RUN skips it after 2 s), then the title. |
-| **Rastan** | • Walk, crouch, jumps (low, high and forward);<br>• attacks: standing, crouched, in the air;<br>• the standing up-swing;<br>• down and up thrusts;<br>• ropes and vines;<br>• the four weapons;<br>• knockback, invulnerability flashes and the death animation. |
+| **Rastan** | • Walk, crouch, jumps (low, high and forward);<br>• attacks: standing, crouched, in the air;<br>• the up-swing, standing or in a jump;<br>• the down thrust;<br>• ropes and vines;<br>• the four weapons;<br>• the arcade's hit effects (knockback, drains) and the death animation. |
 | **HUD** | The arcade's: 1UP score, high score, lives, the Rastan icon, the draining health bar, and ROUND 1. |
 | **Sound** | • The round 1, castle and boss music, converted from the arcade's YM2151 output;<br>• the effects;<br>• the jump grunt and death cry as real samples (MSM5205 ADPCM, played through the PSG's D/A). |
 | **Flow** | • Deaths restart at the arcade's checkpoints.<br>• GAME OVER when the last life goes, then the title.<br>• **RUN pauses** the game and the sound. |
@@ -32,7 +32,7 @@ The demo ROM is `build/rastan.pce`:
 **Controls:**
 - **D-pad:** move and crouch; UP grabs ropes.
 - **I:** jump. Hold a direction for a forward jump, or UP for the high jump.
-- **II:** attack. UP+II standing swings overhead. In the air, DOWN+II is the down thrust and UP+II the up thrust.
+- **II:** attack. UP+II standing swings overhead. In the air, DOWN+II is the down thrust and UP+II the up-swing.
 - **RUN:** start and pause.
 
 ### Presenting it
@@ -214,10 +214,11 @@ The project spans 44 commits (2026-10-20 → 2026-10-23).
    - the lizardmen's, soldiers' and clubs' hits on Rastan from the same tables: crouching now ducks a lizardman's swing, as in the arcade, and clubs reach 7 px, not 19;
    - the soldiers' low swing (the arcade picks high or low at random), which does reach a crouching Rastan.
    - Rastan's weapon and body boxes from the arcade's tables, per pose and weapon, with its rules for when the weapon hits (a swing's blade only while it is out; held up as he rises in a jump), and the objects' body boxes from its box index table: the blade now reaches a lizardman 68 px ahead, as in the arcade;
+   - the arcade's hit effects: what each enemy's touch and swing cost, knockback or a drain, and how long he is untouchable after; the up-swing in a jump in place of an "up thrust" that was the hurt pose;
    - parity fixes from comparing the arcade and the port checkpoint by checkpoint: the sky's 8 steps toward dusk, the floor spears appearing as the arcade's do, the camera after a restart at checkpoint 5, and gold soldiers in a game begun at a castle checkpoint.
 
 The next steps, in order, are in `docs/HANDOFF.md` §8:
-1. the rest of the arcade's hit effects (which object hurts on touch, and by how much; the gargoyle's wings can be struck);
+1. the gargoyle's wings, which the arcade's sword can strike, and the fire jets' touch;
 2. the lava hall's vines and fire sparks;
 3. more compression, if needed;
 4. rounds 2–6;

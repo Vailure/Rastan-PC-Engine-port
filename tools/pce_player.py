@@ -39,12 +39,12 @@ POSES = {
 # Poses captured from the attract demo (it climbs a rope in segment 3).
 POSES_ATTRACT = {'climb1': 4455, 'climb2': 4459, 'climb3': 4463, 'climb4': 4493}
 # Air thrusts from sim/scripts/thrusts.txt: DOWN+attack in a jump (two
-# transition poses, then the sword-down pose held until landing), and
-# UP+attack in a high jump.
-POSES_THRUSTS = {'dthr1': 532, 'dthr2': 536, 'dthr3': 540, 'uthr': 731}
-# Standing UP+attack, a swing over his head (sim/scripts/upatk.txt): three poses,
-# the arcade's bodies 12-14, held 4, 4, 8, 2, 4 frames.
-POSES_UATK = {'uatk1': 522, 'uatk2': 526, 'uatk3': 530}
+# transition poses, then the sword-down pose held until landing). (Its frame 731,
+# once taken for an up thrust, is Rastan hurt in the air: a lizardman hit him at 716.)
+POSES_THRUSTS = {'dthr1': 532, 'dthr2': 536, 'dthr3': 540}
+# UP+attack, a swing over his head (sim/scripts/upatk.txt): three poses, the arcade's
+# bodies 12-14, held 4, 4, 8, 2, 4 frames; in a jump the same bodies on the jump's legs.
+POSES_UATK = {'uatk1': 522, 'uatk2': 526, 'uatk3': 530, 'juatk1': 612, 'juatk2': 616, 'juatk3': 620}
 # Being hit by a lizardman (sim/scripts/lizard.txt, passive Rastan): 3 poses, 23 frames.
 POSES_HURT = {'hurt1': 667, 'hurt2': 674, 'hurt3': 682}
 # Dying (arcade state 8), from the bot's death on the first waterfall's lip: 9 poses, 57 frames.
@@ -67,9 +67,10 @@ ANIMS = {
              ('catk4', 2), ('catk3', 2), ('catk2', 2), ('catk1', 2)],
     'climb': [('climb1', 3), ('climb2', 3), ('climb3', 3), ('climb4', 3)],
     'dthrust': [('dthr1', 4), ('dthr2', 4), ('dthr3', 0)],
-    'uthrust': [('uthr', 8)],
+    'juattack': [('juatk1', 4), ('juatk2', 4), ('juatk3', 8), ('juatk2', 2), ('juatk1', 4)],
     'uattack': [('uatk1', 4), ('uatk2', 4), ('uatk3', 8), ('uatk2', 2), ('uatk1', 4)],
     'hurt': [('hurt1', 7), ('hurt2', 8), ('hurt3', 8)],
+    'hurt_short': [('hurt2', 3), ('hurt3', 8)],      # (a drain: the hurt's last 11 frames)
     'death': [('die1', 4), ('die2', 4), ('die3', 8), ('die4', 8), ('die5', 8), ('die6', 8),
               ('die7', 8), ('die8', 8), ('die9', 1)],
     'swing': [('swing', 0)],

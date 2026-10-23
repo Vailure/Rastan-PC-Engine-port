@@ -50,7 +50,13 @@ ST_UATK		=	10		; UP+attack standing: a swing over his head.
 PLAYER_HP	=	48		; Health bar units: arcade 12288 / 256.
 HIT_DAMAGE	=	12		; A lizardman hit: arcade 3072.
 WATER_DRAIN	=	7		; Water (code 6): a unit every 8 frames (arcade 32/frame).
-INVULN_FRAMES	=	90
+; After a hit (the arcade's $0550A8 handlers): hurt 23 frames knocked back, or
+; 11 not (a touch that drains), then 33 untouchable ($10D30E); in an attack
+; neither: 16 untouchable. A drain also blocks the next one for 80 ($10D366).
+INVULN_FRAMES	=	23 + 33
+INVULN_DRAIN	=	11 + 33
+INVULN_ATTACK	=	16
+DRAIN_LATCH	=	80
 
 START_X		=	48		; Arcade x 32 + 16 (stage 1 start).
 START_Y		=	295		; Arcade y 112 + 183.
@@ -70,7 +76,7 @@ p_anim:		ds	2		; Current animation (pose, frames) list.
 p_animi:	ds	1		; Index into it (bytes).
 p_animt:	ds	1		; Frames left on this pose (0 = hold).
 p_animend:	ds	1		; Set when a one-shot animation finished.
-p_jatk:		ds	1		; Air attack: 0 none, 1 swing/up thrust, 2 down thrust.
+p_jatk:		ds	1		; Air attack: 0 none, 1 swing, 2 down thrust, 3 up-swing.
 p_pose:		ds	1
 p_pose_up:	ds	1		; Pose currently uploaded ($FF none).
 p_buf:		ds	1		; 0: buffer A shows, 1: B.
@@ -110,6 +116,7 @@ p_bufpose:	ds	2		; Per buffer: pose whose body cells it holds ($FF none),
 p_bufwpose:	ds	2		; pose and variant whose weapon cells it holds.
 p_bufvar:	ds	2
 p_wbuf:		ds	16		; Weapon pieces: dx, dy, cell, SATB flags.
+p_latch:	ds	1		; Frames before a touch can drain again.
 
 		.code
 
@@ -151,6 +158,9 @@ player_update:	lda	#COLL_BANK		; Collision data at $A000.
 		lda	<p_invuln
 		beq	!+
 		dec	<p_invuln
+!:		lda	p_latch
+		beq	!+
+		dec	p_latch
 !:		lda	<p_weapon		; A taken weapon runs out.
 		cmp	#WPN_SWORD
 		beq	!+
@@ -289,14 +299,16 @@ st_air:		bbr1	<padtrg, .no_atk	; Air attack (once per jump):
 		ldx	#>anim_dthrust
 		jsr	set_anim
 		bra	.no_atk
-.not_down:	inc	<p_jatk			; UP: up thrust, else swing.
-		bbr4	<pad, .swing
-		lda	#<anim_uthrust
-		ldx	#>anim_uthrust
+.not_down:	lda	#SFX_SWING
+		jsr	sound_sfx
+		bbr4	<pad, .swing		; UP: the swing over his head, as standing
+		lda	#3			; (on the jump's legs), else a swing.
+		sta	<p_jatk
+		lda	#<anim_juattack
+		ldx	#>anim_juattack
 		jsr	set_anim
 		bra	.no_atk
-.swing:		lda	#SFX_SWING
-		jsr	sound_sfx
+.swing:		inc	<p_jatk
 		lda	#<anim_jatk
 		ldx	#>anim_jatk
 		jsr	set_anim
@@ -462,8 +474,9 @@ hazard_probe:	clc
 .kill:		sec
 		rts
 
-; player_hit - an enemy hits Rastan. A = knockback direction (1 right, $FF left).
-; Ignored while invulnerable or already hurt.
+; player_hit - an enemy hits Rastan: A = knockback direction (1 right, $FF
+; left), Y = health units. Ignored while untouchable or already hurt. In an
+; attack he keeps on with it (16 frames untouchable); else he is knocked back.
 player_hit:
 	.if	GOD_MODE			; Test builds: enemies can't hurt him.
 		rts
@@ -478,21 +491,113 @@ player_hit:
 		cpx	#ST_DEAD
 		beq	.no
 		sta	<p_kdir
-		lda	<p_hp
-		sec
-		sbc	#HIT_DAMAGE
-		bcs	!+
-		cla
-!:		sta	<p_hp
+		jsr	player_attacking
+		bcc	!+
+		lda	#DRAIN_LATCH
+		sta	p_latch
+		tya
+		jmp	hit_in_attack
+!:		tya
+		jsr	hp_sub
 		lda	#INVULN_FRAMES
 		sta	<p_invuln
+		lda	#<anim_hurt
+		ldx	#>anim_hurt
+		bra	enter_hurt
+.no:		rts
+
+; enter_hurt - A/X = the hurt animation.
+enter_hurt:	pha
 		lda	#ST_HURT
 		sta	<p_state
 		stz	<p_jatk
-		lda	#<anim_hurt
-		ldx	#>anim_hurt
+		pla
 		jmp	set_anim
+
+; player_touch - X's body touches Rastan's: A = its touch type (the arcade's
+; ($29,A4)): 1, 2 drain 4, 8 units (hurt 11 frames, not knocked back; not
+; again for 80 frames), 3 on knock him back for 4 per step (12 for 3).
+player_touch:
+	.if	GOD_MODE
+		rts
+	.endif
+		cmp	#3
+		bcc	.drain
+		asl	a			; 4 units a step.
+		asl	a
+		tay
+		lda	<p_x			; Knocked away from it.
+		cmp	e_xl, x
+		lda	<p_x + 1
+		sbc	e_xh, x
+		lda	#1
+		bcs	!+
+		lda	#$FF
+!:		jmp	player_hit
+.drain:		ldy	<dbg_god
+		bne	.no
+		ldy	<p_invuln
+		bne	.no
+		ldy	p_latch
+		bne	.no
+		ldy	<p_state
+		cpy	#ST_HURT
+		beq	.no
+		cpy	#ST_DEAD
+		beq	.no
+		asl	a
+		asl	a
+		tay
+		lda	#DRAIN_LATCH
+		sta	p_latch
+		jsr	player_attacking
+		tya
+		bcs	hit_in_attack
+		jsr	hp_sub
+		lda	#INVULN_DRAIN
+		sta	<p_invuln
+		stz	<p_kdir			; (not knocked back)
+		lda	#<anim_hurt_short
+		ldx	#>anim_hurt_short
+		bra	enter_hurt
 .no:		rts
+
+; hit_in_attack - A = units: hit while attacking, he keeps on (dies at 0).
+hit_in_attack:	jsr	hp_sub
+		lda	#INVULN_ATTACK
+		sta	<p_invuln
+		lda	<p_hp
+		bne	!+
+		jmp	enter_dead
+!:		rts
+
+; hp_sub - p_hp -= A (not below 0).
+hp_sub:		sta	<ctmp
+		lda	<p_hp
+		sec
+		sbc	<ctmp
+		bcs	!+
+		cla
+!:		sta	<p_hp
+		rts
+
+; player_attacking - carry set while Rastan attacks (the arcade's $10D108).
+player_attacking:
+		lda	<p_state
+		cmp	#ST_ATTACK
+		beq	.yes
+		cmp	#ST_CATK
+		beq	.yes
+		cmp	#ST_UATK
+		beq	.yes
+		cmp	#ST_AIR
+		bne	.no
+		lda	<p_jatk
+		beq	.no
+.yes:		sec
+		rts
+.no:		clc
+		rts
 
 ; player_drain - A = health units lost without being knocked back (a bat).
 player_drain:
@@ -523,8 +628,7 @@ player_drain:
 ;    the 11th (atk3, atk4, atk5: the blade out, not drawn back), and in the
 ;    swing over his head from its 2nd frame through the 12th;
 ;  - all through a down thrust, and all through any attack with the fire sword;
-;  - held up, as he rises in a jump (not in the up thrust's pose: the arcade
-;    gives that none).
+;  - held up, as he rises in a jump (not while hurt: $10D2F0).
 sword_box:	lda	<p_state
 		cmp	#ST_ATTACK
 		beq	.swing
@@ -538,9 +642,8 @@ sword_box:	lda	<p_state
 		beq	.rise
 		cmp	#2
 		beq	.on			; Down thrust: all through.
-		lda	<p_pose
-		cmp	#POSE_UTHR
-		beq	.none
+		cmp	#3
+		beq	.uatk			; The up-swing: as standing.
 		jsr	.fire
 		bcs	.on
 		lda	<p_animi		; Jump swing: jatk3, jatk4, then 8 of
@@ -968,6 +1071,7 @@ player_init_pos:
 		lda	#PLAYER_HP
 		sta	<p_hp
 		stz	<p_invuln
+		stz	p_latch
 		stz	<p_nograb
 		stz	<p_jatk
 		stz	<p_face
@@ -1686,15 +1790,9 @@ player_draw:	php				; VDC writes: IRQ held off (see stream_line).
 !:		dex
 		bne	.cell
 
-.satb:		; Flicker while invulnerable: draw no cells every other 4 frames.
-		lda	<p_invuln
-		beq	!+
-		lda	<p_frame
-		and	#4
-		beq	!+
-		stz	<p_ncells
-		stz	<p_wcount
-!:		; SATB entries 0..ncells-1, the weapon's, then clear what the last frame used.
+.satb:		; (No flicker while untouchable: the arcade draws him every frame,
+		; lizard.snp 668-723; the HUD's icon flashes.)
+		; SATB entries 0..ncells-1, the weapon's, then clear what the last frame used.
 		st0	#VDC_MAWR
 		lda	#<(SATB_ADDR + HUD_ENTRIES * 4)	; After the HUD's entries.
 		sta	VDC_DL

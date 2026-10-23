@@ -238,7 +238,8 @@ boss_think:	lda	e_state, x
 		lda	e_face, x
 		bne	!+
 		lda	#$FF
-!:		jsr	player_hit
+!:		ldy	#HIT_DAMAGE
+		jsr	player_hit
 		plx
 .st2:		dec	e_timer, x
 		beq	.towalk
@@ -441,7 +442,8 @@ frag_think:	jsr	sword_vs_enemy		; Knocked away.
 		lda	e_face, x
 		bne	!+
 		lda	#$FF
-!:		jsr	player_hit
+!:		ldy	#HIT_DAMAGE
+		jsr	player_hit
 		plx
 .gone:		stz	e_state, x
 .r:		rts
