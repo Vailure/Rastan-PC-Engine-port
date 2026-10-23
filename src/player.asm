@@ -571,14 +571,33 @@ hit_in_attack:	jsr	hp_sub
 		jmp	enter_dead
 !:		rts
 
-; hp_sub - p_hp -= A (not below 0).
+; hp_sub - p_hp -= A (not below 0), with the arcade's hurt sound ($0C).
 hp_sub:		sta	<ctmp
+		phx
+		lda	#SFX_HURT
+		jsr	sound_sfx
+		plx
 		lda	<p_hp
 		sec
 		sbc	<ctmp
 		bcs	!+
 		cla
 !:		sta	<p_hp
+		rts
+
+; weapon_power - A = what a hit of Rastan's takes off (the arcade's $10D310,
+; $0549DE; $044804 adds 1 for 2, 3 for 8): 3 in a down thrust, with the axe or
+; the fire sword, or in any attack in the air; else 1.
+weapon_power:	lda	<p_jatk
+		bne	.three			; (in the air: any attack)
+		lda	<p_weapon
+		cmp	#WPN_AXE
+		beq	.three
+		cmp	#WPN_FIRE
+		beq	.three
+		lda	#1
+		rts
+.three:		lda	#3
 		rts
 
 ; player_attacking - carry set while Rastan attacks (the arcade's $10D108).
@@ -609,14 +628,8 @@ player_drain:
 		ldx	<p_state
 		cpx	#ST_DEAD
 		beq	.no
-		sta	<ctmp
+		jsr	hp_sub
 		lda	<p_hp
-		sec
-		sbc	<ctmp
-		bcs	!+
-		cla				; (cla leaves the flags alone)
-!:		sta	<p_hp
-		tax
 		bne	.no
 		jmp	enter_dead
 .no:		rts

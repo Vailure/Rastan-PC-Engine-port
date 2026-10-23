@@ -50,6 +50,8 @@ EFFECTS = [
     ('ITEM', 0x15, 90),           # a weapon item taken
     ('BLOCK', 0x17, 90),          # the cave block broken
     ('DIE', 0x0d, 150),           # Rastan dies
+    ('HIT', 0x07, 60),            # an enemy struck, not killed ($044804; $08 for some kinds)
+    ('HURT', 0x0c, 60),           # Rastan hit ($0555B8, $05560C)
 ]
 NCH = 6
 

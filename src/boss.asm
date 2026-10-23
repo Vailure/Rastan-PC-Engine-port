@@ -23,8 +23,8 @@ BOSS_FLOOR	=	446		; and lands here.
 BOSS_ROOM	=	11300		; Rastan past this: the boss comes.
 BOSS_LEFT	=	11300		; Its range in the room.
 BOSS_RIGHT	=	11740
-BOSS_HITS	=	10
-BOSS_INVULN	=	20
+BOSS_HITS	=	10		; Hit points: a blow in the air takes 3.
+BOSS_INVULN	=	16		; (the arcade's ($3D,A4))
 BOSS_WALK	=	64
 BOSS_LEAP	=	37
 BOSS_FAR	=	112		; Leaps when Rastan is farther than this.
@@ -147,10 +147,18 @@ boss_think:	lda	e_state, x
 		bcc	.act
 		lda	#BOSS_INVULN
 		sta	e_struck, x
-		inc	e_range, x
-		lda	e_range, x
+		jsr	weapon_power		; (3 for a blow in the air: the arcade's)
+		clc
+		adc	e_range, x
+		sta	e_range, x
 		cmp	#BOSS_HITS
-		bcc	.act
+		bcs	!+
+		phx
+		lda	#SFX_HIT
+		jsr	sound_sfx
+		plx
+		bra	.act
+!:
 		lda	#ES_DYING		; Ten hits: dead.
 		sta	e_state, x
 		sta	e_state + 1, x

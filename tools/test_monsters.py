@@ -23,6 +23,7 @@ Arcade values (round 1 census, sim/scripts/chimera.txt; see README):
 """
 import sys
 from peek import peek
+from routes import warp
 
 rom, god = sys.argv[1:3]
 fails = []
@@ -169,6 +170,20 @@ check('they stop about 60 px away to swing', att and all(50 <= abs(d) <= 62 for 
 drops = [r2[i - 1]['p_hp'][0] - r2[i]['p_hp'][0] for i in range(1, len(r2)) if r2[i]['p_hp'][0] < r2[i - 1]['p_hp'][0]]
 check('a swing that reaches costs 12 units, a soldier\'s touch 8 (castle.snp: 3072 and 2048)',
       drops and set(drops) == {8, 12}, f'{drops}')
+
+# Two of the sword's hits kill a soldier (the arcade's hit points 2): the first makes it
+# reel 16 frames, pushed away; a kill scores 400 (sword) or 500 (mace).
+keys = warp(4) + sum([[f, f + 1, '80'] for f in range(220, 900, 20)], [])
+r = peek(god, 900, keys, {'e_kind': 4, 'e_state': 4, 'e_dmg': 4, 'e_flash': 4, 'e_xl': 4, 'e_xh': 4, 'score': 3})
+reeled = [(i, k) for i in range(201, len(r)) for k in range(4) if r[i]['e_flash'][k] == 16 and r[i]['e_kind'][k] in (EK_SWORD, EK_MACE)]
+push = [abs(x_of(r[i + 15], k) - x_of(r[i], k)) for i, k in reeled if i + 15 < len(r)]
+died = [(i, k) for i in range(201, len(r)) for k in range(4) if r[i]['e_state'][k] == ES_DYING and r[i - 1]['e_state'][k] != ES_DYING]
+check('a soldier reels from the first hit (about 15 px back) and dies at the second',
+      reeled and all(13 <= p <= 16 for p in push) and died and all(r[i]['e_dmg'][k] == 2 for i, k in died),
+      f'pushed {push}, damage at death {[r[i]["e_dmg"][k] for i, k in died]}')
+sc = lambda f: int(f'{f["score"][2]:02x}{f["score"][1]:02x}{f["score"][0]:02x}')
+gains = sorted({sc(r[i + 1]) - sc(r[i - 1]) for i, k in died})
+check('a sword soldier scores 400, a mace soldier 500', set(gains) <= {4, 5, 9} and gains, f'{gains} (hundreds)')
 
 # Fire jets: checkpoint 5 (god build): up the rope and along the top of the lava
 # hall, down into the jets' room, jumping its three pits.

@@ -109,6 +109,8 @@ e_pose:		ds	NUM_OBJ
 e_timer:	ds	NUM_OBJ
 e_sub:		ds	NUM_OBJ		; Speed: skip every 8th step.
 e_struck:	ds	NUM_OBJ		; Club hit already checked this swing.
+e_dmg:		ds	NUM_OBJ		; Damage taken (the arcade's ($3C,A4); kind_hp kills).
+e_flash:	ds	NUM_OBJ		; Frames it reels from a hit, untouchable ($3D,A4).
 e_kind:		ds	NUM_OBJ
 e_range:	ds	NUM_OBJ		; Attack distance.
 e_alt:		ds	NUM_OBJ		; Blue: next throw is low.
@@ -413,6 +415,8 @@ try_spawn:	dec	<spawn_timer
 .kind:		sta	e_kind, x
 		lda	#$FF
 		sta	e_shown, x
+		stz	e_dmg, x
+		stz	e_flash, x
 		jmp	start_walk
 
 spawn_gaps:	db	49, 81, 65
@@ -466,9 +470,16 @@ enemy_think:	lda	e_kind, x
 		beq	.r
 		stz	e_state, x
 .r:		rts
-!:		jsr	sword_vs_enemy		; Rastan's sword kills in one hit.
+!:		lda	e_flash, x		; Reeling from a hit: pushed away 1 px a
+		beq	!+			; frame, untouchable (the arcade's 16
+		dec	e_flash, x		; frames, castle.snp 1324-1340).
+		jmp	reel
+!:		jsr	sword_strike		; The sword: kind_hp hits kill.
 		bcc	!+
 		jmp	kill_enemy
+!:		lda	e_flash, x
+		beq	!+
+		rts
 !:		lda	e_kind, x
 		cmp	#EK_CHIM
 		bne	!+
@@ -708,13 +719,16 @@ kind_death_h:	db	>anim_liz_death, >anim_blue_death, 0, 0, 0, >anim_chim_death, 0
 kind_range:	db	ATTACK_RANGE, 88, 0, 0, 0, 0, 0, 0, 0, 0, 0, SOLDIER_RANGE, SOLDIER_RANGE, 0, 0, 0, 0, 0
 kind_keep:	db	0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 0, 1	; No off-screen despawn.
 ; Arcade: lizardman 300, blue thrower 200, bat 200, chimera 300.
-; Castle soldiers: the arcade gave 900 for a sword and a mace soldier dying together.
-kind_score:	db	$03, $02, 0, 0, $02, $03, 0, 0, 0, 0, $03, $03, $06, 0, 0, 0, 0, 0
+; Castle soldiers: the arcade's ($2C,A4): 400 the sword's, 500 the mace's.
+kind_score:	db	$03, $02, 0, 0, $02, $03, 0, 0, 0, 0, $03, $04, $05, 0, 0, 0, 0, 0
 ; Touching Rastan (the arcade's ($29,A4), player_touch): 1, 2 drain 4, 8 units;
 ; 3 knocks him back, 12 units; 0 nothing (the woman warrior: only her sword).
 ; (The item and its bat, the boss's second half and the vines: their own code;
 ; the jets' type is not measured.)
 kind_touch:	db	1, 1, 3, 0, 0, 2, 3, 3, 2, 2, 0, 2, 2, 3, 3, 0, 3, 0
+; Hit points (the arcade's ($3A,A4)): the gargoyle and the soldiers take two of
+; the sword's hits (one of the stronger blows: weapon_power), the boss ten.
+kind_hp:	db	1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 1, 2, 2, 1, 10, 1, 1, 1
 kind_bank:	db	GRP_SECT1_BANK, GRP_SECT1_BANK, GRP_SECT1_BANK, GRP_ITEMS_BANK, GRP_ITEMS_BANK
 		db	GRP_CHIMERA_BANK, GRP_CHIMERA_BANK, GRP_ROCKS_BANK, GRP_GARGOYLE_BANK, GRP_GARGOYLE_BANK
 		db	GRP_WOMAN_BANK, GRP_CASTLE_BANK, GRP_CASTLE_BANK, GRP_JETS_BANK
@@ -734,6 +748,37 @@ kind_top:	db	20, 20, 8, 2, 25, 5, 8, 8, 16, 8, 20, 20, 20, 16, 36, 0, 8, 0
 kind_bot:	db	16, 16, 8, 30, 7, 14, 8, 8, 24, 18, 16, 16, 16, 40, 30, 0, 8, 0
 kind_half:	db	12, 12, 3, 20, 16, 20, 3, 3, 12, 12, 12, 12, 12, 16, 16, 0, 3, 0
 kind_cx:	db	0, 0, 0, -8, -2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+
+; sword_strike - X = slot: carry set if Rastan's weapon kills it now. A hit
+; adds his weapon's power (weapon_power) to its damage; at its kind's hit
+; points (the arcade's ($3A,A4)) it dies, else it reels for 16 frames.
+sword_strike:	jsr	sword_vs_enemy
+		bcc	.r
+		jsr	weapon_power
+		clc
+		adc	e_dmg, x
+		sta	e_dmg, x
+		ldy	e_kind, x
+		cmp	kind_hp, y
+		bcs	.r			; (carry set: dead)
+		lda	#16
+		sta	e_flash, x
+		phx
+		lda	#SFX_HIT
+		jsr	sound_sfx
+		plx
+		clc
+.r:		rts
+
+; reel - X = slot: pushed 1 px away from Rastan.
+reel:		lda	<p_x
+		cmp	e_xl, x
+		lda	<p_x + 1
+		sbc	e_xh, x
+		lda	#1
+		bcc	!+			; Rastan left of it: to the right.
+		lda	#$FF
+!:		jmp	add_x
 
 ; ---------------------------------------------------------------------------
 ; throw_club - X = blue thrower: a club leaves its hand toward Rastan.

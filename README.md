@@ -211,7 +211,9 @@ Not done yet: slopes, waterfall currents, the other collision codes, rope attack
   (chimeras, gargoyles, soldiers) and hurts him 11 frames where he stands, and the next drain waits 80 frames;
   the woman warrior's touch does nothing. After a hurt he is untouchable 33 frames more (16 if he was hit in an
   attack, which he keeps on with). He does not flicker meanwhile (the arcade draws him every frame); the HUD's
-  icon flashes. When health runs out, the stage restarts.
+  icon flashes. When health runs out, the stage restarts. His hits take 1 off an enemy's hit points, 3 in the
+  air, in a down thrust or with the axe or fire sword (`$0549DE`); soldiers and the gargoyle have 2, the boss
+  10, the rest 1, and one that survives reels back for 16 frames.
 - **Weapon and body boxes** (the arcade's tables, `tools/pce_player.py` `write_boxes`): per weapon frame
   (`$10D244`) the weapon has a box (`$05C9EA`, `$05CAC6`, `$05CBA2`, `$05CC7E` for the four weapons, into
   `$10D254`) and Rastan's body one (`$05C90E`: x −12..12, y −24 or 0 crouched .. 26; −8 behind him with the blade
@@ -289,8 +291,9 @@ Not done yet: slopes, waterfall currents, the other collision codes, rope attack
   and the arcade's weapon boxes: each attack is a high or a low swing at random (the arcade: bit 2 of a byte of the
   slot); the sword's reach 4 to 52 px in front (`$3A`, `$3C`), the mace's 4 to 60 (`$AE`, `$B0`); high, 13 to 19
   above the anchor, which a crouching Rastan ducks; low, 3 above to 3 below, which hits him crouched too. A swing
-  that reaches costs 12 units. The arcade gave 900 for a sword and a mace soldier dying together;
-  the port splits it 300 / 600.
+  that reaches costs 12 units, a touch 8. Each takes two of the sword's hits (it reels back 16 px from the
+  first, untouchable 16 frames) or one stronger blow (in the air, a down thrust, the axe or the fire sword: 3 of
+  damage); 400 points the sword soldier, 500 the mace's (the arcade's `($2C,A4)`).
 - **Fire jets** (`src/jets.asm`): over the lava pits at world x 9870, 9966 and 10062 (the arcade's census:
   10382-10574 in segment `$14`, now the jets' room at square ($13, -1)). Each erupts when Rastan is 172 px
   left of it (the flame rises for 17 frames, dies down for 18, then a column flickers for 57) and again about 220
