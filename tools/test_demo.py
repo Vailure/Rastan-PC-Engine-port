@@ -26,6 +26,13 @@ def check(name, ok, detail=''):
         fails.append(name)
 
 
+# The card: a Street Fighter II mapper image, 2.5 MB (what emulators go by), with the
+# round's stage data only in page 1 (file 1 MB-1.5 MB): if the game never selected it,
+# nothing in the tests below would draw right.
+size = os.path.getsize(rom)
+check('the ROM is a 2.5 MB SF2 mapper image', size == 0x280000, f'{size} bytes')
+
+
 def shot(frame, keys):
     out = os.path.join(tmp, f'demo_{os.getpid()}.ppm')
     subprocess.run([TGRUN, rom, str(frame), out] + [str(k) for k in keys], check=True, capture_output=True)

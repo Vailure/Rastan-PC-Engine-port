@@ -27,7 +27,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 from peek import peek
 from trace_player import TGRUN
-from routes import ROUTE_A, ROUTE_B
+from routes import ROUTE_A, ROUTE_B, keys as route_keys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 rom, out = sys.argv[1:3]
@@ -65,9 +65,11 @@ def warp(cp):
 
 def route(cp):
     if cp == 4:
-        return warp(cp) + ROUTE_A, 3600
+        k, base = route_keys(rom, cp, ROUTE_A)
+        return k, base + 3377
     if cp == 5:
-        return warp(cp) + ROUTE_B, 3800
+        k, base = route_keys(rom, cp, ROUTE_B)
+        return k, base + 3572
     n = 2400
     keys = warp(cp) + [200, n, '05']                                    # UP + RIGHT held
     keys += sum([[f, f + 2, '41'] for f in range(260, n, 60)], [])      # high jumps

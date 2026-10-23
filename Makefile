@@ -121,7 +121,7 @@ $(BUILD)/item_%.snp: sim/sim sim/maincpu.bin sim/scripts/item_%.txt
 # Cells start at bank $60; each group's poses and anims get the next banks.
 OBJECTS    := $(BUILD)/objects
 $(OBJECTS)/objcells.bin: tools/pce_objects.py tools/object_specs.py tools/census_all.py $(BUILD)/lizard.snp $(BUILD)/blue.snp $(BUILD)/item.snp $(BUILD)/item_fire.snp $(BUILD)/item_star.snp $(BUILD)/chimera.snp $(BUILD)/gargoyle.snp $(BUILD)/woman.snp $(BUILD)/castle.snp $(BUILD)/boss.snp $(BUILD)/vine.snp $(BUILD)/hall.snp
-	cd tools && python3 pce_objects.py ../$(BUILD) ../$(OBJECTS) 0x61
+	cd tools && python3 pce_objects.py ../$(BUILD) ../$(OBJECTS) 0x13
 
 # HUD cells (lives, icon, health bar, ROUND) from the arcade's HUD sprites.
 $(BUILD)/hud/hud.bin: tools/pce_hud.py $(BUILD)/actions.snp
@@ -191,12 +191,18 @@ $(BUILD)/debug/font.bin: $(HUC)/examples/asm/elmer/font/font8x8-ascii-bold-short
 	@mkdir -p $(BUILD)/debug
 	dd if=$< of=$@ bs=8 skip=16 count=64 status=none
 
+# The ROM uses the Street Fighter II mapper (pceas --sf2; see src/main.asm). pceas
+# pads it to 2 MB; SF2PAD makes it 2.5 MB, the size of the real card, which is how
+# emulators recognise the mapper (MAME only accepts exactly that size).
+SF2PAD     := python3 tools/pad_sf2.py
+
 GAME_DEPS  := $(wildcard src/*.asm) $(BUILD)/debug/font.bin $(STAGE)/stage.bin $(PLAYER)/player.bin $(OBJECTS)/objcells.bin $(BUILD)/hud/hud.bin $(BUILD)/props/props.bin $(BUILD)/traps/traps.bin $(BUILD)/sound/sound.bin $(BUILD)/voice/voice.bin $(BUILD)/still/ending.bin $(BUILD)/still/title.bin $(BUILD)/still/gameover.bin
 
 $(BUILD)/rastan.pce: $(GAME_DEPS)
 	@mkdir -p $(BUILD)/opt
 	printf "CAMERA_TEST = 0\nNO_ENEMIES = 0\nGOD_MODE = 0\nBG_CHECK = 0\nTITLE = 1\nDEBUG_MENU = 0\n" > $(BUILD)/opt/options.inc
-	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt):$$PCE_INCLUDE $(PCEAS) --newproc --strip -m -l 2 -S -gA --raw ../src/main.asm -o rastan.pce
+	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt):$$PCE_INCLUDE $(PCEAS) --newproc --sf2 --strip -m -l 2 -S -gA --raw ../src/main.asm -o rastan.pce
+	$(SF2PAD) $(BUILD)/rastan.pce
 
 # The development build: straight into the game, with the debug menu (UP +
 # SELECT held). The tests run on this one; rastan.pce is the demo (the title
@@ -204,33 +210,38 @@ $(BUILD)/rastan.pce: $(GAME_DEPS)
 $(BUILD)/rastan_debug.pce: $(GAME_DEPS)
 	@mkdir -p $(BUILD)/opt_dbg
 	printf "CAMERA_TEST = 0\nNO_ENEMIES = 0\nGOD_MODE = 0\nBG_CHECK = 0\nTITLE = 0\nDEBUG_MENU = 1\n" > $(BUILD)/opt_dbg/options.inc
-	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_dbg):$$PCE_INCLUDE $(PCEAS) --newproc --strip -l 0 --raw ../src/main.asm -o rastan_debug.pce
+	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_dbg):$$PCE_INCLUDE $(PCEAS) --newproc --sf2 --strip -l 0 --raw ../src/main.asm -o rastan_debug.pce
+	$(SF2PAD) $(BUILD)/rastan_debug.pce
 
 # Test build: the pad drives the camera directly and Rastan is not drawn.
 $(BUILD)/camtest.pce: $(GAME_DEPS)
 	@mkdir -p $(BUILD)/opt_test
 	printf "CAMERA_TEST = 1\nNO_ENEMIES = 1\nGOD_MODE = 0\nBG_CHECK = 0\nTITLE = 0\nDEBUG_MENU = 1\n" > $(BUILD)/opt_test/options.inc
-	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_test):$$PCE_INCLUDE $(PCEAS) --newproc --strip -l 0 --raw ../src/main.asm -o camtest.pce
+	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_test):$$PCE_INCLUDE $(PCEAS) --newproc --sf2 --strip -l 0 --raw ../src/main.asm -o camtest.pce
+	$(SF2PAD) $(BUILD)/camtest.pce
 
 # Scroll the ROM through the whole stage and compare with the converter preview.
 # Test build: no enemies, for the movement checks.
 $(BUILD)/noenemy.pce: $(GAME_DEPS)
 	@mkdir -p $(BUILD)/opt_noen
 	printf "CAMERA_TEST = 0\nNO_ENEMIES = 1\nGOD_MODE = 0\nBG_CHECK = 0\nTITLE = 0\nDEBUG_MENU = 1\n" > $(BUILD)/opt_noen/options.inc
-	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_noen):$$PCE_INCLUDE $(PCEAS) --newproc --strip -l 0 --raw ../src/main.asm -o noenemy.pce
+	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_noen):$$PCE_INCLUDE $(PCEAS) --newproc --sf2 --strip -l 0 --raw ../src/main.asm -o noenemy.pce
+	$(SF2PAD) $(BUILD)/noenemy.pce
 
 # Test build: enemies on, but they can't hurt Rastan (to reach later sections).
 $(BUILD)/god.pce: $(GAME_DEPS)
 	@mkdir -p $(BUILD)/opt_god
 	printf "CAMERA_TEST = 0\nNO_ENEMIES = 0\nGOD_MODE = 1\nBG_CHECK = 0\nTITLE = 0\nDEBUG_MENU = 1\n" > $(BUILD)/opt_god/options.inc
-	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_god):$$PCE_INCLUDE $(PCEAS) --newproc --strip -l 0 --raw ../src/main.asm -o god.pce
+	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_god):$$PCE_INCLUDE $(PCEAS) --newproc --sf2 --strip -l 0 --raw ../src/main.asm -o god.pce
+	$(SF2PAD) $(BUILD)/god.pce
 
 # Test build: god mode, and only the tile map is shown (no sprites, no colour
 # cycling), so a whole playthrough can be compared with the converter's preview.
 $(BUILD)/bgcheck.pce: $(GAME_DEPS)
 	@mkdir -p $(BUILD)/opt_bg
 	printf "CAMERA_TEST = 0\nNO_ENEMIES = 0\nGOD_MODE = 1\nBG_CHECK = 1\nTITLE = 0\nDEBUG_MENU = 1\n" > $(BUILD)/opt_bg/options.inc
-	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_bg):$$PCE_INCLUDE $(PCEAS) --newproc --strip -l 0 --raw ../src/main.asm -o bgcheck.pce
+	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_bg):$$PCE_INCLUDE $(PCEAS) --newproc --sf2 --strip -l 0 --raw ../src/main.asm -o bgcheck.pce
+	$(SF2PAD) $(BUILD)/bgcheck.pce
 
 test: $(BUILD)/camtest.pce $(BUILD)/noenemy.pce $(BUILD)/rastan.pce $(BUILD)/rastan_debug.pce $(BUILD)/god.pce tools/tgrun/tgrun
 	python3 tools/test_scroll.py $(BUILD)/camtest.pce $(STAGE)/preview.png $(BUILD)/test $$(seq 62 37 2950)
@@ -246,14 +257,14 @@ test: $(BUILD)/camtest.pce $(BUILD)/noenemy.pce $(BUILD)/rastan.pce $(BUILD)/ras
 	python3 tools/test_sound.py $(BUILD)/rastan_debug.pce $(BUILD)/god.pce $(BUILD)
 	python3 tools/test_demo.py $(BUILD)/rastan.pce $(BUILD)/still
 
-# A whole playthrough, checkpoint by checkpoint (slow: about 10 minutes): object
+# A whole playthrough, checkpoint by checkpoint (about 2 minutes): object
 # poses, slowdown, SATB use, and the tile map against the converter's preview.
 # Contact sheets and logs go to build/audit and build/audit_bg.
 audit: $(BUILD)/god.pce $(BUILD)/bgcheck.pce tools/tgrun/tgrun
 	cd tools && python3 audit.py ../$(BUILD)/god.pce ../$(BUILD)/audit
 	cd tools && AUDIT_EVERY=10 AUDIT_PREVIEW=../$(STAGE)/preview.png python3 audit.py ../$(BUILD)/bgcheck.pce ../$(BUILD)/audit_bg
 
-tools/tgrun/tgrun: tools/tgrun/tgrun.c
+tools/tgrun/tgrun: tools/tgrun/tgrun.c tools/tgrun/build.sh $(wildcard tools/tgemu/src/*.[ch] tools/tgemu/src/*/*.[ch])
 	HUC=$(abspath $(HUC)) tools/tgrun/build.sh
 
 # Exact-port groundwork: record every player-update call under random input and

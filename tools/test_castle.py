@@ -59,15 +59,16 @@ def run(r, end, keys, extra=None):
     return a
 
 
-from routes import ROUTE_A, ROUTE_SHAFT, ROUTE_B, ROUTE_V
+from routes import ROUTE_A, ROUTE_SHAFT, ROUTE_B, ROUTE_V, SHAFT_HANG, keys as route_keys
 
 # A: up shaft 1 and across the lava hall.
-r = run(god, 3600, warp(4) + ROUTE_A)
+ka, base = route_keys(god, 4, ROUTE_A)
+r = run(god, base + 3377, ka)
 ys = [s16(f['scroll_y']) for f in r]
 check('the floor spears of the middle corridor can be walked past', all(f['p_state'][0] != ST_DEAD for f in r),
       f"died at frame {next((i for i, f in enumerate(r) if f['p_state'][0] == ST_DEAD), None)}")
-check('climbing out of the first room, the camera follows up into shaft 1', min(ys[:2800]) <= -450,
-      f'highest scroll_y {min(ys[:2800])}')
+check('climbing out of the first room, the camera follows up into shaft 1', min(ys[:base + 2577]) <= -450,
+      f'highest scroll_y {min(ys[:base + 2577])}')
 top = next((i for i, f in enumerate(r) if f['cam_region'][0] == 2), None)
 check("once the shaft's rows have all streamed, the lava hall's columns come next",
       top is not None and w16(r[top]['next_col']) >= 0x12 * 64, f"frame {top}")
@@ -75,13 +76,14 @@ vines = sorted({f['p_vine'][0] for f in r if f['p_state'][0] == ST_SWING})
 check('the three vines over the lava are caught in turn', len(vines) == 3, f'vine slots {vines}')
 end = r[-1]
 check('he lands past the lava', w16(end['p_x']) >= 9280 and s16(end['p_y']) == -345
-      and all(f['p_state'][0] != ST_DEAD for f in r[2800:]), f"at ({w16(end['p_x'])}, {s16(end['p_y'])})")
+      and all(f['p_state'][0] != ST_DEAD for f in r[base + 2577:]), f"at ({w16(end['p_x'])}, {s16(end['p_y'])})")
 lc = [w16(f['loop_cnt']) for f in r]
 slow = min((lc[i + 60] - lc[i]) & 0xffff for i in range(300, len(r) - 60, 60))
 check('no slowdown on the way (60 logic frames a second)', slow >= 59, f'fewest {slow}')
 
 # B: shaft 2, the door, the boss.
-r = run(god, 4400, warp(5) + ROUTE_B, OBJ)
+kb, base = route_keys(god, 5, ROUTE_B)
+r = run(god, base + 4172, kb, OBJ)
 door = next((i for i, f in enumerate(r) if w16(f['p_x']) == 11728), None)
 check('the door at the top of shaft 2 drops him into the boss room at (11728, 98)',
       door is not None and s16(r[door - 1]['p_y']) < -800 and 98 <= s16(r[door]['p_y']) < 130,
@@ -95,7 +97,8 @@ check('killing it scores 5000, and the round is clear (then a new game: test bui
       won is not None and clear is not None, f"5000 at frame {won}, restart at {clear}")
 
 # V: the vine over the chasm.
-r = run(god, 1100, warp(1) + ROUTE_V)
+kv, base = route_keys(god, 1, ROUTE_V)
+r = run(god, base + 927, kv)
 sw = [i for i, f in enumerate(r) if f['p_state'][0] == ST_SWING]
 check('the vine at x 2750 is caught from the cliff', sw and 2700 <= w16(r[sw[0]]['p_x']) <= 2780,
       f"at {(w16(r[sw[0]]['p_x']), s16(r[sw[0]]['p_y'])) if sw else None}")
@@ -113,7 +116,10 @@ check('jumping off on the far side lands on the ledge (arcade: 2863, 135)', land
 # holding UP, high jumps.)
 keys = warp(3) + [200, 2000, '05'] + sum([[f, f + 2, '41'] for f in range(260, 2000, 60)], [])
 r = run(god, 2000, keys)
-outside = [w16(f['scroll_x']) for f in r[200:] if w16(f['p_x']) < 8192]
+# (RAM is sampled once a frame, partway through the game's frame: a sample can catch
+# scroll_x between camera_update and its clamp. A frame's scroll is what the next
+# sample still shows, so a camera past the wall shows in two samples running.)
+outside = [min(w16(f['scroll_x']), w16(g['scroll_x'])) for f, g in zip(r[200:], r[201:]) if w16(f['p_x']) < 8192]
 inside = [w16(f['scroll_x']) for f in r[200:] if w16(f['p_x']) >= 8192]
 check('outside the castle the camera stops at its wall (scroll_x <= 7936)', outside and max(outside) <= 7936,
       f'max {max(outside) if outside else None}')
@@ -128,9 +134,10 @@ def shot(keys, frame):
     return np.array(Image.open(out))[:224, 32:288]
 
 
-base = warp(4) + ROUTE_SHAFT                   # (hanging still at a rope's top, nothing moving)
-plain = shot(base, 2520)
-menu = shot(base + [2430, 2480, OPEN, 2490, 2490, SEL], 2520)
+ks, b4 = route_keys(noen, 4, ROUTE_SHAFT)     # (hanging still at a rope's top, nothing moving)
+km, _ = route_keys(noen, 4, ROUTE_SHAFT, [SHAFT_HANG - 42, SHAFT_HANG + 8, OPEN, SHAFT_HANG + 18, SHAFT_HANG + 18, SEL])
+plain = shot(ks, b4 + SHAFT_HANG + 48)
+menu = shot(km, b4 + SHAFT_HANG + 48)
 diff = (plain != menu).any(-1).mean() * 100
 check('in a shaft, closing the debug menu restores the screen', diff == 0, f'{diff:.2f}% pixels differ')
 

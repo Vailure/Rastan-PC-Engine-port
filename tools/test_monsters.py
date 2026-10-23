@@ -86,7 +86,8 @@ check('a chimera walks left at 1/2 px/frame', walk and set(steps) <= {0, 1} and 
 breath = [i for i, _, s in c if s == ES_ATTACK]
 check('it stops once to breathe fire, then walks on', breath and breath[-1] - breath[0] + 1 == len(breath)
       and c[-1][2] == ES_WALK, f'breath frames {breath[0] if breath else None}-{breath[-1] if breath else None}')
-fires = [f for f in lives(r, EK_FIRE) if breath and breath[0] <= f[0][0] <= breath[-1] + 1]
+fires = sorted((f for f in lives(r, EK_FIRE) if breath and breath[0] <= f[0][0] <= breath[-1] + 1),
+               key=lambda f: f[0][0])     # (lives() lists them by when they end)
 starts = [f[0][0] - breath[0] for f in fires]
 # (RAM is sampled at a fixed point of each emulated frame; a step can show a frame late.)
 check('two fireballs, 33 and 81 frames into the breath', len(starts) == 2

@@ -19,10 +19,17 @@ needs that are not resident.
 
 Outputs (outdir):
   stage.bin   pointer table (3 bytes/line: bank offset, addr lo, addr hi
-              relative to $6000 window) then line records:
+              relative to $6000 window) then line records (under 256 bytes each):
                 u8 flags (1 row, 2 stop: a door loads the rest), u8 BAT column/row,
                 s16 trigger (world x of a column, y of a row), u8 camera region;
-                u8 n; n * (u16 tile#, 32 bytes pattern); 64 * u16 BAT word
+                u8 n; n * 3 bytes upload: slot lo, pattern # lo,
+                  slot hi | pattern # hi << 3  (slot: VRAM tile #, pattern: stage_pats.bin);
+                the line's 64 BAT words as 16 quads (4 words each), codes:
+                  $00-$DF        quad # (the 224 most used quads)
+                  $E0-$EF        the previous quad again, 1-16 times
+                  $F0-$FF, lo    quad # ((code & $0F) << 8 | lo)
+  stage_pats.bin  every BG pattern once, 32 bytes each (PCE format), by first use
+  stage_quads.bin every distinct quad once, 8 bytes each (4 BAT words), most used first
   stage.inc   equates and the camera box of each region
   palette.bin 256 words (16 palettes) in VCE format
   preview.png converted stage as the PCE would show it
@@ -57,6 +64,7 @@ FIRE_CELL = 0x224
 FIRE_TILE0 = 0x4C0     # VRAM $4C00: the stage props' cells, unused in the castle
 NUM_SLOTS = 944       # $1000-$4AFF; $4B00-$4BFF the floor spears' cells, $4C00-$4FFF stage props
 ROWS = 64
+QUAD_SHORT = 0xE0   # line codes: $00-$DF quad #, $E0-$EF repeat, $F0-$FF long quad #
 
 
 def arcade_pixels(rom, tiles, seg0, seg1):
@@ -439,30 +447,100 @@ def main():
     if fire:                      # fire.bin: 4 phases x 16 tiles, by position
         open(f'{out}/fire.bin', 'wb').write(b''.join(pce_pattern(p) for p in fire['pix']))
 
+    # Compressed stream (see the module docstring): each pattern is stored once in
+    # stage_pats.bin, numbered by first upload, and an upload is (slot, pattern #).
+    # The BAT words of a line are 16 quads (a 4-tile slice of an arcade block): each
+    # distinct quad is stored once in stage_quads.bin, most used first, and a line
+    # is a short code stream over them.
+    pat_num = {}
+    for ups, _ in records:
+        for _, p in ups:
+            pat_num.setdefault(p, len(pat_num))
+    assert len(pat_num) <= 32 * 256, f'{len(pat_num)} patterns: the upload code has 13 bits'
+    quad_use = {}
+    for _, bat in records:
+        for k in range(0, 64, 4):
+            q = tuple(bat[k:k + 4])
+            quad_use[q] = quad_use.get(q, 0) + 1
+    quads = sorted(quad_use, key=lambda q: -quad_use[q])
+    assert len(quads) <= 4096, f'{len(quads)} quads: the long code has 12 bits'
+    quad_num = {q: i for i, q in enumerate(quads)}
+
+    def bat_codes(bat):
+        qs = [quad_num[tuple(bat[k:k + 4])] for k in range(0, 64, 4)]
+        code = bytearray()
+        k = 0
+        while k < 16:
+            q = qs[k]
+            code += bytes([q]) if q < QUAD_SHORT else bytes([0xF0 | q >> 8, q & 0xff])
+            j = k + 1
+            while j < 16 and j - k <= 16 and qs[j] == q:
+                j += 1
+            if j - k > 1:
+                code.append(0xE0 | (j - k - 2))
+            k = j
+        return code
+
     body = bytearray()
     offs = []
     table_size = 3 * W
     regions = []
+    n_up = 0
     for (ups, bat), ln in zip(records, lines):
         offs.append(table_size + len(body))
         box = ln['box'] + (int(ln['stop'] or ln['seg'] in world.FREE),)
         if box not in regions:
             regions.append(box)
         trig = ln['trigger'] & 0xffff
-        body += bytes([(1 if ln['row'] else 0) | (2 if ln['stop'] else 0), ln['i'], trig & 0xff, trig >> 8,
-                       regions.index(box)])
-        body.append(len(ups))
+        rec = bytearray([(1 if ln['row'] else 0) | (2 if ln['stop'] else 0), ln['i'], trig & 0xff, trig >> 8,
+                         regions.index(box), len(ups)])
         for slot, p in ups:
-            body += slot.to_bytes(2, 'little') + pce_pats[p]
-        for v in bat:
-            body += v.to_bytes(2, 'little')
+            n = pat_num[p]
+            assert FIRST_SLOT <= slot < 0x800
+            rec += bytes([slot & 0xff, n & 0xff, (slot >> 8) | (n >> 8) << 3])
+        rec += bat_codes(bat)
+        assert len(rec) < 256, 'a record is read with one 8-bit index'
+        body += rec
+        n_up += len(ups)
     table = bytearray()
     for o in offs:
         table += bytes([o // 8192, 0x6000 + o % 8192 & 0xff, (0x6000 + o % 8192) >> 8])
     assert table_size <= 8192, 'pointer table must fit in one bank'
     blob = bytes(table + body)
+    pats_blob = b''.join(pce_pats[p] for p in sorted(pat_num, key=pat_num.get))
+    quads_blob = b''.join(v.to_bytes(2, 'little') for q in quads for v in q)
     open(f'{out}/stage.bin', 'wb').write(blob)
-    print(f'stage.bin {len(blob)} bytes ({(len(blob) + 8191) // 8192} banks)')
+    open(f'{out}/stage_pats.bin', 'wb').write(pats_blob)
+    open(f'{out}/stage_quads.bin', 'wb').write(quads_blob)
+    # Decode it back as the engine does (stream_line) and compare.
+    pnum_pat = {n: pce_pats[p] for p, n in pat_num.items()}
+    for c, (ups, bat) in enumerate(records):
+        o = blob[3 * c] * 8192 + (blob[3 * c + 1] | blob[3 * c + 2] << 8) - 0x6000
+        n, y = blob[o + 5], o + 6
+        got = []
+        for _ in range(n):
+            b0, b1, b2 = blob[y:y + 3]
+            got.append(((b2 & 7) << 8 | b0, pats_blob[((b2 >> 3) << 8 | b1) * 32:][:32]))
+            y += 3
+        assert got == [(sl, pce_pats[p]) for sl, p in ups], f'line {c} uploads'
+        words, last = [], None
+        while len(words) < 64:
+            code = blob[y]
+            y += 1
+            if code < QUAD_SHORT:
+                last = code
+                words += quads[last]
+            elif code < 0xF0:
+                words += quads[last] * ((code & 15) + 1)
+            else:
+                last = (code & 15) << 8 | blob[y]
+                y += 1
+                words += quads[last]
+        assert words == list(bat), f'line {c} BAT'
+    raw = sum(6 + 34 * len(u) + 128 for u, _ in records) + table_size
+    total = len(blob) + len(pats_blob) + len(quads_blob)
+    print(f'stage: lines {len(blob)} + patterns {len(pats_blob)} ({len(pat_num)}) + quads {len(quads_blob)}'
+          f' ({len(quads)}) = {total} bytes, {raw / total:.2f}x smaller than raw ({raw}); {n_up} uploads')
 
     for k, name in ((0, 'palette.bin'), (1, 'palette_castle.bin')):
         c0, pals_k, _ = psets[k]
@@ -499,6 +577,9 @@ def main():
     print(f'dynamic slots: ' + ', '.join(f'{i}:{len(v)}' for i, v in sorted(slots.items())))
     with open(f'{out}/stage.inc', 'w') as f:
         f.write(f'STAGE_LINES = {W}\nSTAGE_BANKS = {(len(blob) + 8191) // 8192}\n')
+        f.write(f'STAGE_PAT_BANKS = {(len(pats_blob) + 8191) // 8192}\t; stage_pats.bin: 256 patterns a bank\n')
+        f.write(f'STAGE_QUAD_BANKS = {(len(quads_blob) + 8191) // 8192}\t; stage_quads.bin: 1024 quads a bank\n')
+        f.write(f'QUAD_SHORT = ${QUAD_SHORT:02X}\t; quad codes below this are the quad # itself\n')
         f.write(f'STAGE_LEAD_X = {world.LEAD}\t; a column streams once scroll_x + this reaches it\n')
         f.write(f'STAGE_LEAD_Y = {world.LEAD_Y}\t; a row streams once scroll_y - this reaches it\n')
         regions.append(world.BOX_END + (1,))

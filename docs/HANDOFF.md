@@ -56,7 +56,7 @@ Branch: `section1-parity` on `github.com/Vailure/Rastan-PC-Engine-port`. Last up
 5. **Run the checks:**
 
    ```sh
-   make HUC=/path/to/huc test    # about 20 min
+   make HUC=/path/to/huc test    # about 2 min
    make HUC=/path/to/huc audit   # about 2 min once the ROMs are built
    ```
 
@@ -75,7 +75,7 @@ Branch: `section1-parity` on `github.com/Vailure/Rastan-PC-Engine-port`. Last up
 | `camtest.pce` | `CAMERA_TEST=1` | The pad moves the camera; BG only. Used by `test_scroll.py`. |
 | `bgcheck.pce` | `GOD_MODE=1 BG_CHECK=1` | God mode with the tile map alone: no sprites, no colour cycling, the fire frozen. Compared with `preview.png` by the audit. |
 
-All builds are 1,032,192 bytes (126 banks of 8 KB) and fit an 8 Mbit HuCard.
+All builds are 2.5 MB images for the Street Fighter II mapper card (§4.2). `tools/pad_sf2.py` pads them to that size after `pceas`.
 
 ---
 
@@ -141,11 +141,21 @@ The engine is about 9,200 lines of PCEAS assembly on top of HuC's core library (
 | 2 | `$4000` | `DEBUG_BANK` ($05): checkpoints, debug menu, later object code (gargoyle, woman, jets, boss), screens. Always mapped. |
 | 3 | `$6000` | **Data window.** Mapped freely by everyone. The timer IRQ (`voice_irq`) saves and restores it. |
 | 4 | `$8000` | Second data window. Stage records span `$6000-$9FFF` using MPR3 and MPR4. |
-| 5 | `$A000` | Collision map (`COLL_BANK` $5B), mapped by `player_update`. |
+| 5 | `$A000` | Collision map (`COLL_BANK`), mapped by `player_update`. `stream_line` borrows MPR5 for the pattern and quad dictionaries, and puts the collision map back. |
 | 6 | `$C000` | `GAME_BANK` ($04): most game code. |
 | 7 | `$E000` | Core library, bank 0. |
 
-### 4.2 ROM bank map
+### 4.2 ROM bank map (Street Fighter II mapper)
+
+The build uses `pceas --sf2`.
+- **CPU banks `$00-$3F`** are fixed.
+- **CPU banks `$40-$7F`** show one of four 512 KB *pages*.
+- **The page is chosen** by a write to physical `$001FF0+n`, which is bank `$00` at offset `$1FF0`. The engine does `stz $FFF0 + overlay(label)` with bank 0 in MPR7.
+- **In PCEAS file-bank numbers,** page *n* is file banks `$40+$40n…`: page 0 is `$40-$7F`, page 1 is `$80-$BF`, and so on.
+  - `^label` gives the CPU bank (`$40-$7F`).
+  - `overlay(label)` gives the page.
+
+**Fixed half.** Code and data the game needs in every round:
 
 | Banks | Contents |
 |---|---|
@@ -155,32 +165,37 @@ The engine is about 9,200 lines of PCEAS assembly on top of HuC's core library (
 | $04 | Game code |
 | $05 | Debug/late object code |
 | $06–$07 | Title still |
-| $08 | Palettes (outdoor, castle, sprites, objects, HUD, props, traps), debug font, trap cells |
-| $10–$4E | Stage stream records (`stage.bin`, 547 KB) |
-| $55–$5A | Rastan (`player.bin`) |
-| $5B | Collision |
-| $5C | Weapon piece lists per pose (`weapon_tab.inc`) |
-| $5D | Weapon cells |
-| $5E | HUD cells |
-| $5F | Prop cells |
-| $61–$73 | Objects |
-| $74–$79 | Music and effects |
-| $7A–$7C | Voices |
-| $7D | Round-clear still |
+| $08 | Palettes, debug font, trap cells |
+| $09–$0E | Rastan (`player.bin`) |
+| $0F | Weapon piece lists per pose |
+| $10 | Weapon cells |
+| $11 | HUD cells |
+| $12 | Prop cells |
+| $13–$25 | Objects: cells `$13-$1B`, then one bank per pose group. Placed by `pce_objects.py … 0x13`. |
+| $26–$2B | Music and effects |
+| $2C–$2E | Voices |
+| $2F | Round-clear still |
+| **$01, $30–$3F** | **Free (136 KB)** |
 
-**Free space:**
-- whole banks $01, $09–$0F, $4F–$54 and $60 (about 120 KB);
-- tails of $02, $03, $04 (3 KB), $05 (3 KB), $07, $08, $4E, $5A–$5C, $5E, $5F, $69–$73, $7C and $7D.
+**Page 1 (file banks `$80-$9B`).** Round 1's own data, 224 KB:
 
-Bank $04, the game code, has about 3 KB left. Bank $05 has about 3 KB left. New code will soon need a third code bank. Map it in MPR2 alongside, or move a module out.
+| Banks | Contents |
+|---|---|
+| `$80`+ | `stage.bin`: line table and records, 9 banks |
+| next | `stage_quads.bin`, 3 banks |
+| next | `stage_pats.bin`, 15 banks |
+| last | `collision.bin`, 1 bank |
 
-Check usage with:
+Pages 0, 2 and 3 are empty.
 
-```sh
-make ... 2>&1 | grep ^BANK
-```
+**Rules:**
+- Anything read from an interrupt, or by code that can run in any round, must be in the fixed half. The voice IRQ and the music are the reason sound and voices moved there.
+- A round's data must sit in one page, and `sf2_round` must select it before the stage streams. It runs at boot and from `stream_reset`.
+- Round 1 is deliberately in page 1, not page 0, so a missing or wrong page write breaks the tests at once.
 
-`pceas` prints used/free per bank.
+Bank $04, the game code, has about 3 KB left, and bank $05 has about 3 KB left. New code will soon need a third code bank: map it in MPR2 alongside, or move a module out.
+
+Check bank usage with `make … build/rastan.pce 2>&1 | grep ^BANK`. That build has the listing on, and `pceas` prints used and free space per bank.
 
 ### 4.3 VRAM map (words)
 
@@ -285,8 +300,13 @@ There are two BG sets of 16 palettes:
 
 **A record holds:**
 - a header (row or column, door flag, trigger coordinate, camera region);
-- the patterns to upload;
-- 64 BAT words.
+- its uploads, 3 bytes each: the VRAM slot and a pattern number in `stage_pats.bin`;
+- its 64 BAT words as codes over 16 *quads* (4-word slices) in `stage_quads.bin`:
+  - `$00-$DF`: quad number;
+  - `$E0-$EF`: the last quad again, 1–16 times;
+  - `$F0-$FF` plus a byte: quad numbers 0–4095.
+
+The format is documented at the top of `tools/pce_stage.py` and above `stream_line`. The converter decodes every line back and asserts it matches before writing, and the scroll tests check the result on screen pixel for pixel.
 
 **How streaming runs:**
 - `stream_ahead` streams the next line once the camera reaches its trigger.
@@ -382,11 +402,11 @@ tgrun rom.pce frames out.ppm [from to padhex]...
 | `test_enemies.py` | Hits, kills, spawn lanes and timing, clubs, frame budget |
 | `test_effects.py` | Waterfall cycle, sky switch, hazards, death animation |
 | `test_debug.py` | The menu needs a hold; the screen comes back exactly; warps, invincibility, checkpoint restart |
-| `test_items.py` | Weapons, items, bats |
+| `test_items.py` | Weapons, items, bats (weapon drawing is sampled over 4 frames: the fire sword's flame hides behind the blade on some) |
 | `test_monsters.py` | Chimeras, boulders, gargoyle, woman, boss; the round-clear screen and jingle |
 | `test_castle.py` | Soldiers, spears, jets, vines, doors, camera walls; the round is cleared within 4400 frames |
 | `test_sound.py` | PSG writes match the streams; notes are in the audio spectrum; the voices' levels in order on channel 5 |
-| `test_demo.py` | Title, blink, RUN starts, pause, no debug menu, GAME OVER → title → new game |
+| `test_demo.py` | The image is a 2.5 MB SF2 card; title, blink, RUN starts, pause, no debug menu, GAME OVER → title → new game |
 
 ### The audit
 
@@ -402,9 +422,10 @@ tgrun rom.pce frames out.ppm [from to padhex]...
 - `AUDIT_CPS=3,4` limits the run to those checkpoints.
 - `AUDIT_EVERY` sets the sampling interval.
 
-**Bot routes** are in `tools/routes.py`: `ROUTE_A` (castle), `ROUTE_SHAFT`, `ROUTE_B` (boss room) and `ROUTE_V`. They are frame-timed.
-- **Any change that adds or removes frames before play resumes** (for example, extra frames in a cut) shifts every route. Use `shift()` to re-time them.
-- This happened once: `screen_cut` added 2 frames, and `ROUTE_A` had to move by +2.
+**Bot routes** are in `tools/routes.py`: `ROUTE_A` (castle), `ROUTE_SHAFT`, `ROUTE_B` (boss room) and `ROUTE_V`.
+- They are frame-timed **from the frame play resumes after the warp**. `routes.resume(rom, cp)` measures that frame in the build under test, and `routes.keys(rom, cp, route)` places the warp and the route.
+- **Restarts may take any time.** The compression made them up to 37 frames shorter, which used to break every route.
+- **What still shifts the routes:** a change to the game's own timing once play has resumed, such as enemy clocks or the vines' shared clock. Re-time the routes with `shift()` in that case.
 
 ### Debugging tools
 
@@ -437,11 +458,17 @@ tgrun rom.pce frames out.ppm [from to padhex]...
    - 64 SATB entries;
    - 16 cells per scanline (a 32-wide sprite counts as 2).
    - The patched tgemu emulates the per-line limit. A test that passes with `TGRUN_NOSPRLIMIT=1` but not without it is a crowding problem, not a logic bug.
-8. **tgemu as shipped by HuC** had a one-shot timer and no PSG direct D/A. The copy in `tools/tgemu/` is patched. Do not swap in an upstream build.
+8. **tgemu as shipped by HuC** had a one-shot timer, no PSG direct D/A and no SF2 mapper. The copy in `tools/tgemu/` is patched. Do not swap in an upstream build.
+   - Its SF2 decode is strict: only bank `$00` at offsets `$1FF0-$1FF3` switches pages, as on the card.
+   - `make` rebuilds `tgrun` when the core's sources change.
 9. **Segment-local coordinates vs world coordinates.**
    - Items and markers in shafts have negative world y.
    - Comparisons that only check x (as the morning star's appear check once did) trigger on the wrong floor. Check that the y signs match.
-10. **The debug menu once popped up at random.** SELECT alone was enough to open it, and some pads and emulators send it spuriously. It now needs UP+SELECT held, and the demo build has no menu.
+10. **SF2 pages.** Data in CPU banks `$40-$7F` exists only while its page is selected.
+    - Anything shared between rounds, or read from an interrupt, goes in `$00-$3F`.
+    - The page register is write-only and is not saved anywhere, so code that switches pages must switch back.
+11. **`make` does not notice recipe changes.** Changing an argument in a rule (for example the objects' first bank) does not rebuild its target. Delete the output (`build/objects/objcells.bin`) to force the rebuild.
+12. **The debug menu once popped up at random.** SELECT alone was enough to open it, and some pads and emulators send it spuriously. It now needs UP+SELECT held, and the demo build has no menu.
 
 ---
 
@@ -495,11 +522,15 @@ The order is roughly by the value it adds to the demo for the effort.
 3. **Ceiling spikes** at x 8328 and 8488. Markers `$47` at (8480, 16) and `$45`/`$4D` are unidentified. They could also be the hanging stone column in shaft 1.
    - Capture with a bot that stands under them (see `sim/scripts/spikes.txt`) until they drop.
 4. **The lava hall's vines and the fire's sparks.** The three vines swing together, and their grab box is a guess. Measure them like the chasm vine (`vine.snp`).
-5. **Compression.**
-   - Round 1's stream is 547 KB of an 8 Mbit card. Rounds 2–6 at this rate will not fit even with the SF2 mapper (2.5 MB).
-   - Metatiles (the arcade's 32×32 blocks) plus LZ on the patterns is the obvious first step. The converter already knows the blocks.
+5. **More compression, if needed.**
+   - The stage stream is now 206 KB (dictionaries; §4.7). The 3,645 raw patterns are 57% of it.
+   - A cheap per-pattern code would save about 15%: a bit mask for zero bytes and for rows that repeat the row above.
+   - zlib-class LZ would save about 35%, but would need a RAM window and more CPU time in the frame.
+   - At the current size, two rounds fit in each free page, so this is not urgent.
 6. **Rounds 2–6.**
    - The world decoder, segment layout and converter are generic. The bot needs to reach those rounds to capture their palettes.
+   - Each round needs its own stage outputs, placed in a free page (0, 2 or 3).
+   - Make `sf2_round` and the `^stage_*` bank references per round: a small table of page, banks and line count, indexed by the round.
    - `$10D2A6` is only a candidate health counter. Poke invincibility, or jump straight to a round via the continue table.
 7. **The exact port of the player.**
    - `tools/m68k` and `tools/lockstep.py` reproduce the arcade's player update call for call (9,215/9,215 calls).

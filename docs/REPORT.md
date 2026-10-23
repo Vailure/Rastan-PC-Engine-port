@@ -5,7 +5,8 @@
 Round 1 of Taito's *Rastan* (1987 arcade) runs on a PC Engine / TurboGrafx-16 HuCard. The run covers the title screen, the whole round with its castle and boss, the round-clear screen with its jingle, and GAME OVER. Everything on screen and in the speakers was converted from the arcade program and ROMs by the tools in this repository. Gameplay values were measured by running the arcade program headless.
 
 The demo ROM is `build/rastan.pce`:
-- size: 1,032,192 bytes, which fits an 8 Mbit HuCard;
+- size: a 2.5 MB image for the Street Fighter II mapper card, the PC Engine's largest HuCard;
+- round 1's stage data: compressed 2.5x, from 513 KB to 206 KB;
 - test suite: passes;
 - full-playthrough audit: 0 problems.
 
@@ -35,8 +36,11 @@ The demo ROM is `build/rastan.pce`:
 
 ### Presenting it
 
-- Any accurate PC Engine emulator that takes a `.pce` HuCard image will run it, for example Mednafen, Mesen or Geargrafx.
-- On real hardware, use a flash cart.
+- The image uses the **Street Fighter II mapper**, so it needs an emulator or flash cart that supports that mapper.
+  - Emulators recognise the mapper by the image size, which is why the image is padded to exactly 2.5 MB. MAME accepts only that size.
+  - MAME and Mednafen support the mapper, because they run *Street Fighter II' Champion Edition*. For other emulators, check before relying on them.
+  - Not every flash cart supports it. Check yours before a live demo.
+  - So far the image has been run only in the project's own test emulator, which is patched to decode the mapper like the real card. Try it in your target emulator before presenting.
 - The demo build has **no debug menu**.
 - To show a particular section quickly, use `rastan_debug.pce`. Hold UP+SELECT for about ¾ s and use "Warp to checkpoint".
 
@@ -44,7 +48,7 @@ The demo ROM is `build/rastan.pce`:
 
 ## 2. How it was verified
 
-### 2.1 Test suite (`make test`, about 20 minutes, headless)
+### 2.1 Test suite (`make test`, a few minutes, headless)
 
 Every test drives the real ROM in a patched copy of HuC's `tgemu` emulator (`tools/tgrun`).
 - The tests feed it pad input and read back RAM, screens, the SATB, PSG writes or audio.
@@ -72,21 +76,19 @@ A bot plays every section in god mode, starting from each checkpoint.
 - **The bgcheck build:** every 10th frame is compared pixel for pixel with the converter's preview. That build shows the tile map alone.
 - **Contact sheets** (`build/audit/cpN.png`) are written for review by eye.
 
-The results below are from the run on 2026-10-22, against the committed code.
+The results below are from the run on 2026-10-22 on the compressed SF2 build.
 
 | Section (start) | Distance covered (world x) | Slow frames | Bad poses | Tile-map frames wrong | SATB full¹ | Frames with a sprite lost to the 16-a-line limit¹ |
 |---|---|---|---|---|---|---|
 | cp0: round start | 49 → 1830 | 0 | 0 | 0 / 240 | 0 | 165 |
-| cp1: segment 4 | 2097 → 4708 | 0 | 0 | 0 / 240 | 110 | 270 |
-| cp2: segment 8 (waterfall) | 4145 → 5638 | 0 | 0 | 0 / 240 | 190 | 172 |
-| cp3: segment 12 → castle | 48² → 8662 | 0 | 0 | 0 / 240 | 0 | 232 |
-| cp4: segment 16 (castle) | 48² → 9300 | 0 | 0 | 0 / 360 | 0 | 270 |
-| cp5: lava hall → boss | 48² → 11728 | 0 | 0 | 0 / 380 | 0 | 498 |
+| cp1: segment 4 | 2097 → 4708 | 0 | 0 | 0 / 240 | 113 | 287 |
+| cp2: segment 8 (waterfall) | 4145 → 5638 | 0 | 0 | 0 / 240 | 118 | 161 |
+| cp3: segment 12 → castle | 6193 → 8662 | 0 | 0 | 0 / 240 | 0 | 242 |
+| cp4: segment 16 (castle) | 8253 → 9300 | 0 | 0 | 0 / 357 | 0 | 270 |
+| cp5: lava hall → boss | 9306 → 11728 | 0 | 0 | 0 / 377 | 0 | 499 |
 | **Problems** | | | | | | **0 (both runs)** |
 
 ¹ These are reported, not failed: they are the PC Engine's hardware limits, 64 sprites and 16 sprite cells per scanline. When either runs out, the walkers take turns losing pieces, which shows as flicker, as many PC Engine games do. No single enemy disappears for good.
-
-² The bot's start position before it is warped.
 
 **Deaths:** cp0 and cp2 each show one death. In both, the bot fell off the map, which kills even in god mode. They exercise the restart path.
 
@@ -101,6 +103,7 @@ All of these are fixed, and each now has a check:
 - **The camera clamp silently disabled** by code inserted in front of it.
 - **The debug menu opening at random.** It was opened by stray SELECT bits; it now needs a hold, and the demo has no menu.
 - **Voice samples landing on the wrong PSG channel.** The music's writes moved the channel select; this is fixed with a shadow register and `sei`.
+- **Stage loads got faster with compression,** which put the frame-timed bot routes out of step: Rastan died at the spears and missed the vines. Routes are now timed from the frame play resumes, measured in each build, so restart length no longer matters.
 - **Two bugs in the test emulator itself:** a one-shot timer, and no PSG direct D/A. It also now emulates the per-line sprite limit, so the tests see what hardware would show.
 
 ---
@@ -156,13 +159,17 @@ All of these are fixed, and each now has a check:
 
 | Resource | Use |
 |---|---|
-| **ROM** | 126 of 128 banks. The stage stream is 547 KB of that. About 120 KB is in whole free banks, with more in bank tails. |
+| **ROM** | A 2.5 MB SF2 image. The fixed 512 KB half holds the code and everything shared between rounds, with 136 KB free. Round 1's own data (stage and collision, 224 KB) is in page 1. Pages 0, 2 and 3 (1.5 MB) are empty. |
 | **Code** | About 9,200 lines of PCEAS assembly in 20 modules. Code banks $04 and $05 each have about 3 KB free. |
 | **VRAM** | BG tile pool: 960 slots, peak 932. Rastan is double-buffered. 17 object slot buffers, plus the HUD and the SATB. |
 | **CPU** | No slow frames in any audited section. The voice IRQ costs about 9% of the CPU while a sample plays. |
 | **Sprites** | The HUD takes the first 12 of 64 entries. Rastan, his weapon, props and objects are packed after it each frame. |
 
-**Scaling.** The other five rounds will not fit at this data rate, even with the SF2 mapper's 2.5 MB. Compression comes first: metatiles from the arcade's 32×32 blocks, plus LZ on the patterns. See `HANDOFF.md` §8.
+**Scaling.**
+- **Before:** round 1's stage stream was 513 KB, so six rounds could not have fitted even in 2.5 MB.
+- **Compression:** every BG pattern is now stored once, and the tile map is coded over a dictionary of 4-tile slices of the arcade's blocks. That brings the stream to 206 KB, and the stream decodes faster than the old raw copy.
+- **Room for the rest:** at that size, the other five rounds fit two to a page in the three free pages.
+- See `HANDOFF.md` §4.2 and §8.
 
 ---
 
@@ -197,13 +204,14 @@ The project spans 34 commits (2026-10-20 → 2026-10-22).
    - the castle's own palettes and the lava hall camera;
    - the lava hall's fire;
    - the castle shaft's morning star;
-   - the camera clamp fix.
+   - the camera clamp fix;
+   - stage compression (513 KB → 206 KB) and the move to the Street Fighter II mapper.
 
 The next steps, in order, are in `docs/HANDOFF.md` §8:
 1. the swarm;
 2. soldier colours;
 3. ceiling spikes;
-4. compression;
+4. more compression, if needed;
 5. rounds 2–6;
 6. the exact player port;
 7. parallax.

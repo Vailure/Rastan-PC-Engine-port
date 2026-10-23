@@ -120,10 +120,13 @@ def shot(w, frame):
     return np.array(Image.open(out))[40:150, 32:200].astype(int)
 
 
-sword = shot(1, 170)
+# Over a few frames of the swing: the fire sword's flame cycles (4 steps, 2 frames
+# each), and at its smallest it hides behind the blade on a single frame.
+FRAMES = (166, 168, 170, 172)
+sword = [shot(1, f) for f in FRAMES]
 for w, name in ((2, 'axe'), (3, 'morning star'), (4, 'fire sword')):
-    d = (shot(w, 170) != sword).any(-1).sum()
-    check(f'the {name} is drawn in his swing', d > 20, f'{d} pixels differ from the sword')
+    d = max(int((shot(w, f) != s_).any(-1).sum()) for f, s_ in zip(FRAMES, sword))
+    check(f'the {name} is drawn in his swing', d > 20, f'up to {d} pixels differ from the sword')
 flame = (shot(4, 150) != shot(4, 152)).any(-1).sum()
 check('the fire sword flickers (flame steps every 2 frames)', flame > 0, f'{flame} pixels')
 

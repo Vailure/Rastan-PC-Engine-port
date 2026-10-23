@@ -1,5 +1,13 @@
-"""Input routes through round 1 (tgrun key lists), shared by the tests and tools/audit.py."""
+"""Input routes through round 1 (tgrun key lists), shared by the tests and tools/audit.py.
+
+A route is timed from the frame play resumes after a debug-menu warp (its frame 0 is
+the first game frame after the restart), not from power-on: a restart's length
+depends on how fast the stage streams, and the routes must not change with it.
+keys(rom, cp, route) gives the warp and the route placed for a given build.
+"""
+import subprocess
 I = '40'
+OPEN, RIGHT = '11', '04'
 
 def shift(route, d):
     """The same route d frames later."""
@@ -16,10 +24,12 @@ ROUTE_A = [200, 449, '04', 450, 453, '08', 470, 473, '41', 474, 700, '01', 710, 
            2474, 2639, '04', 2645, 2648, '41', 2649, 2840, '01', 2850, 2853, '44', 2854, 2989, '04',
            2990, 2993, '45', 2994, 3123, '04', 3124, 3127, '44', 3128, 3229, '04', 3230, 3233, '44',
            3234, 3329, '04', 3330, 3333, '44', 3334, 3600, '04']
-# (Measured before warps cut to black for two more frames: it starts that much later.)
-ROUTE_A = shift(ROUTE_A, 2)
-# The same up to the top of shaft 1's lower rope, where he hangs still.
-ROUTE_SHAFT = ROUTE_A[:ROUTE_A.index(2472)]
+# (Measured from power-on on a build whose warp to checkpoint 4 resumed play 2 frames
+# sooner than the one that later ran it at 223: the route, 2 frames later, from 223.)
+ROUTE_A = shift(ROUTE_A, 2 - 223)
+# The same up to the top of shaft 1's lower rope, where he hangs still (from 2249).
+SHAFT_HANG = 2249
+ROUTE_SHAFT = ROUTE_A[:ROUTE_A.index(SHAFT_HANG)]
 
 ROUTE_B = [200, 830, '05'] + sum([[f, f + 3, I] for f in range(220, 830, 60)], []) + [
     831, 1100, '04', 864, 867, I, 914, 917, I, 964, 967, I, 1101, 1103, '08', 1110, 1113, '41', 1114, 1470, '01',
@@ -27,5 +37,37 @@ ROUTE_B = [200, 830, '05'] + sum([[f, f + 3, I] for f in range(220, 830, 60)], [
     1991, 1995, '04', 2010, 2013, '41', 2014, 2280, '01', 2290, 2293, '44', 2294, 2491, '04', 2510, 2513, '41',
     2514, 2760, '01', 2770, 2773, '48', 2774, 3100, '08'] + sum([[f, f + 1, '80'] for f in range(3150, 3800, 25)], [])
 
+ROUTE_B = shift(ROUTE_B, -228)          # (that build resumed at 228 from checkpoint 5)
+
 ROUTE_V = [200, 350, '04', 360, 363, '41', 364, 600, '01', 610, 613, '44', 614, 1300, '04', 730, 733, '44',
            832, 835, '45', 965, 968, '44']
+ROUTE_V = shift(ROUTE_V, -173)          # (and at 173 from checkpoint 1)
+
+
+def warp(cp):
+    """Debug menu: open it, pick checkpoint cp, apply (frame 150)."""
+    if cp == 0:
+        return []
+    return ([40, 90, OPEN] + sum([[100 + 6 * k, 100 + 6 * k, RIGHT] for k in range(cp)], [])
+            + [150, 150, I])
+
+
+_resumed = {}
+
+
+def resume(rom, cp):
+    """The frame play resumes after warp(cp) in this build: the first frame after the
+    warp in which player_update runs (p_frame moves)."""
+    if (rom, cp) not in _resumed:
+        from peek import peek
+        r = peek(rom, 400, warp(cp), {'p_frame': 1})
+        start = 151 if cp else 1
+        _resumed[rom, cp] = next(i for i in range(start, len(r)) if r[i]['p_frame'] != r[i - 1]['p_frame'])
+    return _resumed[rom, cp]
+
+
+def keys(rom, cp, route, extra=()):
+    """warp(cp), then route (and extra keys, timed like it) from the frame play resumes.
+    Returns (keys, that frame)."""
+    base = resume(rom, cp)
+    return warp(cp) + shift(list(route) + list(extra), base), base

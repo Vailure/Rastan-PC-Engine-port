@@ -51,6 +51,9 @@ tmp:		ds	2
 count:		ds	1
 loop_cnt:	ds	2		; Main loop iterations (to detect slow frames).
 mawr_hi:	ds	1		; Scratch for stream_line (tmp belongs to stream_ahead).
+sl_lo:		ds	1		; More stream_line scratch.
+sl_hi:		ds	1
+sl_y:		ds	1
 ln_flags:	ds	1		; Header of line next_col (line_header): 1 row, 2 door.
 ln_idx:		ds	1		; BAT column or row.
 ln_trig:	ds	2		; World x of a column, y of a row.
@@ -76,6 +79,7 @@ core_main:	lda	#GAME_BANK		; (the boot mapping already has it there)
 		stz	<dbg_god
 		stz	<dbg_noenemy
 		stz	<dbg_slow
+		jsr	sf2_round		; (the page the mapper starts with is not known)
 		call	init_screen
 
 		cla				; The 16 BG palettes (outdoors).
@@ -327,9 +331,16 @@ read_input:	lda	joynow
 .clamp:		jmp	camera_clamp
 
 ; ---------------------------------------------------------------------------
+; sf2_round - the round's SF2 page into banks $40-$7F (stage stream, collision).
+
+sf2_round:	stz	$FFF0 + overlay(stage_data)
+		rts
+
+; ---------------------------------------------------------------------------
 ; stream_reset - nothing streamed yet (next_col 0, no rows, no forced lines).
 
-stream_reset:	stz	<next_col
+stream_reset:	jsr	sf2_round
+		stz	<next_col
 		stz	<next_col + 1
 		stz	<stream_min
 		stz	<stream_min + 1
@@ -465,6 +476,14 @@ line_header:	lda	#^stage_data		; Pointer table entry = stage_data + next_col * 3
 
 ; ---------------------------------------------------------------------------
 ; stream_line - upload line next_col (after line_header), then next_col++.
+;
+; The record (tools/pce_stage.py) after its header: u8 n, n uploads of 3 bytes
+; (slot lo, pattern # lo, slot hi | pattern # hi << 3), then the line's 64 BAT
+; words as codes over 16 quads (4 words each): $00-$DF quad #, $E0-$EF the last
+; quad again (1-16 times), $F0-$FF + a byte: quad # 0-4095. Patterns (32 bytes,
+; 256 a bank) and quads (8 bytes, 1024 a bank) are dictionaries in the stage's
+; SF2 page, read through MPR5 (the collision map's window, put back after).
+; A record is under 256 bytes: Y walks it.
 
 stream_line:
 		; The VBLANK IRQ selects VDC_CR and, on exit, restores VDC_AR from the
@@ -473,17 +492,29 @@ stream_line:
 		; sequences run with interrupts held off.
 		php
 		sei
+		tma5
+		pha
+		lda	#32			; ram_tia: tia src, VDC_DL, 32
+		sta	ram_tia + 5
 		lda	[rec_ptr]		; Number of tile uploads.
 		sta	<count
-		jsr	inc_ptr_1
-		lda	<count
+		ldy	#1
+		tax
 		beq	.bat
 
-.upload:	; MAWR = tile# * 16
-		ldy	#1
-		lda	[rec_ptr], y		; tile# hi
+.upload:	lda	[rec_ptr], y		; MAWR = slot * 16
+		sta	<sl_lo
+		iny
+		lda	[rec_ptr], y		; pattern # lo
+		sta	<sl_hi
+		iny
+		lda	[rec_ptr], y		; slot hi | pattern # hi << 3
+		iny
+		sty	<sl_y
+		tax
+		and	#7
 		sta	<mawr_hi
-		lda	[rec_ptr]		; tile# lo
+		lda	<sl_lo
 		asl	a
 		rol	<mawr_hi
 		asl	a
@@ -497,24 +528,30 @@ stream_line:
 		lda	<mawr_hi
 		sta	VDC_DH
 		st0	#VDC_VWR
-
-		ldy	#2			; 32 bytes of pattern.
-.pat:		lda	[rec_ptr], y
-		sta	VDC_DL
-		iny
-		lda	[rec_ptr], y
-		sta	VDC_DH
-		iny
-		cpy	#34
-		bne	.pat
-
-		lda	<rec_ptr + 0		; rec_ptr += 34
+		txa				; Bank: stage_pats + pattern # >> 8.
+		lsr	a
+		lsr	a
+		lsr	a
 		clc
-		adc	#34
-		sta	<rec_ptr + 0
-		bcc	!+
-		inc	<rec_ptr + 1
-!:		dec	<count
+		adc	#^stage_pats
+		tam5
+		lda	<sl_hi			; $A000 + (pattern # & $FF) * 32
+		tax
+		asl	a
+		asl	a
+		asl	a
+		asl	a
+		asl	a
+		sta	ram_tia + 1
+		txa
+		lsr	a
+		lsr	a
+		lsr	a
+		ora	#$A0
+		sta	ram_tia + 2
+		jsr	ram_tia
+		ldy	<sl_y
+		dec	<count
 		bne	.upload
 
 .bat:		lda	<ln_flags
@@ -558,31 +595,76 @@ stream_line:
 		lda	<mawr_hi
 		sta	VDC_DH
 .write:		st0	#VDC_VWR
-		cly
-.batloop:	lda	[rec_ptr], y
-		sta	VDC_DL
+		lda	#8			; ram_tia: one quad, 4 words.
+		sta	ram_tia + 5
+		lda	#16
+		sta	<count
+.quad:		lda	[rec_ptr], y
 		iny
+		cmp	#QUAD_SHORT
+		bcc	.short
+		cmp	#$F0
+		bcs	.long
+		and	#$0F			; The last quad again, 1-16 times.
+		inc	a
+		tax
+.again:		jsr	ram_tia
+		dec	<count
+		dex
+		bne	.again
+		bra	.next
+.long:		and	#$0F			; Quad # hi, then lo.
+		sta	<sl_hi
 		lda	[rec_ptr], y
-		sta	VDC_DH
 		iny
-		cpy	#128			; 64 words.
-		bne	.batloop
+		bra	.map
+.short:		stz	<sl_hi
+.map:		sta	<sl_lo			; Bank: stage_quads + quad # >> 10.
+		lda	<sl_hi
+		lsr	a
+		lsr	a
+		clc
+		adc	#^stage_quads
+		tam5
+		lda	<sl_lo			; $A000 + (quad # & $3FF) * 8
+		asl	a
+		asl	a
+		asl	a
+		sta	ram_tia + 1
+		lda	<sl_hi			; (hi & 3) << 3 | lo >> 5
+		and	#3
+		asl	a
+		asl	a
+		asl	a
+		sta	<mawr_hi
+		lda	<sl_lo
+		lsr	a
+		lsr	a
+		lsr	a
+		lsr	a
+		lsr	a
+		ora	<mawr_hi
+		ora	#$A0
+		sta	ram_tia + 2
+		jsr	ram_tia
+		dec	<count
+.next:		lda	<count
+		bne	.quad
 
+		lda	#128			; (ram_tia back to its usual length)
+		sta	ram_tia + 5
 		st0	#VDC_CR			; Back to increment by 1.
 		lda	<vdc_crl
 		sta	VDC_DL
 		st2	#$00
+		pla
+		tam5
 
 		inc	<next_col + 0
 		bne	!+
 		inc	<next_col + 1
 !:		plp
 		rts
-
-inc_ptr_1:	inc	<rec_ptr + 0
-		bne	!+
-		inc	<rec_ptr + 1
-!:		rts
 
 ; ---------------------------------------------------------------------------
 ; init_screen - 256x224, 64x64 BAT, SATB at $7F00, display off.
@@ -688,47 +770,64 @@ debug_font:	incbin	"font.bin"		; HuC's 8x8 bold font, $20-$5F (build/debug).
 trap_palettes:	incbin	"trappal.bin"		; The floor spears (build/traps).
 trap_cells:	incbin	"traps.bin"
 
-		.bank	$10
+; The ROM uses the Street Fighter II mapper (pceas --sf2): banks $00-$3F are
+; fixed, and banks $40-$7F show one of four 512 KB pages, chosen by a write to
+; $1FF0-$1FF3 in bank 0 ($FFF0-$FFF3 with bank 0 in MPR7). Everything the game
+; needs all the time (code, Rastan, objects, sound, voices, screens) is in the
+; fixed half; a round's own data (its stage stream and dictionaries, its
+; collision map) is in a page: round 1 in page 1 (file banks $80-$BF), page 0
+; is free for the next round. sf2_round maps it.
+
+		.bank	$09
 		.page	3
-stage_data:	incbin	"stage.bin"
+player_data:	incbin	"player.bin"		; ($09-$0E)
 
-		.bank	$55			; (the stage takes $10-$54)
-		.page	3
-player_data:	incbin	"player.bin"
-
-		.bank	$5B
-		.page	5
-collision_data:	incbin	"collision.bin"
-
-		.bank	$5C
+		.bank	$0F
 		.page	3
 		include	"weapon_tab.inc"	; Weapon piece lists per pose (build/player).
 
-		.bank	$5D
+		.bank	$10
 		.page	3
 weapon_cells:	incbin	"weapons.bin"
 
-		include	"objects_data.inc"	; Object cells ($61..) and pose banks.
-
-		.bank	$5E
+		.bank	$11
 		.page	3
 hud_cells:	incbin	"hud.bin"
 
-		.bank	$5F
+		.bank	$12
 		.page	3
 prop_cells:	incbin	"props.bin"
 
-		.bank	$74			; (after the object data)
-		.page	3
-snd_data:	incbin	"sound.bin"		; Music and effects (build/sound).
+		include	"objects_data.inc"	; Object cells and pose banks ($13-$25).
 
-		.bank	$7A			; (the music takes $74-$79)
+		.bank	OBJ_FREE_BANK		; (after the object data)
 		.page	3
-voice_data:	incbin	"voice.bin"		; Jump and death voices (build/voice).
+snd_data:	incbin	"sound.bin"		; Music and effects (build/sound, 6 banks).
 
-		.bank	$7D			; (the voices take $7A-$7C)
+		.bank	OBJ_FREE_BANK + 6
+		.page	3
+voice_data:	incbin	"voice.bin"		; Jump and death voices (build/voice, 3 banks).
+
+		.bank	OBJ_FREE_BANK + 9
 		.page	3
 still_ending:	incbin	"ending.bin"		; The round-clear screen (build/still).
+
+; Round 1, SF2 page 1.
+		.bank	$80
+		.page	3
+stage_data:	incbin	"stage.bin"		; Line table and records (build/stage1).
+
+		.bank	$80 + STAGE_BANKS
+		.page	5
+stage_quads:	incbin	"stage_quads.bin"	; BAT quads, 1024 a bank.
+
+		.bank	$80 + STAGE_BANKS + STAGE_QUAD_BANKS
+		.page	5
+stage_pats:	incbin	"stage_pats.bin"	; BG patterns, 256 a bank.
+
+		.bank	$80 + STAGE_BANKS + STAGE_QUAD_BANKS + STAGE_PAT_BANKS
+		.page	5
+collision_data:	incbin	"collision.bin"
 
 		.bank	$06			; (free: the code banks are 0, 4, 5)
 		.page	3

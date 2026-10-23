@@ -1,7 +1,8 @@
 # Rastan → PC Engine (HuCard)
 
 A port of Taito's *Rastan* (1987 arcade) to the PC Engine / TurboGrafx-16 HuCard.
-The first target is one BG layer at 256 px wide in 8 Mbit, with the engine written in PCEAS assembly.
+The first target is one BG layer at 256 px wide, on a Street Fighter II mapper card (2.5 MB), with the engine
+written in PCEAS assembly.
 
 **Start here:**
 - `docs/REPORT.md` covers the state of the round 1 demo and how it was verified.
@@ -63,8 +64,8 @@ Requirements: Python 3 with numpy and Pillow, gcc and zlib, and a built checkout
 
 ```sh
 make HUC=/path/to/huc          # -> build/rastan.pce (the demo) and build/rastan_debug.pce
-make HUC=/path/to/huc test     # the test scripts, headless (about 20 minutes)
-make HUC=/path/to/huc audit    # a whole playthrough checked frame by frame (about 10 minutes)
+make HUC=/path/to/huc test     # the test scripts, headless (about 2 minutes)
+make HUC=/path/to/huc audit    # a whole playthrough checked frame by frame (about 2 minutes)
 python3 tools/trace_player.py build/rastan_debug.pce 600 60 300 04   # walk right, print Rastan's state
 ```
 
@@ -157,8 +158,18 @@ cd tools && python3 contact.py ../out/play1.snp ../out/play1.png 700 900 1100
   The converter models the BAT offline: a pattern stays resident while a BAT cell that can still be seen
   shows it (the camera rules above say which can), and each line record carries the patterns it needs
   uploaded, plus its 64 BAT words. Peak use is 929 of 960 slots.
-- **Size:** round 1 is 547 KB. Compressing the BAT columns and patterns is a later task,
-  because six rounds at this rate would not fit in 8 Mbit.
+- **Compression:** the stream was 513 KB: 9,149 pattern uploads of 32 bytes (only 3,645 distinct
+  patterns, re-uploaded as they come back into view) and 128 bytes of BAT words per line. Now
+  (206 KB, 2.5x smaller):
+  - every pattern is stored once (`stage_pats.bin`, numbered by first use) and an upload is 3 bytes:
+    the VRAM slot and the pattern number;
+  - a line's 64 BAT words are 16 *quads*, 4-tile slices of the arcade's 32 px blocks; each distinct quad
+    (2,944) is stored once (`stage_quads.bin`, most used first), and a line is a short code stream: one
+    byte for the 224 most used quads, two for the rest, one to repeat the last quad (sky, walls).
+  The converter decodes every line back and checks it before writing. `stream_line` reads the
+  dictionaries through MPR5 and copies with `tia` (patterns 32 bytes, quads 8), which is faster than
+  the old byte loop. Patterns themselves are not compressed: a cheap codec would save about 15% of
+  them for a decoder in the frame.
 
 VRAM layout: BAT `$0000`, streamed tiles `$1000-$4BFF`, props `$4C00`, Rastan's two sprite pattern
 buffers `$5000`/`$5600` (20 body cells + 4 weapon cells each), object buffers `$5C00-$767F`, HUD `$7700`, SATB `$7F00`.
@@ -325,9 +336,21 @@ including randomized input. A HuC6280 back end is the next step there.
 
 ## Street Fighter II mapper
 
-Later rounds will need more than 8 Mbit, so the ROM will use the SF2 mapper (up to 2.5 MB). PCEAS supports it: data in
-file banks `$80+` is selected by writing to `$1FF0-$1FF3`. `tools/tgemu/` is HuC's `tgemu` (GPLv2) with the mapper
-added, used by `tools/tgrun`.
+The ROM is built for the Street Fighter II mapper (`pceas --sf2`), as a 2.5 MB image, the real card's
+size (`tools/pad_sf2.py`; emulators recognise the mapper by size, MAME only by exactly that size).
+Banks `$00-$3F` are fixed; banks `$40-$7F` show one of four 512 KB pages, chosen by a write to
+physical `$001FF0-$001FF3` (`stz $FFF0 + overlay(label)`, with bank 0 in MPR7).
+
+- **Fixed half:** everything the game needs whatever the round: the code (banks 0, 4, 5), palettes,
+  Rastan, weapons, HUD, props, the objects (`$13-$25`), music and effects (`$26-$2B`), voices
+  (`$2C-$2E`), the screens. `$01` and `$30-$3F` are free (136 KB).
+- **Pages:** a round's own data: its stage stream, the pattern and quad dictionaries, its collision
+  map. Round 1 is in page 1 (file banks `$80-$9B`, 224 KB), not page 0, so that the page switch is
+  exercised (and tested) from the first round; `sf2_round` maps it at boot and at every stage start. Page 0 and pages 2-3 are free: at round 1's size, the other five rounds fit two to a
+  page.
+
+`tools/tgemu/` is HuC's `tgemu` (GPLv2) with the mapper added, used by `tools/tgrun`. Like the card,
+it answers the page writes only at offsets `$1FF0-$1FF3` of bank `$00`.
 
 Simulator script commands: `in <frame> <p1> <sys>` (active-low pad bits; up 01, down 02,
 left 04, right 08, b1 10, b2 20), `poke <from> <to> <addr> <b|w|l> <val>`,
@@ -437,7 +460,8 @@ music gets the channel back, and that the voice shows in the audio.
       `$10D2A6` is only a *candidate* health counter.
 - [x] Run-time colors: waterfall cycle and the segment 3 sky change
 - [x] Hazards: waterfall lip / deadly tiles (codes 7, 8), water drain (code 6), death animation
-- [ ] Data compression (metatiles, LZ)
+- [x] Stage compression: pattern and quad dictionaries (513 KB → 206 KB)
+- [x] Street Fighter II mapper: fixed half for the game, a page per round's data
 - [x] Rastan (approximate): walk, crouch, attacks, jumps, ropes, collision, camera
 - [ ] Rastan (exact): translate the arcade player code (interpreter done and verified)
 - [x] Down thrust and up thrust (DOWN+II / UP+II in a jump)
