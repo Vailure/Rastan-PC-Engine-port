@@ -9,7 +9,7 @@
 ; before the checkpoint's segment, then those the camera has reached), so the
 ; VRAM tile cache ends up exactly as if the stage had been played to there.
 ;
-; Debug menu: SELECT opens it (the core's soft reset is RUN held + SELECT).
+; Debug menu: UP + SELECT opens it (the core's soft reset is RUN held + SELECT).
 ; UP/DOWN pick a line, LEFT/RIGHT change a value, I applies, SELECT or II
 ; closes. While it is open the game is frozen, sprites are hidden, and the
 ; menu font sits in the enemy sprite cells. The tile map under the box is
@@ -191,8 +191,11 @@ door_enter:	stz	<p_door
 ; ---------------------------------------------------------------------------
 ; debug_check - once a frame, before the game logic: SELECT opens the menu.
 
-debug_check:	lda	joytrg
+debug_check:	lda	joytrg			; SELECT pressed
 		and	#JOY_SEL
+		beq	!+
+		lda	joynow			; while UP is held.
+		and	#JOY_U
 		beq	!+
 		jmp	debug_menu
 !:		rts

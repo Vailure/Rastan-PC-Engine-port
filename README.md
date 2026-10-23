@@ -76,7 +76,7 @@ The build:
 
 The camera only scrolls forward. A death restarts at the last checkpoint reached, as in the arcade.
 
-**Debug menu:** SELECT opens it and freezes the game (RUN held + SELECT is still the core's soft reset).
+**Debug menu:** UP + SELECT opens it and freezes the game (RUN held + SELECT is still the core's soft reset).
 UP/DOWN pick a line, LEFT/RIGHT change a value, I applies, SELECT or II closes.
 
 | Line | What it does |
@@ -344,7 +344,7 @@ The headless runner is built with `tools/tgrun/build.sh`, after running `make` i
 - [x] Swinging vines (the chasm at x 2750, the lava hall)
 - [ ] Castle ceiling spikes; the lava hall's `$4C`/`$52-$55` objects; score popups; the small castle flyers
 - [x] Restart at the arcade's checkpoints after a death (stream fast-forward, no preload data)
-- [x] Debug menu (SELECT): checkpoint warp, invincible, enemies on/off, health, lives, slow motion, weapon
+- [x] Debug menu (UP + SELECT): checkpoint warp, invincible, enemies on/off, health, lives, slow motion, weapon
 
 ## Licenses
 
