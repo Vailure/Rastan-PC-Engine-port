@@ -26,7 +26,7 @@ import numpy as np
 from PIL import Image
 from arcade_gfx import load_region, decode_packed
 from snap import read_snaps, palette_rgb
-from object_specs import B64_GROUPS, BANK64_SNAP, ROUND_PAL_SNAPS, FIXED_PALS, GROUP_BANK, CELL_SYMBOLS, FILES, GROUPS, POSE_SYMBOLS, GROUP_MAX, PATHS
+from object_specs import B64_GROUPS, BANK64_SNAP, ROUND_PAL_SNAPS, GROUP_ROUNDS, NUM_ROUNDS, FIXED_PALS, GROUP_BANK, CELL_SYMBOLS, FILES, GROUPS, POSE_SYMBOLS, GROUP_MAX, PATHS
 import census_all
 
 ROMDIR = os.environ.get('RASTAN_ROMS', os.path.join(os.path.dirname(__file__), '..', 'roms', 'rastan'))
@@ -81,6 +81,7 @@ def main():
     # Poses and animations per group; arcade palettes (bank-qualified) as used.
     groups = {}
     used_pals = {}          # arcade palette index (with bank) -> 16 RGB colors
+    ap_rounds = {}          # arcade palette index -> the rounds whose objects use it
     for g, seqs in GROUPS.items():
         poses, ids, anims = [], {}, {}
         for name, cap, slot, a, b, *rest in seqs:
@@ -104,6 +105,8 @@ def main():
                 for q in p:
                     if q[4] < FIXED and q[4] not in used_pals:
                         used_pals[q[4]] = palette_rgb(s.pal)[q[4] * 16:q[4] * 16 + 16]
+                    if q[4] < FIXED:
+                        ap_rounds.setdefault(q[4], set()).update(GROUP_ROUNDS.get(g, range(1, NUM_ROUNDS + 1)))
                 k = norm([q[:4] for q in p])
                 if k not in ids:
                     # The same cells in the same order, a few px apart (an object
@@ -167,17 +170,29 @@ def main():
                 v += ((g_ << 6) | (r << 3) | b).to_bytes(2, 'little')
             open(f'{out}/sprpal{ps}.bin', 'wb').write(v)
             used_pals[FIXED + ps] = src[ap * 16:ap * 16 + 16]    # (for the preview)
+    # Slots: an arcade palette shares one with others whose colours agree, or which no
+    # round uses together with it (each round loads its own colours into the slots).
+    slot_aps = {}                                # PCE slot -> [(ap, key, alt)]
     for ap, cols in sorted(used_pals.items()):
         if ap >= FIXED:
             continue
         key = tuple(to9(c) for c in cols)
         alt = (tuple(to9(c) for c in rgb64[(ap + 16) * 16:(ap + 16) * 16 + 16])
                if 48 <= ap < 64 and ap in late else key)
-        if (key, alt) not in pal9:
-            if len(pal9) == len(PAL_SLOTS):
-                raise SystemExit('too many sprite palettes')
-            pal9[key, alt] = PAL_SLOTS[len(pal9)]
-        slot_of[ap] = pal9[key, alt]
+        for ps in PAL_SLOTS:
+            if all((k2, a2) == (key, alt) or not (ap_rounds[ap] & ap_rounds[ap2]) for ap2, k2, a2 in slot_aps.get(ps, [])):
+                break
+        else:
+            raise SystemExit('too many sprite palettes')
+        slot_aps.setdefault(ps, []).append((ap, key, alt))
+        slot_of[ap] = ps
+    # (round 1's set: the colours of the slot's palette that round 1 uses, as captured)
+    pal9 = {}
+    for ps, lst in sorted(slot_aps.items()):
+        ap, key, alt = next((e for e in lst if 1 in ap_rounds[e[0]]), lst[0])
+        pal9[key, alt, ps] = ps
+    print('sprite palette slots (arcade palette: rounds):',
+          {ps: [(hex(e[0]), sorted(ap_rounds[e[0]])) for e in lst] for ps, lst in sorted(slot_aps.items()) if len(lst) > 1})
 
     # Cells: unique image up to flips, per PCE palette slot.
     cells, cell_ids, cell_of = [], {}, {}
@@ -216,7 +231,7 @@ def main():
     cell_banks = (len(blob) + 8191) // 8192
 
     vce, vce64, changed = bytearray(), bytearray(), []
-    for (key, alt), ps in sorted(pal9.items(), key=lambda kv: kv[1]):
+    for (key, alt, _), ps in sorted(pal9.items(), key=lambda kv: kv[1]):
         for r, g_, b in key:
             vce += ((g_ << 6) | (r << 3) | b).to_bytes(2, 'little')
         for r, g_, b in alt:
@@ -235,11 +250,13 @@ def main():
         r48 = palette_rgb(next(s for s in read_snaps(os.path.join(build, c48)) if s.frame == f48).pal)
         r64 = palette_rgb(next(s for s in read_snaps(os.path.join(build, c64)) if s.frame == f64).pal)
         v48, v64 = bytearray(), bytearray()
-        for (key, alt), ps in sorted(pal9.items(), key=lambda kv: kv[1]):
-            aps = sorted(ap for ap, sl in slot_of.items() if sl == ps)
+        for (key, alt, _), ps in sorted(pal9.items(), key=lambda kv: kv[1]):
+            aps = sorted(ap for ap, sl in slot_of.items() if sl == ps and ap < FIXED and rnd in ap_rounds[ap])
+            unused = not aps                     # (a slot this round's objects leave alone)
+            aps = aps or sorted(ap for ap, sl in slot_of.items() if sl == ps and ap < FIXED)
             for vb, src, d in ((v48, r48, 0), (v64, r64, 16)):
                 cols = {tuple(to9(c) for c in src[(ap + d) * 16:(ap + d) * 16 + 16]) for ap in aps}
-                if len(cols) > 1:
+                if len(cols) > 1 and not unused:
                     print(f'round {rnd}: slot {ps} (arcade palettes {aps}) differs between them; first kept')
                 for r, g_, b in tuple(to9(c) for c in src[(aps[0] + d) * 16:(aps[0] + d) * 16 + 16]):
                     vb += ((g_ << 6) | (r << 3) | b).to_bytes(2, 'little')

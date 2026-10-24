@@ -211,9 +211,9 @@ traps_update:
 ; traps_draw - SATB entries (VWR already selected, enemies_draw), en_satb counts.
 traps_draw:
 		R1_ONLY				; (round 1's own: none in other rounds yet)
-		jsr	column_draw		; (src/column.asm)
-		jsr	wall_draw
-		jsr	weights_draw		; (src/weights.asm)
+		jsr	x_column_draw		; (src/column.asm)
+		jsr	x_wall_draw
+		jsr	x_weights_draw		; (src/weights.asm)
 		jsr	traps_active
 		bcc	.r
 		ldx	#NUM_TRAPS - 1

@@ -29,7 +29,7 @@ fire_update:
 		bne	!+
 		stz	<fire_on
 		rts
-!:		jsr	column_cells		; (the castle: the column's cells, once)
+!:		jsr	x_column_cells		; (the castle: the column's cells, once)
 	.if	BG_CHECK | CAMERA_TEST		; (test builds: still, at phase 0, as
 		lda	<fire_on		; the converter's preview shows it)
 		bne	fire_done

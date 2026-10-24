@@ -214,7 +214,7 @@ checkpoint_start:
 		jsr	enemies_reset
 		jsr	props_reset
 		jsr	swarm_reset		; (src/swarm.asm)
-		jsr	column_reset		; (src/column.asm)
+		jsr	x_column_reset		; (src/column.asm)
 		ldx	#0			; The arcade's sprite colour bank: 64 after a
 		lda	new_game		; restart from segment 16 on (checkpoints 4
 		stz	new_game		; and 5: the castle soldiers turn green),

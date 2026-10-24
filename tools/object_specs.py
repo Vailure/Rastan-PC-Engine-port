@@ -27,6 +27,9 @@ FILES = {
     'snake': 'snake.snp',
     'knight': 'boss2.snp',       # sim/scripts/boss2.txt: round 2's boss (slot 17), passive Rastan, its orbs
     'knight_leap': 'boss2_leap.snp',  # sim/scripts/boss2_leap.txt: its float leap
+    'r3_32': 'r3bot_32.snp',     # the bot (tools/make_bot.py) from round 3's checkpoint $32,
+    'r3_34': 'r3bot_34.snp',     # $34
+    'r3_39': 'r3bot_39.snp',     # and $39 (every frame from 380)
     'knight_kill': 'boss2_kill.snp',  # sim/scripts/boss2_kill.txt: its death        # sim/scripts/snake.txt: round 2's snakes (slot 5 crawls, strikes, dies)
 }
 
@@ -143,6 +146,23 @@ GROUPS = {
         ('kn2_death', 'knight_kill', 17, 731, 746, {'index': (13, 99)}),
         ('orb', 'knight', 19, 667, 701),
     ],
+    # Round 3's walkers (arcade type $33, its lane walkers): the horned man (anims 201-204
+    # walking, 8 frames each; three swings, 201/205/206/207; the walkers' burst), the
+    # skeleton (221-224; three swings, 235-238), the harpy (96-98; the throw, 99-104, two
+    # blades leaving at 9 and 32 frames), and the harpy's blades (type $2B, slots 18-19,
+    # anims 170-177 spinning, 1.5 px a frame like the blue throwers' clubs).
+    'r3walk': [
+        ('horn_walk', 'r3_32', 8, 1132, 1162),
+        ('horn_attack', 'r3_32', 8, 441, 501),
+        ('horn_death', 'r3_34', 8, 447, 476),
+        ('skel_walk', 'r3_32', 3, 2443, 2474),
+        ('skel_attack', 'r3_34', 5, 517, 577),
+        ('skel_death', 'r3_39', 8, 2884, 2913),
+        ('harpy_walk', 'r3_32', 4, 2491, 2522),
+        ('harpy_throw', 'r3_32', 4, 1242, 1281),
+        ('harpy_death', 'r3_39', 5, 527, 556),
+        ('blade', 'r3_32', 18, 1251, 1266),
+    ],
     # The hurry-up swarm's small bats (arcade slots 20-28): flapping (cells $268-$26A,
     # all bats on one global clock) and the cell a sword hit leaves ($276). src/swarm.asm
     # draws them itself (CELL_SYMBOLS); these captures only bring in the cells.
@@ -174,6 +194,13 @@ FIXED_PALS = {'knight': {15: (8, 'knight', 700, 79)}}
 BANK64_SNAP = ('castle', 2600)
 B64_GROUPS = ('castle', 'jets', 'vine', 'swarm', 'items', 'boss', 'knight')
 
+# The rounds a group's objects appear in (default: every round). Arcade palettes used only
+# in rounds that never meet can share a PCE sprite palette slot: each round loads its own
+# colours (objpal.bin for round 1, objpal_r<n>.bin).
+GROUP_ROUNDS = {'boss': {1}, 'gargoyle': {1}, 'woman': {1}, 'jets': {1}, 'rocks': {1, 3},
+                'vine': {1, 2}, 'snake': {2, 3}, 'knight': {2}, 'r3walk': {3}}
+NUM_ROUNDS = 3
+
 # Single cells the engine draws by itself: symbol -> (group, arcade cell). objects.inc
 # gets SYMBOL (the cell's number in objcells.bin) and SYMBOL_ATTR (its SATB attribute
 # byte as pce_objects writes it for poses: palette, cell bits 8-9, flips).
@@ -203,4 +230,6 @@ POSE_SYMBOLS = {
     ('castle', 'sword_low', 6): 'POSE_SWORD_LOW',
     ('snake', 'snake_strike', 3): 'POSE_SNAKE_OUT',     # arcade anim 185: the strike's reach
     ('knight', 'kn_swing', 4): 'POSE_KN_OUT',           # arcade anim 223: its sword out (box $93)
+    ('r3walk', 'horn_attack', 3): 'POSE_HORN_OUT',      # arcade anim 207: the swing's reach (6 frames)
+    ('r3walk', 'skel_attack', 3): 'POSE_SKEL_OUT',      # arcade anim 238
 }

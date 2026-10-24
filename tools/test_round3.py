@@ -5,7 +5,9 @@ Round 3 (map segments $2E-$44, src/debug.asm's checkpoints 17-23, its boss room'
   there (sim/scripts/round3.txt with the restart table byte $50768 patched);
 - the tile map there, and as Rastan walks right from the round's start, is the converter's
   (build/stage3/preview.png; bgcheck build: the tile map alone);
-- its walkers are lizardmen and chimeras.
+- its walkers: lizardmen and chimeras, then (from $32) horned men, snakes, harpies (which throw
+  blades) and skeletons;
+- its first weapon item, an axe at (1088, 292), with its bat.
 """
 import os
 import subprocess
@@ -84,7 +86,31 @@ b = resume(god, CP0)
 r = peek(god, b + 900, warp(CP0), {'e_state': 17, 'e_kind': 17})
 kinds = [r[i]['e_kind'][k] for i in range(b + 1, len(r)) for k in range(4)
          if r[i]['e_state'][k] and not r[i - 1]['e_state'][k]]
-check('its walkers are lizardmen and chimeras in turn', kinds[:4] == [0, 5, 0, 5], f'kinds {kinds[:6]}')
+check('its first walkers are two lizardmen, a chimera, a lizardman', kinds[:4] == [0, 0, 5, 0], f'kinds {kinds[:6]}')
+
+# From $32: horned men, snakes, harpies and skeletons in turn; the harpies throw blades.
+EK_HORN, EK_SNAKE, EK_SKEL, EK_HARPY, EK_BLADE = 22, 18, 23, 24, 25
+b = resume(god, 18)
+r = peek(god, b + 900, warp(18), {'e_state': 17, 'e_kind': 17})
+new = [r[i]['e_kind'][k] for i in range(b + 1, len(r)) for k in range(17)
+       if r[i]['e_state'][k] and not r[i - 1]['e_state'][k]]
+walk = [k for k in new if k != EK_BLADE]
+check('from $32 horned men, snakes, harpies and skeletons come in turn',
+      walk[:4] == [EK_HORN, EK_SNAKE, EK_HARPY, EK_SKEL], f'kinds {walk[:6]}')
+check('the harpy throws blades', EK_BLADE in new, f'kinds {new[:10]}')
+
+# The first item: an axe at (1088, 292) with its bat when Rastan reaches 924 (god build, walking
+# and hopping right from the start).
+ITEM, BAT = 4, 5
+b = resume(god, CP0)
+keys = warp(CP0) + [b + 10, b + 760, '04'] + sum([[t, t + 3, '40'] for t in range(b + 30, b + 760, 40)], [])
+r = peek(god, b + 760, keys, {'e_state': 17, 'e_kind': 17, 'e_xl': 17, 'e_xh': 17, 'e_yl': 17, 'e_yh': 17,
+                               'e_alt': 17, 'p_x': 2})
+i = next((i for i in range(1, len(r)) if r[i]['e_state'][ITEM] and not r[i - 1]['e_state'][ITEM]), None)
+pos = i and ((r[i]['e_xl'][ITEM] | r[i]['e_xh'][ITEM] << 8), (r[i]['e_yl'][ITEM] | r[i]['e_yh'][ITEM] << 8))
+check('the first item, an axe, comes at (1088, 292) when Rastan reaches 924, with its bat',
+      i and pos == (1088, 292) and r[i]['e_alt'][ITEM] == 2 and r[i]['e_kind'][BAT] == 4
+      and 924 <= s16(r[i]['p_x']) < 932, f"{pos}, at x {i and s16(r[i]['p_x'])}")
 
 print(f'{len(fails)} failure(s)')
 sys.exit(1 if fails else 0)

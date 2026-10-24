@@ -10,7 +10,7 @@ XCALL		.macro
 x_\1:		lda	#XBANK
 		tam2
 		jsr	\1
-		bra	x_back
+		jmp	x_back
 		.endm
 
 		XCALL	garg_spawn
@@ -26,6 +26,14 @@ x_\1:		lda	#XBANK
 		XCALL	kn_think
 		XCALL	kn2_think
 		XCALL	orb_think
+		XCALL	column_reset
+		XCALL	column_cells
+		XCALL	column_update
+		XCALL	column_draw
+		XCALL	wall_update
+		XCALL	wall_draw
+		XCALL	weights_update
+		XCALL	weights_draw
 
 x_back:		lda	#DEBUG_BANK
 		tam2

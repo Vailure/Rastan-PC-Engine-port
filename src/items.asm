@@ -35,26 +35,36 @@ BP_CLING	=	3
 ; in round 2: the item in arcade slot 17, its guard a dragonfly, type $12, in
 ; slot 16; sim/scripts/item_r2.txt): the axe, the fire sword, the axe, the
 ; morning star. (The castle's, if any, not seen.) The port's bat behaviour,
-; drawn as the dragonfly.
+; drawn as the dragonfly. Round 3's four (the bot from its checkpoints, build/
+; r3bot_*.txt: arcade anims 191 and 194, round 1's axe and morning star in
+; other colours), guarded by bats: the axe, the morning star, the axe, the axe.
 item_x_l:	db	<1004, <2893, <3854, <6829, <8384
 		db	<1848, <3820, <5536, <6216
+		db	<1088, <3241, <7277, <9388
 item_x_h:	db	>1004, >2893, >3854, >6829, >8384
 		db	>1848, >3820, >5536, >6216
+		db	>1088, >3241, >7277, >9388
 item_y_l:	db	<340, <164, <364, <276, <-178
 		db	<200, <228, <52, <405
+		db	<292, <292, <276, <276
 item_y_h:	db	>340, >164, >364, >276, >-178
 		db	>200, >228, >52, >405
+		db	>292, >292, >276, >276
 item_weapon:	db	WPN_AXE, WPN_FIRE, WPN_AXE, WPN_STAR, WPN_STAR
 		db	WPN_AXE, WPN_FIRE, WPN_AXE, WPN_STAR
+		db	WPN_AXE, WPN_STAR, WPN_AXE, WPN_AXE
 item_anim_l:	db	<anim_item_axe, <anim_item_fire, <anim_item_axe, <anim_item_star, <anim_item_star
 		db	<anim_item_axe, <anim_item_fire, <anim_item_axe, <anim_item_star
+		db	<anim_item_axe, <anim_item_star, <anim_item_axe, <anim_item_axe
 item_anim_h:	db	>anim_item_axe, >anim_item_fire, >anim_item_axe, >anim_item_star, >anim_item_star
 		db	>anim_item_axe, >anim_item_fire, >anim_item_axe, >anim_item_star
+		db	>anim_item_axe, >anim_item_star, >anim_item_axe, >anim_item_axe
 item_bit:	db	1, 2, 4, 8, 16
+		db	1, 2, 4, 8
 		db	1, 2, 4, 8
 ; Each round's items: ir_first[round - 1] .. ir_first[round] - 1; and its
 ; guard's animation.
-ir_first:	db	0, 5, 9, 9		; (round 3's: not yet)
+ir_first:	db	0, 5, 9, 13
 ir_bat_l:	db	<anim_bat, <anim_dfly, <anim_bat
 ir_bat_h:	db	>anim_bat, >anim_dfly, >anim_bat
 

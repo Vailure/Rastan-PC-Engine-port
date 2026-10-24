@@ -792,9 +792,11 @@ GAME_BANK	=	$04
 		include	"chimera.asm"
 		include	"boulder.asm"
 		include	"props.asm"
-		include	"column.asm"
-		include	"weights.asm"
 		include	"xbank.asm"		; (calls into XBANK)
+game_end:
+	.if	bank(game_end) != GAME_BANK
+	.fail	bank GAME_BANK is full
+	.endif
 
 ; Checkpoints, the debug menu and more object code: bank DEBUG_BANK, in MPR2
 ; ($4000) all the time, so it is as callable as GAME_BANK.
@@ -815,7 +817,8 @@ debug_end:
 	.fail	bank DEBUG_BANK is full
 	.endif
 
-; The rounds' own object code (the gargoyle, the jets, the bosses, the snake):
+; The rounds' own object code (the gargoyle, the jets, the bosses, the snake,
+; round 1's hanging column, sealing wall and spiked weights):
 ; bank XBANK, mapped into MPR2 in place of DEBUG_BANK while it runs (it calls
 ; only GAME_BANK and the core; src/xbank.asm has the way in).
 XBANK		=	$01
@@ -827,6 +830,8 @@ XBANK		=	$01
 		include	"snake.asm"
 		include	"boss.asm"
 		include	"knight.asm"
+		include	"column.asm"
+		include	"weights.asm"
 xbank_end:
 	.if	bank(xbank_end) != XBANK
 	.fail	bank XBANK is full

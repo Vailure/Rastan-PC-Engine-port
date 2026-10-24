@@ -65,12 +65,17 @@ EK_SNAKE	=	18		; Round 2's snake.
 EK_KNIGHT	=	19		; Round 2's boss: its first 13 pieces (thinks),
 EK_KNIGHT2	=	20		; the rest (follows),
 EK_ORB		=	21		; and its orbs.
+EK_HORN		=	22		; Round 3's walkers: the horned man,
+EK_SKEL		=	23		; the skeleton,
+EK_HARPY	=	24		; the harpy,
+EK_BLADE	=	25		; and the harpy's blades.
 SOLDIER_RANGE	=	60
 
 ITEM_SLOT	=	NUM_EN		; Big slots after the walkers'.
 BAT_SLOT	=	NUM_EN + 1
 
 ATTACK_RANGE	=	52
+HARPY_RANGE	=	152		; (r3bot_32: it throws at 151 px)
 RETREAT_FRAMES	=	48
 
 		.zp
@@ -128,6 +133,7 @@ jet_wait:	ds	3		; Frames before each fire jet may erupt again.
 vines_done:	ds	1		; Vines present (bits, vines.asm).
 vn_end:		ds	1		; (vines_spawn: the round's last + 1)
 it_end:		ds	1		; (item_spawn: the round's last + 1)
+throw_k:	ds	1		; (throw_club: the kind thrown)
 trap_t:		ds	1		; The floor spears' clock (traps.asm).
 trap_on:	ds	1		; The floor spears have appeared (traps.asm).
 vine_t:		ds	1		; The vines' swing clock (vines.asm).
@@ -270,9 +276,9 @@ enemies_update:	lda	<dbg_noenemy		; Debug menu: no walkers (items still come).
 		jsr	traps_update
 		lda	<bg_set			; In the castle: the first room's hanging
 		beq	!+			; column (src/column.asm).
-		jsr	column_update
-		jsr	wall_update		; (and the lava hall's sealing wall)
-		jsr	weights_update		; (and shaft 2's spiked weights)
+		jsr	x_column_update
+		jsr	x_wall_update		; (and the lava hall's sealing wall)
+		jsr	x_weights_update		; (and shaft 2's spiked weights)
 !:		jsr	x_boss_spawn
 .boss:		lda	boss_clear		; The boss is dead: the round is clear soon.
 		beq	!+
@@ -392,56 +398,35 @@ try_spawn:	dec	<spawn_timer
 		stz	e_face, x
 		stz	e_sub, x
 		stz	e_alt, x
-		; Kind (round 1 census, tools/census_all.py): lizardmen only before
-		; world x SPAWN_ONE (1500); then blue throwers and lizardmen take turns;
-		; from x SPAWN_THREE (2400) throwers, chimeras and lizardmen in turn; in
-		; the castle (x 8200) sword and mace soldiers. (Each round's: rs_* below.)
+		; Kind: the zone of the round its x is in (the round's census, tools/
+		; census_all.py) has a cycle of kinds, taken in turn (spawn_kind
+		; steps before use).
 		phx
-		ldx	<cur_round
-		dex
-		lda	<cx
-		cmp	rs_one_l, x
+		ldx	<cur_round		; The last zone starting at or before x.
+		ldy	zn_first, x
+		dey
+!:		lda	<cx
+		cmp	zn_x_l, y
 		lda	<cx + 1
-		sbc	rs_one_h, x
-		cla
-		bcc	.kindp
+		sbc	zn_x_h, y
+		bcs	!+
+		dey
+		bra	!-
+!:		lda	zn_n, y			; Its next kind.
+		sta	<ex
+		lda	zn_ofs, y
+		sta	<ex + 1
 		ldy	<spawn_kind
 		iny
-		lda	<cx			; x >= 8200 (the castle): sword and mace soldiers.
-		cmp	#<8200
-		lda	<cx + 1
-		sbc	#>8200
-		bcc	!+
-		cpy	#2
-		bcc	.castle
-		cly
-.castle:	sty	<spawn_kind
-		lda	spawn_castle, y
-		bra	.kindp
-!:		lda	<cx			; x >= SPAWN_THREE: a cycle of 3 (or 4).
-		cmp	rs_three_l, x
-		lda	<cx + 1
-		sbc	rs_three_h, x
-		bcs	.three
-		cpy	#2
+		cpy	<ex
 		bcc	!+
 		cly
 !:		sty	<spawn_kind
 		tya
 		clc
-		adc	rs_two, x
+		adc	<ex + 1
 		tay
-		lda	spawn_two, y
-		bra	.kindp
-.three:		tya
-		cmp	rs_n3, x
-		bcc	!+
-		cla
-!:		sta	<spawn_kind
-		clc
-		adc	rs_three, x
-		tay
-		lda	spawn_three, y
+		lda	zn_kinds, y
 .kindp:		plx
 .kind:		sta	e_kind, x
 		lda	#$FF
@@ -451,36 +436,60 @@ try_spawn:	dec	<spawn_timer
 		jmp	start_walk
 
 spawn_gaps:	db	49, 81, 65
-; Per round: walkers come one kind at a time (spawn_two: two in turn) from x 0,
-; two in turn from x SPAWN_ONE on, and from x SPAWN_THREE on N3 in turn
-; (spawn_three).
-; Round 1: lizardmen, then lizardmen and throwers, then throwers, chimeras and
-; lizardmen.
-; Round 2 (its census, sim/scripts/round2.txt and the checkpoint runs): from the
-; start lizardmen and snakes take turns; from segment $1D (x 3072) throwers,
-; snakes, chimeras and lizardmen. (The throwers before that, and the golden
-; women, are the map's own; not yet ported.)
-; Round 3 (sim/scripts/round3.txt, the round's start; its census to come):
-; lizardmen and chimeras.
-rs_one_l:	db	<1500, <0, <0
-rs_one_h:	db	>1500, >0, >0
-rs_three_l:	db	<2400, <3072, <$FFFF
-rs_three_h:	db	>2400, >3072, >$FFFF
-rs_n3:		db	3, 4, 0
-rs_two:		db	0, 2, 4			; (offsets into spawn_two)
-rs_three:	db	0, 3, 0			; (and spawn_three)
-spawn_two:	db	EK_LIZARD, EK_BLUE
-		db	EK_SNAKE, EK_LIZARD	; (spawn_kind steps before use: a lizardman first)
-		db	EK_CHIM, EK_LIZARD
-spawn_three:	db	EK_BLUE, EK_CHIM, EK_LIZARD
+; Walker zones (from x on, a cycle of kinds), each round's from zn_first[round - 1]
+; on, in x order, the first at x 0; the castle's (x 8200) sword and mace soldiers
+; in every round.
+; Round 1 (its census): lizardmen; from x 1500 blue throwers and lizardmen in
+; turn; from 2400 throwers, chimeras and lizardmen.
+; Round 2 (sim/scripts/round2.txt and the checkpoint runs): lizardmen and snakes;
+; from segment $1D (x 3072) throwers, snakes, chimeras and lizardmen. (The
+; throwers before that, and the golden women, are the map's own; not yet ported.)
+; Round 3 (the bot from its checkpoints, build/r3bot_*.txt): lizardmen and
+; chimeras; from $32 (x 2384) horned men, snakes, harpies and skeletons; from $34
+; (3472) chimeras, horned men and snakes; from $39 (5680) horned men, harpies,
+; snakes, chimeras, skeletons and lizardmen.
+zn_first:	db	0, 4, 7, 12		; (round n's: [n - 1] .. [n] - 1)
+zn_x_l:		db	<0, <1500, <2400, <8200
+		db	<0, <3072, <8200
+		db	<0, <2384, <3472, <5680, <8200
+zn_x_h:		db	>0, >1500, >2400, >8200
+		db	>0, >3072, >8200
+		db	>0, >2384, >3472, >5680, >8200
+zn_n:		db	1, 2, 3, 2
+		db	2, 4, 2
+		db	3, 4, 3, 6, 2
+zn_ofs:		db	ZK_LIZ, ZK_LIZBLUE, ZK_BCL, ZK_CASTLE
+		db	ZK_SNLIZ, ZK_BSCL, ZK_CASTLE
+		db	ZK_LLC, ZK_HSHS, ZK_CHS, ZK_R3, ZK_CASTLE
+zn_kinds:
+ZK_LIZ		=	* - zn_kinds
+ZK_LIZBLUE	=	* - zn_kinds
+		db	EK_LIZARD, EK_BLUE
+ZK_BCL		=	* - zn_kinds
+		db	EK_BLUE, EK_CHIM, EK_LIZARD
+ZK_CASTLE	=	* - zn_kinds
+		db	EK_SWORD, EK_MACE
+ZK_SNLIZ	=	* - zn_kinds
+		db	EK_SNAKE, EK_LIZARD	; (a lizardman first)
+ZK_BSCL		=	* - zn_kinds
 		db	EK_BLUE, EK_SNAKE, EK_CHIM, EK_LIZARD
-spawn_castle:	db	EK_SWORD, EK_MACE
+ZK_LLC		=	* - zn_kinds
+		db	EK_CHIM, EK_LIZARD, EK_LIZARD
+ZK_HSHS		=	* - zn_kinds
+		db	EK_SKEL, EK_HORN, EK_SNAKE, EK_HARPY
+ZK_CHS		=	* - zn_kinds
+		db	EK_CHIM, EK_HORN, EK_SNAKE
+ZK_R3		=	* - zn_kinds
+		db	EK_HORN, EK_HARPY, EK_SNAKE, EK_CHIM, EK_SKEL, EK_LIZARD
 
 ; ---------------------------------------------------------------------------
 ; enemy_think - X = slot.
 
 enemy_think:	lda	e_kind, x
 		cmp	#EK_CLUB
+		bne	!+
+		jmp	club_think
+!:		cmp	#EK_BLADE		; (the harpy's blades fly as clubs)
 		bne	!+
 		jmp	club_think
 !:		cmp	#EK_ITEM
@@ -614,6 +623,8 @@ enemy_think:	lda	e_kind, x
 		jmp	enemy_step
 
 .attack:	ldy	e_kind, x
+		cpy	#EK_HARPY
+		beq	.harpy
 		cpy	#EK_BLUE
 		bne	.club_swing
 		; Blue: clubs leave the hand 8 and 27 frames into the throw.
@@ -623,8 +634,18 @@ enemy_think:	lda	e_kind, x
 		beq	.throw
 		cmp	#27
 		bne	.wait
-.throw:		jsr	throw_club
+.throw:		lda	#EK_CLUB
+.throwk:	jsr	throw_club
 		bra	.wait
+.harpy:		; The harpy: its blades leave 9 and 32 frames into the throw (r3bot_32).
+		inc	e_timer, x
+		lda	e_timer, x
+		cmp	#9
+		beq	!+
+		cmp	#32
+		bne	.wait
+!:		lda	#EK_BLADE
+		bra	.throwk
 
 .club_swing:	; The weapon is out in the kind's hit pose: the arcade arms its box
 		lda	kind_attack2_h, y	; for the pose's first 3 frames ($042F92) and
@@ -769,63 +790,76 @@ kind_walk_l:	db	<anim_liz_walk, <anim_blue_walk, <anim_club, 0, <anim_bat, <anim
 		db	<anim_boulder, <anim_garg_body, <anim_garg_wings, <anim_woman_walk, <anim_sword_walk
 		db	<anim_mace_walk, <anim_jet_column, <anim_boss_walk, <anim_boss2_walk, <anim_frag_form
 		db	<anim_vine_swing, <anim_snake_crawl, <anim_kn_stand, <anim_kn2_stand, <anim_orb
+		db	<anim_horn_walk, <anim_skel_walk, <anim_harpy_walk, <anim_blade
 kind_walk_h:	db	>anim_liz_walk, >anim_blue_walk, >anim_club, 0, >anim_bat, >anim_chim_walk, >anim_fireball
 		db	>anim_boulder, >anim_garg_body, >anim_garg_wings, >anim_woman_walk, >anim_sword_walk
 		db	>anim_mace_walk, >anim_jet_column, >anim_boss_walk, >anim_boss2_walk, >anim_frag_form
 		db	>anim_vine_swing, >anim_snake_crawl, >anim_kn_stand, >anim_kn2_stand, >anim_orb
+		db	>anim_horn_walk, >anim_skel_walk, >anim_harpy_walk, >anim_blade
 kind_attack_l:	db	<anim_liz_attack, <anim_blue_throw, 0, 0, 0, 0, 0, 0, 0, 0, 0, <anim_sword_attack
-		db	<anim_mace_attack
+		db	<anim_mace_attack, 0, 0, 0, 0, 0, 0, 0, 0, 0, <anim_horn_attack, <anim_skel_attack, <anim_harpy_throw
 kind_attack_h:	db	>anim_liz_attack, >anim_blue_throw, 0, 0, 0, 0, 0, 0, 0, 0, 0, >anim_sword_attack
-		db	>anim_mace_attack
+		db	>anim_mace_attack, 0, 0, 0, 0, 0, 0, 0, 0, 0, >anim_horn_attack, >anim_skel_attack, >anim_harpy_throw
 kind_retreat_l:	db	<anim_liz_walk, <anim_blue_walk2, 0, 0, 0, 0, 0, 0, 0, 0, 0, <anim_sword_walk
-		db	<anim_mace_walk
+		db	<anim_mace_walk, 0, 0, 0, 0, 0, 0, 0, 0, 0, <anim_horn_walk, <anim_skel_walk, <anim_harpy_walk
 kind_retreat_h:	db	>anim_liz_walk, >anim_blue_walk2, 0, 0, 0, 0, 0, 0, 0, 0, 0, >anim_sword_walk
-		db	>anim_mace_walk
+		db	>anim_mace_walk, 0, 0, 0, 0, 0, 0, 0, 0, 0, >anim_horn_walk, >anim_skel_walk, >anim_harpy_walk
 kind_hitpose:	db	POSE_LIZ_CLUB_OUT, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, POSE_SWORD_OUT, POSE_MACE_OUT
+		db	0, 0, 0, 0, 0, 0, 0, 0, 0, POSE_HORN_OUT, POSE_SKEL_OUT, $FF
 kind_hitpose2:	db	POSE_SWORD_LOW, POSE_MACE_LOW		; (kinds 11, 12)
 kind_attack2_l:	db	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, <anim_sword_low, <anim_mace_low, 0, 0, 0, 0, 0
+		db	0, 0, 0, 0, 0, 0, 0, 0
 kind_attack2_h:	db	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, >anim_sword_low, >anim_mace_low, 0, 0, 0, 0, 0
+		db	0, 0, 0, 0, 0, 0, 0, 0
 kind_death_l:	db	<anim_liz_death, <anim_blue_death, 0, 0, 0, <anim_chim_death, 0, 0, <anim_garg_death, <anim_wings_death, <anim_woman_death
 		db	<anim_sword_death, <anim_mace_death, 0, 0, 0, 0, 0, 0, <anim_snake_death, 0, 0, 0
+		db	<anim_horn_death, <anim_skel_death, <anim_harpy_death, 0
 kind_death_h:	db	>anim_liz_death, >anim_blue_death, 0, 0, 0, >anim_chim_death, 0, 0, >anim_garg_death, >anim_wings_death, >anim_woman_death
 		db	>anim_sword_death, >anim_mace_death, 0, 0, 0, 0, 0, 0, >anim_snake_death, 0, 0, 0
+		db	>anim_horn_death, >anim_skel_death, >anim_harpy_death, 0
 kind_range:	db	ATTACK_RANGE, 88, 0, 0, 0, 0, 0, 0, 0, 0, 0, SOLDIER_RANGE, SOLDIER_RANGE, 0, 0, 0, 0, 0, 0, 0, 0, 0
-kind_keep:	db	0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 1, 1, 0	; No off-screen despawn.
+		db	ATTACK_RANGE, ATTACK_RANGE, HARPY_RANGE, 0
+kind_keep:	db	0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 1, 1, 0, 0, 0, 0, 0	; No off-screen despawn.
 ; Arcade: lizardman 300, blue thrower 200, bat 200, chimera 300.
 ; Castle soldiers: the arcade's ($2C,A4): 400 the sword's, 500 the mace's. Snake 200 (snake.txt).
+; Round 3's (not measured): the horned man 300, the skeleton 400, the harpy 300.
 kind_score:	db	$03, $02, 0, 0, $02, $03, 0, 0, $05, $05, $03, $04, $05, 0, 0, 0, 0, 0, $02, 0, 0, 0
+		db	$03, $04, $03, 0
 ; Touching Rastan (the arcade's ($29,A4), player_touch): 1, 2 drain 4, 8 units;
 ; 3 knocks him back, 12 units; 0 nothing (the woman warrior: only her sword).
 ; (The item and its bat, the boss's second half and the vines: their own code.)
-kind_touch:	db	1, 1, 3, 0, 0, 2, 3, 3, 2, 2, 0, 2, 2, 2, 3, 0, 3, 0, 1, 3, 0, 3
+kind_touch:	db	1, 1, 3, 0, 0, 2, 3, 3, 2, 2, 0, 2, 2, 2, 3, 0, 3, 0, 1, 3, 0, 3, 1, 1, 1, 3
 ; Hit points (the arcade's ($3A,A4)): the gargoyle and the soldiers take two of
 ; the sword's hits (one of the stronger blows: weapon_power), the boss ten.
-kind_hp:	db	1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 1, 2, 2, 1, 10, 1, 1, 1, 1, 10, 1, 1
+kind_hp:	db	1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 1, 2, 2, 1, 10, 1, 1, 1, 1, 10, 1, 1, 1, 2, 1, 1
 kind_bank:	db	GRP_SECT1_BANK, GRP_SECT1_BANK, GRP_SECT1_BANK, GRP_ITEMS_BANK, GRP_ITEMS_BANK
 		db	GRP_CHIMERA_BANK, GRP_CHIMERA_BANK, GRP_ROCKS_BANK, GRP_GARGOYLE_BANK, GRP_GARGOYLE_BANK
 		db	GRP_WOMAN_BANK, GRP_CASTLE_BANK, GRP_CASTLE_BANK, GRP_JETS_BANK
 		db	GRP_BOSS_BANK, GRP_BOSS_BANK, GRP_BOSS_BANK, GRP_VINE_BANK, GRP_SNAKE_BANK
 		db	GRP_KNIGHT_BANK, GRP_KNIGHT_BANK, GRP_KNIGHT_BANK
+		db	GRP_R3WALK_BANK, GRP_R3WALK_BANK, GRP_R3WALK_BANK, GRP_R3WALK_BANK
 kind_ptab_l:	db	<grp_sect1_ptab, <grp_sect1_ptab, <grp_sect1_ptab, <grp_items_ptab, <grp_items_ptab
 		db	<grp_chimera_ptab, <grp_chimera_ptab, <grp_rocks_ptab, <grp_gargoyle_ptab, <grp_gargoyle_ptab
 		db	<grp_woman_ptab, <grp_castle_ptab, <grp_castle_ptab, <grp_jets_ptab
 		db	<grp_boss_ptab, <grp_boss_ptab, <grp_boss_ptab, <grp_vine_ptab, <grp_snake_ptab
 		db	<grp_knight_ptab, <grp_knight_ptab, <grp_knight_ptab
+		db	<grp_r3walk_ptab, <grp_r3walk_ptab, <grp_r3walk_ptab, <grp_r3walk_ptab
 kind_ptab_h:	db	>grp_sect1_ptab, >grp_sect1_ptab, >grp_sect1_ptab, >grp_items_ptab, >grp_items_ptab
 		db	>grp_chimera_ptab, >grp_chimera_ptab, >grp_rocks_ptab, >grp_gargoyle_ptab, >grp_gargoyle_ptab
 		db	>grp_woman_ptab, >grp_castle_ptab, >grp_castle_ptab, >grp_jets_ptab
 		db	>grp_boss_ptab, >grp_boss_ptab, >grp_boss_ptab, >grp_vine_ptab, >grp_snake_ptab
 		db	>grp_knight_ptab, >grp_knight_ptab, >grp_knight_ptab
+		db	>grp_r3walk_ptab, >grp_r3walk_ptab, >grp_r3walk_ptab, >grp_r3walk_ptab
 ; Body box: x = anchor + cx +/- half, y = anchor - top .. anchor + bot: the
 ; arcade's ($0446BC: an index per object into the boxes at $044CE0), for all
 ; but the item, its bat and the vines (from their sprites' extent); the jets'
 ; ($37: x +/-16, y from 16 above to 64 below the column's height, 16..52) as
 ; the span it sweeps. The snake's: $95, x -10 .. 10, y -5 .. 14 (its ($3E,A4), 11,
 ; picks it from the table at $044796).
-kind_top:	db	20, 20, 8, 2, 25, 5, 8, 8, 16, 8, 20, 20, 20, 0, BOSS_TOP, 0, 8, 0, 5, KNIGHT_TOP, 0, 8
-kind_bot:	db	16, 16, 8, 30, 7, 14, 8, 8, 24, 18, 16, 16, 16, 116, BOSS_BOT, 0, 8, 0, 14, KNIGHT_BOT, 0, 8
-kind_half:	db	12, 12, 3, 20, 16, 20, 3, 3, 12, 12, 12, 12, 12, 16, BOSS_HALF, 0, 3, 0, 10, KNIGHT_HALF, 0, 3
-kind_cx:	db	0, 0, 0, -8, -2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+kind_top:	db	20, 20, 8, 2, 25, 5, 8, 8, 16, 8, 20, 20, 20, 0, BOSS_TOP, 0, 8, 0, 5, KNIGHT_TOP, 0, 8, 20, 20, 20, 8
+kind_bot:	db	16, 16, 8, 30, 7, 14, 8, 8, 24, 18, 16, 16, 16, 116, BOSS_BOT, 0, 8, 0, 14, KNIGHT_BOT, 0, 8, 16, 16, 16, 8
+kind_half:	db	12, 12, 3, 20, 16, 20, 3, 3, 12, 12, 12, 12, 12, 16, BOSS_HALF, 0, 3, 0, 10, KNIGHT_HALF, 0, 3, 12, 12, 12, 3
+kind_cx:	db	0, 0, 0, -8, -2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 
 ; sword_strike - X = slot: carry set if Rastan's weapon kills it now. A hit
 ; adds his weapon's power (weapon_power) to its damage; at its kind's hit
@@ -862,7 +896,8 @@ reel:		lda	<p_x
 ; throw_club - X = blue thrower: a club leaves its hand toward Rastan.
 CLUB_DX		=	23			; Measured: hand 23 px ahead of the anchor.
 
-throw_club:	ldy	#NUM_OBJ - 1		; Free projectile slot?
+throw_club:	sta	throw_k
+		ldy	#NUM_OBJ - 1		; Free projectile slot?
 !:		lda	e_state, y
 		beq	.slot
 		dey
@@ -894,6 +929,9 @@ throw_club:	ldy	#NUM_OBJ - 1		; Free projectile slot?
 		sta	e_timer, y
 		lda	e_alt, x
 		beq	!+
+		lda	e_kind, x		; (the blue thrower's only)
+		cmp	#EK_BLUE
+		bne	!+
 		lda	#13			; Low: anchor - 13, sinking 7 px.
 		sta	<etmp
 		lda	#7
@@ -905,7 +943,7 @@ throw_club:	ldy	#NUM_OBJ - 1		; Free projectile slot?
 		lda	e_yh, x
 		sbc	#0
 		sta	e_yh, y
-		lda	#EK_CLUB
+		lda	throw_k
 		sta	e_kind, y
 		lda	#$FF
 		sta	e_shown, y
@@ -1086,12 +1124,13 @@ weapon_hit:	lda	<p_x
 ; sword's $3C, 4 .. 52, -3 .. 3; the mace's $B0, 4 .. 60, -3 .. 3, which
 ; reach a crouching Rastan; the others do not swing; row 15 the snake's strike,
 ; $5F, 16 .. 32, -20 .. -12: it ducks under it too; row 16 round 2's boss's
-; sword, $93, 32 .. 48, -28 .. -20: ducked too)
-kind_hx_lo:	db	-8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -8, -8, -8, -8, 4, 20
-kind_hx_w:	db	68, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 72, 80, 72, 80, 40, 40
-kind_hy_lo:	db	-46, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -45, -45, -29, -29, -46, -54
-kind_hy_w:	db	58, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56, 56, 56, 56, 58, 58
-kind_hy_wc:	db	34, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32, 32, 32, 32, 34, 34
+; sword, $93, 32 .. 48, -28 .. -20: ducked too; rows 22, 23 round 3's horned
+; man's and skeleton's swings, given the lizardman's box: theirs not measured)
+kind_hx_lo:	db	-8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -8, -8, -8, -8, 4, 20, 0, 0, 0, 0, 0, -8, -8
+kind_hx_w:	db	68, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 72, 80, 72, 80, 40, 40, 0, 0, 0, 0, 0, 68, 68
+kind_hy_lo:	db	-46, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -45, -45, -29, -29, -46, -54, 0, 0, 0, 0, 0, -46, -46
+kind_hy_w:	db	58, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56, 56, 56, 56, 58, 58, 0, 0, 0, 0, 0, 58, 58
+kind_hy_wc:	db	34, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32, 32, 32, 32, 34, 34, 0, 0, 0, 0, 0, 34, 34
 
 ; face_player - e_face = Rastan is to the right.
 face_player:	lda	<p_x
