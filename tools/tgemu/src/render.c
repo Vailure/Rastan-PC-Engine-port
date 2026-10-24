@@ -392,6 +392,31 @@ void render_bg_16(int line)
 }
 
 
+/* The VDC fetches at most 16 sprite cells (16 px wide; a 32 px sprite is two)
+   for a line, in SAT order, counting every sprite whose rows cover the line,
+   on screen or not: later ones are not shown there. Returns the first SAT index
+   cut off on this line (64: none). TGRUN_NOSPRLIMIT=1 shows them all. */
+#include <stdlib.h>
+static int sprite_cutoff(int line)
+{
+    static int checked, off;
+    uint16 *sat = &objramw[0];
+    int i, units = 0;
+    if (!checked) { checked = 1; off = getenv("TGRUN_NOSPRLIMIT") != NULL; }
+    if (off) return 0x40;
+    for (i = 0; i < 0x40; i += 1)
+    {
+        int y = (swap16(sat[(i << 2) | 0]) & 0x3FF) - 64;
+        int attr = swap16(sat[(i << 2) | 3]);
+        int cgy = (attr >> 12) & 3;
+        int h = (cgy == 0) ? 16 : (cgy == 1) ? 32 : 64;
+        if (line < y || line >= y + h) continue;
+        units += ((attr >> 8) & 1) ? 2 : 1;
+        if (units > 16) return i;
+    }
+    return 0x40;
+}
+
 void render_obj_8(int line)
 {
     t_sprite *p;
@@ -402,9 +427,12 @@ void render_obj_8(int line)
     int nt_line;
     uint8 *dst;
 
+    int cutoff = sprite_cutoff(line);
+
     for(j = (used_sprite_index - 1); j >= 0; j -= 1)
     {
         i = used_sprite_list[j];
+        if (i >= cutoff) continue;
         p = &sprite_list[i];
 
         if( (line >= p->top) && (line < p->bottom))
@@ -452,9 +480,12 @@ void render_obj_16(int line)
     int nt_line;
     uint16 *dst;
 
+    int cutoff = sprite_cutoff(line);
+
     for(j = (used_sprite_index - 1); j >= 0; j -= 1)
     {
         i = used_sprite_list[j];
+        if (i >= cutoff) continue;
         p = &sprite_list[i];
 
         if( (line >= p->top) && (line < p->bottom))
