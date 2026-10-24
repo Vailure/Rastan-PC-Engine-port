@@ -54,9 +54,9 @@ item_bit:	db	1, 2, 4, 8, 16
 		db	1, 2, 4, 8
 ; Each round's items: ir_first[round - 1] .. ir_first[round] - 1; and its
 ; guard's animation.
-ir_first:	db	0, 5, 9
-ir_bat_l:	db	<anim_bat, <anim_dfly
-ir_bat_h:	db	>anim_bat, >anim_dfly
+ir_first:	db	0, 5, 9, 9		; (round 3's: not yet)
+ir_bat_l:	db	<anim_bat, <anim_dfly, <anim_bat
+ir_bat_h:	db	>anim_bat, >anim_dfly, >anim_bat
 
 ; ---------------------------------------------------------------------------
 ; item_spawn - the next item (and its bat) when Rastan comes near it.
@@ -68,6 +68,8 @@ item_spawn:
 		lda	ir_first, x
 		sta	it_end
 		ldy	ir_first - 1, x
+		cpy	it_end			; (none)
+		beq	.r
 .loop:		lda	items_done
 		and	item_bit, y
 		bne	.next

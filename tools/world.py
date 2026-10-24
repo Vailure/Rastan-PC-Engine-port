@@ -78,17 +78,28 @@ if ROUND == 1:
     FREE = {s for s, v in LAYOUT.items() if v[2] == UP} | {0x16}
     CASTLE_SEG, HALL_SEG = 0x10, 0x12
 else:
-    # Round 2 (the forest, then a castle from $27, as round 1's from $10: the arcade's
-    # restart at $27 shows its first room, cp27 in the round 2 captures): every segment
-    # is streamed to the right, the boss room last.
-    LAYOUT = {s: (s - SEG0, 0, H) for s in range(SEG0, SEG_BOSS + 1)}
-    DOOR_TO = None
-    X1 = (SEG_BOSS - SEG0) * 512 + 512 - SCREEN_W
-    BOXES = {s: (0, X1, 0, 512 - SCREEN_H) for s in LAYOUT}
-    BOX_END = BOXES[SEG_BOSS]
+    # Rounds 2 and 3. A segment's mode is in the table at $50F6B, indexed through the one at
+    # $50EE0 (a segment's entry, and entries between two segments' for what lies between:
+    # 4 the castle gate, 6 a door, 7 the round's end). Round 2 (the forest, then a castle
+    # from $27, as round 1's from $10: the arcade's restart at $27 shows its first room)
+    # and round 3 (a cave, its castle from $3E) scroll to the right, then climb shafts
+    # upwards above the last horizontal square (round 2: $2B, $2C; round 3: $41-$43), the
+    # door at the top of the last into the boss room, placed on world row 0 at square $16
+    # as round 1's.
+    SHAFTS = {2: (0x2B, 0x2C), 3: (0x41, 0x42, 0x43)}[ROUND]
+    CASTLE_SEG, HALL_SEG = {2: 0x27, 3: 0x3E}[ROUND], None
+    _sq = SHAFTS[0] - 1 - SEG0                       # the square the shafts rise from
+    LAYOUT = {s: (s - SEG0, 0, H) for s in range(SEG0, SHAFTS[0])}
+    LAYOUT.update({s: (_sq, -1 - k, UP) for k, s in enumerate(SHAFTS)})
+    LAYOUT[SEG_BOSS] = (0x16, 0, H)
+    DOOR_TO = SEG_BOSS
+    BOXES = {s: (0, _sq * 512 + 512 - SCREEN_W, 0, 512 - SCREEN_H) for s in range(SEG0, SHAFTS[0])}
+    BOXES.update({s: (_sq * 512, _sq * 512 + 512 - SCREEN_W, -512 * (k + 1), 512 - SCREEN_H)
+                  for k, s in enumerate(SHAFTS)})
+    BOX_END = (0x16 * 512, 0x16 * 512 + 512 - SCREEN_W, 0, 512 - SCREEN_H)   # the boss room
+    BOXES[SEG_BOSS] = BOX_END
     CAMERA_REST = None
-    FREE = set()
-    CASTLE_SEG, HALL_SEG = SEG0 + 0x10, None
+    FREE = set(SHAFTS) | {SEG_BOSS}
 ORDER = sorted(LAYOUT)
 
 
@@ -204,7 +215,7 @@ def census_to_world(x, y, seg):
     The camera's square is the one before the streamed segment (or the shaft being
     streamed, whose census x stays in the square below it)."""
     if ROUND != 1:
-        return x - SEG0 * 512, y
+        return x - SEG0 * 512, y          # (the horizontal squares'; the shafts': not yet)
     m = x // 512
     if m <= 0x10 or m >= 0x16:
         return x, y

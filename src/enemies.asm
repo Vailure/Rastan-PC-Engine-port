@@ -207,8 +207,8 @@ enemies_load:	jsr	traps_load
 		bne	.pal
 		plp
 		bra	obj_invalidate
-.pals_l:	db	<obj_palettes, <obj_palettes_b64, <obj_palettes_r2, <obj_palettes_r2_b64
-.pals_h:	db	>obj_palettes, >obj_palettes_b64, >obj_palettes_r2, >obj_palettes_r2_b64
+.pals_l:	db	<obj_palettes, <obj_palettes_b64, <obj_palettes_r2, <obj_palettes_r2_b64, <obj_palettes_r3, <obj_palettes_r3_b64
+.pals_h:	db	>obj_palettes, >obj_palettes_b64, >obj_palettes_r2, >obj_palettes_r2_b64, >obj_palettes_r3, >obj_palettes_r3_b64
 		; (fall through: the cells in the buffers must be uploaded again)
 
 ; obj_invalidate - forget what is in the slot buffers (the debug menu borrows them).
@@ -256,6 +256,9 @@ enemies_update:	lda	<dbg_noenemy		; Debug menu: no walkers (items still come).
 		beq	.round1
 		jsr	vines_tick
 		jsr	vines_spawn
+		lda	<cur_round
+		cmp	#2
+		bne	.boss
 		jsr	x_kn_spawn		; Round 2: its boss.
 		bra	.boss
 .round1:	jsr	rock_spawn
@@ -457,15 +460,18 @@ spawn_gaps:	db	49, 81, 65
 ; start lizardmen and snakes take turns; from segment $1D (x 3072) throwers,
 ; snakes, chimeras and lizardmen. (The throwers before that, and the golden
 ; women, are the map's own; not yet ported.)
-rs_one_l:	db	<1500, <0
-rs_one_h:	db	>1500, >0
-rs_three_l:	db	<2400, <3072
-rs_three_h:	db	>2400, >3072
-rs_n3:		db	3, 4
-rs_two:		db	0, 2			; (offsets into spawn_two)
-rs_three:	db	0, 3			; (and spawn_three)
+; Round 3 (sim/scripts/round3.txt, the round's start; its census to come):
+; lizardmen and chimeras.
+rs_one_l:	db	<1500, <0, <0
+rs_one_h:	db	>1500, >0, >0
+rs_three_l:	db	<2400, <3072, <$FFFF
+rs_three_h:	db	>2400, >3072, >$FFFF
+rs_n3:		db	3, 4, 0
+rs_two:		db	0, 2, 4			; (offsets into spawn_two)
+rs_three:	db	0, 3, 0			; (and spawn_three)
 spawn_two:	db	EK_LIZARD, EK_BLUE
 		db	EK_SNAKE, EK_LIZARD	; (spawn_kind steps before use: a lizardman first)
+		db	EK_CHIM, EK_LIZARD
 spawn_three:	db	EK_BLUE, EK_CHIM, EK_LIZARD
 		db	EK_BLUE, EK_SNAKE, EK_CHIM, EK_LIZARD
 spawn_castle:	db	EK_SWORD, EK_MACE

@@ -13,7 +13,7 @@
 ;
 ; ***************************************************************************
 
-NUM_ROUNDS	=	2
+NUM_ROUNDS	=	3
 MAX_REGIONS	=	8		; Camera boxes a round may have.
 
 		.zp
@@ -74,7 +74,8 @@ round_setup:	ldx	<cur_round
 		inc	a
 		sta	<count
 		clx				; (destination: region_free + k * 8)
-.array:		cly
+.array:		phx
+		cly
 .copy:		lda	[tmp], y
 		sta	region_free, x
 		inx
@@ -87,10 +88,9 @@ round_setup:	ldx	<cur_round
 		sta	<tmp
 		bcc	!+
 		inc	<tmp + 1
-!:		txa				; Next destination array.
+!:		pla				; Next destination array.
 		clc
-		adc	#MAX_REGIONS - 1
-		and	#$FF - (MAX_REGIONS - 1)
+		adc	#MAX_REGIONS
 		tax
 		cpx	#9 * MAX_REGIONS
 		bne	.array
@@ -110,20 +110,21 @@ sf2_round:	phx
 		rts
 
 ; The rounds' constants.
-rt_page:	db	(r1_page >> 6) - 1, (r2_page >> 6) - 1	; (the SF2 pages)
-rt_lines_l:	db	<R1_STAGE_LINES, <R2_STAGE_LINES
-rt_lines_h:	db	>R1_STAGE_LINES, >R2_STAGE_LINES
-rt_region_end:	db	R1_STAGE_REGION_END, R2_STAGE_REGION_END
-rt_boss_l:	db	<(R1_STAGE_DOOR_LINE + 1), <(R2_STAGE_DOOR_LINE + 1)
-rt_boss_h:	db	>(R1_STAGE_DOOR_LINE + 1), >(R2_STAGE_DOOR_LINE + 1)
-rt_rest_x0:	dw	R1_CAM_REST_X0, R2_CAM_REST_X0
-rt_rest_x1:	dw	R1_CAM_REST_X1, R2_CAM_REST_X1
-rt_rest_y:	dw	R1_CAM_REST_Y, R2_CAM_REST_Y
-rt_regions:	dw	r1_region_free, r2_region_free
+rt_page:	db	(r1_page >> 6) - 1, (r2_page >> 6) - 1, (r3_page >> 6) - 1	; (the SF2 pages)
+rt_lines_l:	db	<R1_STAGE_LINES, <R2_STAGE_LINES, <R3_STAGE_LINES
+rt_lines_h:	db	>R1_STAGE_LINES, >R2_STAGE_LINES, >R3_STAGE_LINES
+rt_region_end:	db	R1_STAGE_REGION_END, R2_STAGE_REGION_END, R3_STAGE_REGION_END
+rt_boss_l:	db	<(R1_STAGE_DOOR_LINE + 1), <(R2_STAGE_DOOR_LINE + 1), <(R3_STAGE_DOOR_LINE + 1)
+rt_boss_h:	db	>(R1_STAGE_DOOR_LINE + 1), >(R2_STAGE_DOOR_LINE + 1), >(R3_STAGE_DOOR_LINE + 1)
+rt_rest_x0:	dw	R1_CAM_REST_X0, R2_CAM_REST_X0, R3_CAM_REST_X0
+rt_rest_x1:	dw	R1_CAM_REST_X1, R2_CAM_REST_X1, R3_CAM_REST_X1
+rt_rest_y:	dw	R1_CAM_REST_Y, R2_CAM_REST_Y, R3_CAM_REST_Y
+rt_regions:	dw	r1_region_free, r2_region_free, r3_region_free
 
-	.if	(R1_STAGE_REGION_END >= MAX_REGIONS) | (R2_STAGE_REGION_END >= MAX_REGIONS)
+	.if	(R1_STAGE_REGION_END >= MAX_REGIONS) | (R2_STAGE_REGION_END >= MAX_REGIONS) | (R3_STAGE_REGION_END >= MAX_REGIONS)
 	.fail	a round has more camera boxes than MAX_REGIONS
 	.endif
 
 		include	"stage1/stage_regions.inc"
 		include	"stage2/stage_regions.inc"
+		include	"stage3/stage_regions.inc"

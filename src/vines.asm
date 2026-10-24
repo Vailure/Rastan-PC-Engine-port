@@ -36,7 +36,7 @@ vine_bit:	db	1, 2, 4, 8, 16, 32
 ; back: measured only for the chasm's vine, chosen for the hall's.
 vine_phase:	db	0, 0, 90, 0, 0, 0
 ; Each round's vines: vr_first[round - 1] .. vr_first[round] - 1.
-vr_first:	db	0, 4, 6
+vr_first:	db	0, 4, 6, 6		; (round 3: none)
 
 ; Per phase: the swing's half-step (signed), Rastan's x and y from the anchor.
 vine_h:		db	0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14
@@ -64,6 +64,8 @@ vines_spawn:
 		lda	vr_first, x
 		sta	vn_end
 		ldy	vr_first - 1, x
+		cpy	vn_end			; (none)
+		beq	.none
 .loop:		lda	vines_done
 		and	vine_bit, y
 		bne	.next
@@ -108,7 +110,7 @@ vines_spawn:
 .next:		iny
 		cpy	vn_end
 		bne	.loop
-		rts
+.none:		rts
 
 ; vines_tick - the shared swing clock, once a frame (enemies_update).
 vines_tick:	inc	vine_t

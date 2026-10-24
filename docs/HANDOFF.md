@@ -545,9 +545,20 @@ The order is roughly by the value it adds to the demo for the effort.
    - A cheap per-pattern code would save about 15%: a bit mask for zero bytes and for rows that repeat the row above.
    - zlib-class LZ would save about 35%, but would need a RAM window and more CPU time in the frame.
    - At the current size, two rounds fit in each free page, so this is not urgent.
-4. **Rounds 2–6.** Rounds 1 and 2 are in one ROM, the round chosen at run time (`cur_round`):
+4. **Rounds 2–6.** Rounds 1-3 are in one ROM, the round chosen at run time (`cur_round`):
+   - **How a round is laid out.** A segment's streaming mode is in the table at `$50F6B`, indexed
+     through the one at `$50EE0` (`$0503BC`): a segment's own entry (0 scroll right, 1 a shaft
+     upwards), and between two segments' entries one for what lies between (4 the castle gate,
+     6 a door, 7 the round's end). (Read straight from `$50F6C` + segment, as this port did at
+     first, the modes are off by one entry per transition: round 2 looked all horizontal.) Rounds
+     2 and 3 scroll right, then climb shafts above their last horizontal square (round 2: `$2B`,
+     `$2C`; round 3: `$41`-`$43`) to a door into the boss room, which `world.py` puts on world row
+     0 at square `$16` like round 1's. Their castles start at `$27` and `$3E`: x 8192 in all three
+     rounds. The collision map's square table has four rows now (round 3's shafts reach y -1536).
+     Where the doors drop Rastan into rounds 2's and 3's boss rooms is not measured (`door_px` in
+     `debug.asm`: where the arcade starts those rounds in the room).
    - `RASTAN_ROUND=n` makes `world.py` lay out the round's segments (`$17 × (round − 1)` on, the boss
-     room last; round 2 scrolls only to the right, its castle from `$27`, x 8192) and `pce_stage.py`
+     room last) and `pce_stage.py`
      and `pce_coll.py` (the collision, split out of `pce_player.py`) write `build/stageN`, every name
      prefixed `Rn_` (`stage.inc`, `coll.inc`; `rn_region_*` in `stage_regions.inc`), so `main.asm`
      includes every round's.
@@ -561,8 +572,12 @@ The order is roughly by the value it adds to the demo for the effort.
      boxes (`region_*`, up to `MAX_REGIONS`); and puts "ROUND n" in the HUD (`hud_round`: `pce_hud.py`
      makes the digits of rounds 1-6, `HUD_ROUNDS`).
    - **Checkpoints are numbered through the rounds** (`cp_*` in `debug.asm`: round 1's 0-5 and its
-     boss room 6, round 2's 7-15 and its boss room 16; `cp_round`, `rnd_cp0`, `rnd_cplast`,
-     `rnd_castle`). `routes.warp(cp)` presses RIGHT cp times in the test build's menu; past checkpoint
+     boss room 6, round 2's 7-15 and its boss room 16, round 3's 17-23 and its boss room 24;
+     `cp_round`, `rnd_cp0`, `rnd_cplast`, `rnd_castle`). Round 3's are measured: the arcade started
+     in round 3 (`$5FF9F` = `$FD`) with the restart table byte for `$2E` (`$50768`) patched to each
+     restart segment, Rastan's screen position at `$10D0BE`/`$10D0C0`, the camera from the FG
+     scroll and the segment counter (`object_census.py`'s conversion; in a shaft, 512 px left and
+     up). `routes.warp(cp)` presses RIGHT cp times in the test build's menu; past checkpoint
      8 it applies later than frame 150 (`warp_at`).
    - **Round 1's own objects** (props, traps, fire, column, wall, weights, boulders, gargoyle,
      woman, jets, its sky and waterfall colours) run only in round 1: `enemies_update` calls their
@@ -580,8 +595,13 @@ The order is roughly by the value it adds to the demo for the effort.
      420). Round 2 has one BG palette for the forest, the castle and the boss room. Its sprite
      colours differ from round 1's in a few palettes: `pce_objects.py` writes `objpal_r2.bin` and
      `objpal_r2_b64.bin` (`ROUND_PAL_SNAPS` in `object_specs.py`), which round 2's build loads.
-   - Round 2 needs 960 resident tiles at its peak, so it also streams into `$4B00-$4FFF` (slots
-     `$4B0-$4FF`), which round 1's spears, props and fire use; their uploads are off in round 2.
+   - Rounds 2 and 3 need more resident tiles at their peaks (round 3: 909), so they also stream into
+     `$4B00-$4FFF` (slots `$4B0-$4FF`), which round 1's spears, props and fire use; their uploads
+     are off outside round 1 (`R1_ONLY`).
+   - **Data banks overflow silently too:** moving the sprite palettes into bank `$08` once pushed
+     the data after it into Rastan's graphics (`player.bin`, bank `$09`): he drew wrong and the
+     game stalled when he was hit. `main.asm` now fails the build when bank `$08` or `$12` (the
+     sprite palettes, a set per round) overflows.
    - **Snakes** (`src/snake.asm`, `EK_SNAKE`; `sim/scripts/snake.txt`; the arcade's code at `$0473B8`
      and the walkers' at `$0407BE`): spawned on the lanes like the lizardmen, which they take turns
      with (`spawn_two`/`spawn_three` per round in `enemies.asm`). They crawl 7/8 px a frame, strike

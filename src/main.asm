@@ -29,8 +29,10 @@
 
 		include	"stage1/stage.inc"	; R1_STAGE_LINES, ... (build/stage1)
 		include	"stage2/stage.inc"	; R2_... (build/stage2)
+		include	"stage3/stage.inc"
 		include	"stage1/coll.inc"
 		include	"stage2/coll.inc"
+		include	"stage3/coll.inc"
 		include	"sound.inc"		; SND_*, SFX_* (build/sound)
 		include	"voice.inc"		; VOICE_* (build/voice)
 		include	"ending.inc"		; ENDING_*, TITLE_*, GAMEOVER_* (build/still)
@@ -58,7 +60,13 @@ CASTLE_X	=	R1_CASTLE_X
 	.if	(R2_STAGE_LEAD_X != STAGE_LEAD_X) | (R2_STAGE_LEAD_Y != STAGE_LEAD_Y) | (R2_QUAD_SHORT != QUAD_SHORT)
 	.fail	the rounds' stage streams differ in their constants
 	.endif
+	.if	(R3_STAGE_LEAD_X != STAGE_LEAD_X) | (R3_STAGE_LEAD_Y != STAGE_LEAD_Y) | (R3_QUAD_SHORT != QUAD_SHORT)
+	.fail	the rounds' stage streams differ in their constants
+	.endif
 	.if	(R2_COLL_PATTERNS != COLL_PATTERNS) | (R2_CASTLE_X != CASTLE_X)
+	.fail	the rounds' collision maps or castles differ in their constants
+	.endif
+	.if	(R3_COLL_PATTERNS != COLL_PATTERNS) | (R3_CASTLE_X != CASTLE_X)
 	.fail	the rounds' collision maps or castles differ in their constants
 	.endif
 
@@ -831,11 +839,6 @@ xbank_end:
 		.bank	$08
 		.page	3
 sprite_palette:	incbin	"sprpal.bin"
-obj_palettes:	incbin	"objpal.bin"
-obj_palettes_b64: incbin	"objpal_b64.bin"	; (the same, colour bank 64)
-obj_palettes_r2: incbin	"objpal_r2.bin"		; (round 2's sprite colours: build/objects)
-obj_palettes_r2_b64: incbin	"objpal_r2_b64.bin"
-knight_pal:	incbin	"sprpal8.bin"		; Round 2's boss: sprite palette 8 (knight.asm).
 hud_palette:	incbin	"hudpal.bin"
 prop_palette:	incbin	"proppal.bin"
 debug_font:	incbin	"font.bin"		; HuC's 8x8 bold font, $20-$5F (build/debug).
@@ -844,6 +847,10 @@ trap_cells:	incbin	"traps.bin"
 column_data:	incbin	"column.bin"		; The hanging column (build/traps).
 		include	"stage1/dyncolor.inc"	; Round 1's run-time BG colours (dyncolor.asm).
 weights_data:	incbin	"weights.bin"		; Shaft 2's spiked weights (build/traps).
+data8_end:
+	.if	bank(data8_end) != $08
+	.fail	bank $08 is full
+	.endif
 
 ; The ROM uses the Street Fighter II mapper (pceas --sf2): banks $00-$3F are
 ; fixed, and banks $40-$7F show one of four 512 KB pages, chosen by a write to
@@ -872,6 +879,18 @@ hud_cells:	incbin	"hud.bin"
 		.bank	$12
 		.page	3
 prop_cells:	incbin	"props.bin"
+; The objects' sprite palettes, a set per round (enemies_load; build/objects).
+obj_palettes:	incbin	"objpal.bin"
+obj_palettes_b64: incbin	"objpal_b64.bin"	; (the same, colour bank 64)
+obj_palettes_r2: incbin	"objpal_r2.bin"		; (round 2's sprite colours)
+obj_palettes_r2_b64: incbin	"objpal_r2_b64.bin"
+obj_palettes_r3: incbin	"objpal_r3.bin"		; (round 3's)
+obj_palettes_r3_b64: incbin	"objpal_r3_b64.bin"
+knight_pal:	incbin	"sprpal8.bin"		; Round 2's boss: sprite palette 8 (knight.asm).
+data12_end:
+	.if	bank(data12_end) != $12
+	.fail	bank $12 is full
+	.endif
 
 		include	"objects_data.inc"	; Object cells and pose banks ($13-$25).
 
@@ -888,7 +907,8 @@ voice_data:	incbin	"voice.bin"		; Jump and death voices (build/voice, 3 banks).
 still_ending:	incbin	"ending.bin"		; The round-clear screen (build/still).
 
 ; The rounds' own data: round n in SF2 page n (file banks $40 * (n + 1) on;
-; page 0 is free), at the same banks of each page (STAGE_BANK0 ...).
+; page 0 is free; rounds 4-6 will need two to a page), at the same banks of
+; each page (STAGE_BANK0 ...).
 r1_page		=	$80
 		.bank	r1_page
 		.page	3
@@ -925,13 +945,31 @@ r2_stage_data:	incbin	"stage2/stage.bin"
 		incbin	"stage2/palette.bin"
 		incbin	"stage2/palette_castle.bin"
 
-	.if	(R1_STAGE_BANKS > QUAD_BANK0 - STAGE_BANK0) | (R2_STAGE_BANKS > QUAD_BANK0 - STAGE_BANK0)
+r3_page		=	$100
+		.bank	r3_page
+		.page	3
+r3_stage_data:	incbin	"stage3/stage.bin"
+		.bank	r3_page + QUAD_BANK0 - $40
+		.page	5
+		incbin	"stage3/stage_quads.bin"
+		.bank	r3_page + PAT_BANK0 - $40
+		.page	5
+		incbin	"stage3/stage_pats.bin"
+		.bank	r3_page + COLL_BANK - $40
+		.page	5
+		incbin	"stage3/collision.bin"
+		.bank	r3_page + PAL_BANK - $40
+		.page	3
+		incbin	"stage3/palette.bin"
+		incbin	"stage3/palette_castle.bin"
+
+	.if	(R1_STAGE_BANKS > QUAD_BANK0 - STAGE_BANK0) | (R2_STAGE_BANKS > QUAD_BANK0 - STAGE_BANK0) | (R3_STAGE_BANKS > QUAD_BANK0 - STAGE_BANK0)
 	.fail	a round's line records overrun their banks
 	.endif
-	.if	(R1_STAGE_QUAD_BANKS > PAT_BANK0 - QUAD_BANK0) | (R2_STAGE_QUAD_BANKS > PAT_BANK0 - QUAD_BANK0)
+	.if	(R1_STAGE_QUAD_BANKS > PAT_BANK0 - QUAD_BANK0) | (R2_STAGE_QUAD_BANKS > PAT_BANK0 - QUAD_BANK0) | (R3_STAGE_QUAD_BANKS > PAT_BANK0 - QUAD_BANK0)
 	.fail	a round's quads overrun their banks
 	.endif
-	.if	(R1_STAGE_PAT_BANKS > COLL_BANK - PAT_BANK0) | (R2_STAGE_PAT_BANKS > COLL_BANK - PAT_BANK0)
+	.if	(R1_STAGE_PAT_BANKS > COLL_BANK - PAT_BANK0) | (R2_STAGE_PAT_BANKS > COLL_BANK - PAT_BANK0) | (R3_STAGE_PAT_BANKS > COLL_BANK - PAT_BANK0)
 	.fail	a round's patterns overrun their banks
 	.endif
 

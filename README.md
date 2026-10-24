@@ -70,18 +70,23 @@ make HUC=/path/to/huc audit    # a whole playthrough checked frame by frame (abo
 python3 tools/trace_player.py build/testdbg.pce 600 60 300 04   # walk right, print Rastan's state
 ```
 
-**`rastan.pce`:** rounds 1 and 2 in one ROM. The arcade's title screen, its "PUSH RUN BUTTON" row
+**`rastan.pce`:** rounds 1, 2 and 3 in one ROM. The arcade's title screen, its "PUSH RUN BUTTON" row
 two choices, START GAME and DEBUG MENU; round 1, the arcade's round-clear screen and jingle after
-its boss, then round 2 with the score and lives kept; after round 2's boss, the title. GAME OVER
+its boss, then round 2 with the score and lives kept, then round 3 (no boss yet). GAME OVER
 when the last life goes, and back to the title. There is no debug menu in play.
 
-Round 2 (in progress): the forest, the castle from x 8192 and the boss room (map segments
-`$17`-`$2D`, all scrolled to the right), with their collision and the arcade's nine restart
-checkpoints. Its walkers: lizardmen and round 2's snakes, then throwers and chimeras, and the
+Round 2 (in progress): the forest, the castle from x 8192, two shafts upwards and the door at
+their top into the boss room (map segments `$17`-`$2D`), with their collision and the arcade's
+nine restart checkpoints. Its walkers: lizardmen and round 2's snakes, then throwers and chimeras, and the
 castle's soldiers; its two swinging vines; its own colours. Snakes are low: as in the arcade, a
 standing swing passes over them; crouch and swing (DOWN + II). Its weapon items, guarded by
 dragonflies. The boss, a caped knight with falling orbs. Still to come: its demons, piranhas,
 golden women and tree-dropping throwers, the castle's traps and its music.
+
+Round 3 (started): the cave, the castle from x 8192 (`$3E`), three shafts upwards (`$41`-`$43`)
+and the door at their top into the boss room (`$44`), with their collision, colours and the
+arcade's seven restart checkpoints; lizardmen and chimeras. Still to come: its own enemies and
+map objects, its items, its boss and its music.
 
 The tests run on test builds the Makefile also makes: `testdbg.pce` (straight into the game, with the
 debug menu in play for their checkpoint warps), `god.pce`, `noenemy.pce`, `camtest.pce`, `bgcheck.pce`.
@@ -113,8 +118,8 @@ GAME, or RUN, starts the game; SELECT or II goes back to the title.
 
 | Line | What it does |
 |---|---|
-| Round | 1 or 2 (the checkpoint goes to the round's first) |
-| Checkpoint | One of the round's restart checkpoints (the arcade's: round 1 at segments 0, 4, 8, 12, 16, 19; round 2 at `$17`, `$19`, `$1D`, `$20`, `$22`, `$24`, `$27`, `$2A`, `$2D`), or BOSS: the boss room |
+| Round | 1-3 (the checkpoint goes to the round's first) |
+| Checkpoint | One of the round's restart checkpoints (the arcade's: round 1 at segments 0, 4, 8, 12, 16, 19; round 2 at `$17`, `$19`, `$1D`, `$20`, `$22`, `$24`, `$27`, `$2A`, `$2D`; round 3 at `$2E`, `$32`, `$34`, `$39`, `$3E`, `$41`, `$44`), or BOSS: the boss room |
 | Invincible | Enemies, water and deadly tiles do no harm (falling off the map still kills) |
 | Enemies | Walkers on/off (items and their bats still come) |
 | Lives | 1-9 |
@@ -123,8 +128,8 @@ GAME, or RUN, starts the game; SELECT or II goes back to the title.
 | Start game | Start it |
 
 (The test build `testdbg.pce` keeps the menu in play, opened by UP + SELECT held, for the tests'
-warps: there the warp runs through every round's checkpoints, 0-16 (round 1: 0-5 and its boss room 6;
-round 2: 7-15 and its boss room 16), shown as round-checkpoint; it also has Refill health and Resume,
+warps: there the warp runs through every round's checkpoints, 0-24 (round 1: 0-5 and its boss room 6;
+round 2: 7-15 and its boss room 16; round 3: 17-23 and its boss room 24), shown as round-checkpoint; it also has Refill health and Resume,
 and shows Rastan's position.)
 
 ## Simulator quick start
@@ -450,8 +455,9 @@ physical `$001FF0-$001FF3` (`stz $FFF0 + overlay(label)`, with bank 0 in MPR7).
   (`$2C-$2E`), the screens. `$30-$3F` are free (128 KB).
 - **Pages:** a round's own data: its stage stream, the pattern and quad dictionaries, its collision
   map and BG palettes, at the same banks of every page. Round n is in page n: round 1 in page 1 (file
-  banks `$80-$AF`), round 2 in page 2 (`$C0-$EF`). `sf2_round` maps the round's page at boot and at every
-  stage start (`src/rounds.asm`). Pages 0 and 3 are free.
+  banks `$80-$AF`), round 2 in page 2 (`$C0-$EF`), round 3 in page 3 (`$100-$12F`). `sf2_round` maps
+  the round's page at boot and at every stage start (`src/rounds.asm`). Page 0 is free; rounds 4-6
+  will need two rounds to a page (a round is 137-209 KB).
 
 `tools/tgemu/` is HuC's `tgemu` (GPLv2) with the mapper added, used by `tools/tgrun`. Like the card,
 it answers the page writes only at offsets `$1FF0-$1FF3` of bank `$00`.
@@ -596,7 +602,8 @@ music gets the channel back, and that the voice shows in the audio.
 - [x] The first room's hanging column (marker `$47`) and the lava hall's sealing wall (marker `$4D`)
 - [x] The sprite colour bank: gold and blue castle soldiers, green after a death's restart at checkpoint 4 or 5
 - [x] Shaft 2's three spiked weights (marker `$45`, `src/weights.asm`)
-- [x] Rounds 1 and 2 in one ROM (a page each), the round chosen at run time; the round clear goes on to the next
+- [x] Rounds 1-3 in one ROM (a page each), the round chosen at run time; the round clear goes on to the next
+- [ ] Round 3: stage, collision, colours, checkpoints and its walkers done; its enemies, items and boss to do
 - [x] Title choices (START GAME / DEBUG MENU) and the debug menu as a new-game screen: round, checkpoint, ...
 - [ ] Round 2: stage, collision, colours, checkpoints, snakes, vines, items and the
       boss done; its other enemies and map objects and music to do

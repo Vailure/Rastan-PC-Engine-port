@@ -13,7 +13,7 @@ def main():
     out = sys.argv[2]
     os.makedirs(out, exist_ok=True)
     # ---- collision per world square:
-    #   $000  3 x 24 bytes: square id at (square x, square y + 2), $FF none
+    #   $000  4 x 24 bytes: square id at (square x, square y + 3), $FF none
     #   $100  256 bytes per square id: 4x4 pattern index per block, column-major
     #   COLL_PATTERNS: 16-byte 4x4 patterns
     # Engine byte: the collision code's low nibble (1 solid, 2 rope, 3/4/7 floors,
@@ -25,8 +25,8 @@ def main():
     pats = {}
     for sid, seg in enumerate(world.ORDER):
         sx, sy, _ = world.LAYOUT[seg]
-        assert 0 <= sx < 24 and -2 <= sy <= 0
-        table[(sy + 2) * 24 + sx] = sid
+        assert 0 <= sx < 24 and -3 <= sy <= 0
+        table[(sy + 3) * 24 + sx] = sid
         coll = world.square_tiles(rom, seg)[2]
         for bc in range(16):
             for br in range(16):

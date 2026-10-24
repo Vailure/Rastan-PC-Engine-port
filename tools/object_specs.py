@@ -164,7 +164,8 @@ GROUPS = {
 GROUP_BANK = {'castle': 48, 'boss': 48, 'knight': 48}
 # Rounds after the first: snapshots (file in the build directory, frame) with the round's
 # sprite colours in bank 48 and in bank 64 (pce_objects writes objpal_r<n>[_b64].bin).
-ROUND_PAL_SNAPS = {2: (('round2.snp', 420), ('round2_castle.snp', 420))}
+ROUND_PAL_SNAPS = {2: (('round2.snp', 420), ('round2_castle.snp', 420)),
+                   3: (('round3.snp', 420), ('round3_castle.snp', 420))}
 # Groups drawn with a PCE sprite palette of their own, whose colours the engine loads itself:
 # group -> {arcade colour: (PCE palette, capture, frame, arcade palette)}. Round 2's knight
 # (colour 15) in sprite palette 8 (round 1's props', unused in round 2), with the colours the

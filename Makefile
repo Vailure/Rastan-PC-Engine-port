@@ -53,6 +53,18 @@ $(STAGE2)/stage.bin: tools/pce_stage.py tools/pce_coll.py tools/world.py tools/f
 	cd tools && RASTAN_ROUND=2 python3 pce_stage.py ../sim/maincpu.bin ../$(BUILD)/round2.snp 420 0x17 0x2d ../$(STAGE2) - ../$(BUILD)/round2_castle.snp:420 ../$(BUILD)/round2_boss.snp:420
 	cd tools && RASTAN_ROUND=2 python3 pce_coll.py ../sim/maincpu.bin ../$(STAGE2)
 
+# Round 3 (a cave, then a castle from $3E; three shafts up, $41-$43, the boss room $44 through
+# a door): the arcade started at its first segment, its castle and its boss room (sim/scripts/
+# round3*.txt: $5FF9F = $FD, $DD, $F5), its palette at frame 420 of each.
+STAGE3     := $(BUILD)/stage3
+$(BUILD)/round3.snp $(BUILD)/round3_castle.snp $(BUILD)/round3_boss.snp: $(BUILD)/%.snp: sim/sim sim/maincpu.bin sim/scripts/%.txt
+	@mkdir -p $(BUILD)
+	sim/sim sim/maincpu.bin sim/scripts/$*.txt $@ 20 300
+
+$(STAGE3)/stage.bin: tools/pce_stage.py tools/pce_coll.py tools/world.py tools/fgmap.py tools/bgmap.py sim/maincpu.bin $(BUILD)/round3.snp $(BUILD)/round3_castle.snp $(BUILD)/round3_boss.snp
+	cd tools && RASTAN_ROUND=3 python3 pce_stage.py ../sim/maincpu.bin ../$(BUILD)/round3.snp 420 0x2e 0x44 ../$(STAGE3) - ../$(BUILD)/round3_castle.snp:420 ../$(BUILD)/round3_boss.snp:420
+	cd tools && RASTAN_ROUND=3 python3 pce_coll.py ../sim/maincpu.bin ../$(STAGE3)
+
 # The sky darkens toward dusk in eight steps along the outdoor stage. The same bot from
 # checkpoints 1 and 3 (the arcade's restart table byte: segments 4 and 12) sees the
 # later steps (the round-start bot dies before them).
@@ -165,7 +177,7 @@ $(BUILD)/item_%.snp: sim/sim sim/maincpu.bin sim/scripts/item_%.txt
 # Object (enemy, projectile, item) poses: groups and captures in tools/object_specs.py.
 # Cells start at bank $60; each group's poses and anims get the next banks.
 OBJECTS    := $(BUILD)/objects
-$(OBJECTS)/objcells.bin: tools/pce_objects.py tools/object_specs.py tools/census_all.py $(BUILD)/lizard.snp $(BUILD)/blue.snp $(BUILD)/item.snp $(BUILD)/item_fire.snp $(BUILD)/item_star.snp $(BUILD)/item_r2.snp $(BUILD)/chimera.snp $(BUILD)/gargoyle.snp $(BUILD)/gargkill.snp $(BUILD)/woman.snp $(BUILD)/castle.snp $(BUILD)/boss.snp $(BUILD)/vine.snp $(BUILD)/hall.snp $(BUILD)/swarm.snp $(BUILD)/snake.snp $(BUILD)/boss2.snp $(BUILD)/boss2_leap.snp $(BUILD)/boss2_kill.snp $(BUILD)/round2.snp $(BUILD)/round2_castle.snp
+$(OBJECTS)/objcells.bin: tools/pce_objects.py tools/object_specs.py tools/census_all.py $(BUILD)/lizard.snp $(BUILD)/blue.snp $(BUILD)/item.snp $(BUILD)/item_fire.snp $(BUILD)/item_star.snp $(BUILD)/item_r2.snp $(BUILD)/chimera.snp $(BUILD)/gargoyle.snp $(BUILD)/gargkill.snp $(BUILD)/woman.snp $(BUILD)/castle.snp $(BUILD)/boss.snp $(BUILD)/vine.snp $(BUILD)/hall.snp $(BUILD)/swarm.snp $(BUILD)/snake.snp $(BUILD)/boss2.snp $(BUILD)/boss2_leap.snp $(BUILD)/boss2_kill.snp $(BUILD)/round2.snp $(BUILD)/round2_castle.snp $(BUILD)/round3.snp $(BUILD)/round3_castle.snp
 	cd tools && python3 pce_objects.py ../$(BUILD) ../$(OBJECTS) 0x13
 
 # HUD cells (lives, icon, health bar, ROUND) from the arcade's HUD sprites.
@@ -247,7 +259,7 @@ $(BUILD)/debug/font.bin: $(HUC)/examples/asm/elmer/font/font8x8-ascii-bold-short
 # emulators recognise the mapper (MAME only accepts exactly that size).
 SF2PAD     := python3 tools/pad_sf2.py
 
-GAME_DEPS  := $(wildcard src/*.asm) $(BUILD)/debug/font.bin $(STAGE)/stage.bin $(STAGE2)/stage.bin $(PLAYER)/player.bin $(OBJECTS)/objcells.bin $(BUILD)/hud/hud.bin $(BUILD)/props/props.bin $(BUILD)/traps/traps.bin $(BUILD)/sound/sound.bin $(BUILD)/voice/voice.bin $(BUILD)/still/ending.bin $(BUILD)/still/title.bin $(BUILD)/still/gameover.bin
+GAME_DEPS  := $(wildcard src/*.asm) $(BUILD)/debug/font.bin $(STAGE)/stage.bin $(STAGE2)/stage.bin $(STAGE3)/stage.bin $(PLAYER)/player.bin $(OBJECTS)/objcells.bin $(BUILD)/hud/hud.bin $(BUILD)/props/props.bin $(BUILD)/traps/traps.bin $(BUILD)/sound/sound.bin $(BUILD)/voice/voice.bin $(BUILD)/still/ending.bin $(BUILD)/still/title.bin $(BUILD)/still/gameover.bin
 
 $(BUILD)/rastan.pce: $(GAME_DEPS)
 	@mkdir -p $(BUILD)/opt
@@ -294,7 +306,7 @@ $(BUILD)/bgcheck.pce: $(GAME_DEPS)
 	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_bg):$$PCE_INCLUDE $(PCEAS) --newproc --sf2 --strip -l 0 --raw ../src/main.asm -o bgcheck.pce
 	$(SF2PAD) $(BUILD)/bgcheck.pce
 
-test: $(BUILD)/camtest.pce $(BUILD)/noenemy.pce $(BUILD)/rastan.pce $(BUILD)/testdbg.pce $(BUILD)/god.pce tools/tgrun/tgrun
+test: $(BUILD)/camtest.pce $(BUILD)/noenemy.pce $(BUILD)/rastan.pce $(BUILD)/testdbg.pce $(BUILD)/god.pce $(BUILD)/bgcheck.pce tools/tgrun/tgrun
 	python3 tools/test_scroll.py $(BUILD)/camtest.pce $(STAGE)/preview.png $(BUILD)/test $$(seq 62 37 2950)
 	PAD=46 python3 tools/test_scroll.py $(BUILD)/camtest.pce $(STAGE)/preview.png $(BUILD)/test_down 80 120 160 300
 	KEYS=61:2175:44,2176:2540:01,2541:2930:44,2931:3300:01 python3 tools/test_scroll.py $(BUILD)/camtest.pce $(STAGE)/preview.png $(BUILD)/test_castle $$(seq 2150 30 3300)
@@ -308,6 +320,7 @@ test: $(BUILD)/camtest.pce $(BUILD)/noenemy.pce $(BUILD)/rastan.pce $(BUILD)/tes
 	python3 tools/test_sound.py $(BUILD)/testdbg.pce $(BUILD)/god.pce $(BUILD)
 	python3 tools/test_demo.py $(BUILD)/rastan.pce $(BUILD)/still
 	python3 tools/test_round2.py $(BUILD)/testdbg.pce $(BUILD)/god.pce
+	python3 tools/test_round3.py $(BUILD)/testdbg.pce $(BUILD)/bgcheck.pce $(BUILD)/god.pce $(STAGE3)
 
 # A whole playthrough, checkpoint by checkpoint (about 2 minutes): object
 # poses, slowdown, SATB use, and the tile map against the converter's preview.

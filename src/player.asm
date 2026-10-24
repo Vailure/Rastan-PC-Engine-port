@@ -1274,7 +1274,7 @@ is_floor:	and	#$0F
 ; 0 above the top or below the bottom row of squares and above row 0
 ; (open sky), 1 elsewhere (walls). 1 inside a solid prop, and on a passage
 ; ($80) that a shaft has sealed: at or below row_top + SEAL_DEPTH.
-; Data (MPR5 $A000, tools/pce_player.py): square ids at (x >> 9, (y >> 9) + 2),
+; Data (MPR5 $A000, tools/pce_coll.py): square ids at (x >> 9, (y >> 9) + 3),
 ; 256 bytes per square (block columns of 16), 16-byte 4x4 patterns.
 SEAL_DEPTH	=	480
 coll_at:	phx				; (X and Y kept)
@@ -1289,12 +1289,12 @@ coll_world:	lda	<prop_solid		; A solid prop (the cave block) first.
 		bcc	.map
 		lda	#1
 		rts
-.map:		lda	<cy + 1			; Square row (y >> 9) + 2: 0..2.
+.map:		lda	<cy + 1			; Square row (y >> 9) + 3: 0..3.
 		cmp	#$80
 		ror	a
 		clc
-		adc	#2
-		cmp	#3
+		adc	#3
+		cmp	#4
 		bcs	.empty			; Below row 0, or far above.
 		tax
 		lda	<cx + 1			; Square column x >> 9: 0..23.
@@ -1308,13 +1308,13 @@ coll_world:	lda	<prop_solid		; A solid prop (the cave block) first.
 		lda	$A000, y		; Square id.
 		cmp	#$FF
 		bne	.square
-		cpx	#2			; None: sky above row 0, else wall.
+		cpx	#3			; None: sky above row 0, else wall.
 		bcc	.empty
 .solid:		lda	#1
 		rts
 .empty:		cla
 		rts
-.rows:		db	0, 24, 48
+.rows:		db	0, 24, 48, 72
 
 .square:	inc	a			; cp = $A100 + id * 256 + block column * 16 + block row
 		ora	#$A0

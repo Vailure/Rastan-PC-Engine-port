@@ -25,7 +25,7 @@
 
 ; Checkpoints are numbered through all the rounds (cp_round): each round's
 ; (the arcade's), then a debug warp to its boss room.
-NUM_WARP	=	17
+NUM_WARP	=	25
 
 FONT_VRAM	=	$5C00			; Enemy cells (reloaded on close).
 FONT_TILE	=	FONT_VRAM >> 4		; Tile number of ' '.
@@ -116,29 +116,43 @@ txt_end:
 ; $19 and $20; at $22 the camera is 160 on and he 184), on the floor below him
 ; (the collision map: tools/world.py), the camera 128 px above it as far as
 ; the box allows. (sim/scripts/round2*.txt and the checkpoints' captures.)
-; The last is the boss room, and the warp the same.
+; The last is the boss room (through the door at the top of the shafts), and
+; the warp the same.
+; Round 3: checkpoints 17-23, the boss warp 24 (third line): segments $2E, $32,
+; $34, $39, $3E (the castle), $41 (the first shaft) and $44 (the boss room),
+; the arcade's camera and Rastan as it starts there (the restart table byte
+; patched: sim/scripts/round3.txt, $50768).
 cp_cam_x:	dw	0, 2048, 4096, 6144, 8192, 9216, 11264
 		dw	0, 1024, 3072, 4608, 5792, 6656, 8192, 9728, 11264, 11264
+		dw	0, 2208, 3232, 5632, 8192, 9216, 11264, 11264
 cp_cam_y:	dw	192, 160, 192, 192, 265, -247, 265
 		dw	192, 32, 192, 288, 160, 192, 288, 32, 288, 288
+		dw	107, 192, 131, 195, 107, -244, 261, 261
 cp_p_x:		dw	48, 2096, 4144, 6192, 8240, 9296, 11320
 		dw	48, 1064, 3120, 4648, 5992, 6704, 8240, 9776, 11312, 11312
+		dw	48, 2384, 3472, 5680, 8240, 9296, 11328, 11328
 cp_p_y:		dw	295, 263, 295, 295, 455, -57, 455
 		dw	295, 135, 295, 455, 263, 295, 455, 135, 391, 391
+		dw	295, 295, 295, 295, 295, -89, 391, 391
+; The first line of the camera's segment (64 per segment, in play order; a
+; boss room's the door line's next).
 cp_line:	dw	0, 0, 0, 0, 0, $12 * 64, R1_STAGE_DOOR_LINE + 1
-		dw	0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+		dw	0, 0, 0, 0, 0, 0, 0, 0, R2_STAGE_DOOR_LINE + 1, R2_STAGE_DOOR_LINE + 1
+		dw	0, 0, 0, 0, 0, $13 * 64, R3_STAGE_DOOR_LINE + 1, R3_STAGE_DOOR_LINE + 1
 ; The sky's step a restart shows (src/dyncolor.asm; the arcade's restarts at
 ; segments 5, 9 and 13 load steps 3, 5 and 7 of 8; the castle has none; nor
 ; round 2).
 cp_sky:		db	0, 2, 4, 6, 0, 0, 0
 		db	0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+		db	0, 0, 0, 0, 0, 0, 0, 0
 cp_round:	db	1, 1, 1, 1, 1, 1, 1
 		db	2, 2, 2, 2, 2, 2, 2, 2, 2, 2
+		db	3, 3, 3, 3, 3, 3, 3, 3
 ; Per round: its first checkpoint, its last (before the warp), its first in
 ; the castle.
-rnd_cp0:	db	0, 7, NUM_WARP		; (and the next round's: the end)
-rnd_cplast:	db	5, 15
-rnd_castle:	db	4, 13
+rnd_cp0:	db	0, 7, 17, NUM_WARP	; (and the next round's: the end)
+rnd_cplast:	db	5, 15, 23
+rnd_castle:	db	4, 13, 21
 
 ; checkpoint_track - once a frame: the checkpoint moves on when the camera
 ; reaches the next one's segment (the arcade picks it by segment).
@@ -276,8 +290,8 @@ music_here:	lda	<p_x + 1
 ; ---------------------------------------------------------------------------
 ; door_enter - Rastan walked into a door ($7E). The castle gate takes him in,
 ; dropping in where the arcade puts him (it loads the castle's first room
-; then); the door at the top of the second shaft into the boss room from
-; above, as in the arcade (Rastan at (11728, 98), falling).
+; then); the door at the top of the last shaft into the boss room from
+; above, as in the arcade (round 1: Rastan at (11728, 98), falling; door_px).
 
 door_enter:	stz	<p_door
 		lda	<p_y + 1
@@ -310,9 +324,13 @@ door_enter:	stz	<p_door
 		sta	<stream_min		; and what the camera needs.
 		lda	rd_boss_line + 1
 		sta	<stream_min + 1
-		lda	#<(11728 - 136)
+		lda	<cur_round		; (Y: the round's word)
+		dec	a
+		asl	a
+		tay
+		lda	door_cam, y
 		sta	<scroll_x
-		lda	#>(11728 - 136)
+		lda	door_cam + 1, y
 		sta	<scroll_x + 1
 		stz	<scroll_y
 		stz	<scroll_y + 1
@@ -323,9 +341,13 @@ door_enter:	stz	<p_door
 		sta	<row_top
 		lda	#$7F
 		sta	<row_top + 1
-		lda	#<11728
+		lda	<cur_round
+		dec	a
+		asl	a
+		tay
+		lda	door_px, y
 		sta	<p_x
-		lda	#>11728
+		lda	door_px + 1, y
 		sta	<p_x + 1
 		lda	#98
 		sta	<p_y
@@ -340,6 +362,13 @@ door_enter:	stz	<p_door
 		jsr	props_draw
 		jsr	enemies_draw
 		jmp	screen_show
+
+; Where the door drops Rastan into the boss room (x; y 98, falling), and the
+; camera's x then: round 1's as the arcade's; rounds 2 and 3 where the arcade
+; starts them in the room (sim/scripts/round3_boss.txt: their own doors' not
+; measured).
+door_px:	dw	11728, 11312, 11328
+door_cam:	dw	11728 - 136, 11264, 11264
 
 ; ---------------------------------------------------------------------------
 ; debug_check - once a frame, before the game logic. UP and SELECT held
