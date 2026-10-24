@@ -16,6 +16,7 @@ NUM_GARGS	=	2
 GARG_AHEAD	=	176
 GARG_WINDOW	=	196
 
+	.if	STAGE_ROUND = 1
 garg_x_l:	db	<4608, <6841
 garg_x_h:	db	>4608, >6841
 garg_y_l:	db	<295, <167
@@ -24,9 +25,6 @@ garg_bit:	db	1, 2
 
 ; garg_spawn - a gargoyle (two special slots) when Rastan nears its spot.
 garg_spawn:
-	.if	STAGE_ROUND - 1		; (round 1's own: none in other rounds yet)
-		rts
-	.endif
 		cly
 .loop:		lda	gargs_done
 		and	garg_bit, y
@@ -185,3 +183,10 @@ garg_kill:	ldx	#SPEC_FIRST
 		cpx	#SPEC_LAST + 1
 		bne	.loop
 		rts
+
+	.else
+; (round 1's own: other rounds' builds leave it out, bank space)
+garg_spawn:
+garg_think:
+garg_kill:	rts
+	.endif

@@ -771,6 +771,9 @@ DEBUG_BANK	=	$05
 		include	"traps.asm"
 		include	"swarm.asm"
 		include	"boss.asm"
+	.if	STAGE_ROUND = 2		; (round 2's boss; after everything, its .bss last)
+		include	"knight.asm"
+	.endif
 
 ; ---------------------------------------------------------------------------
 ; Data.
@@ -787,6 +790,7 @@ obj_palettes_b64: incbin	"objpal_b64.bin"	; (the same, colour bank 64)
 	.else
 obj_palettes:	incbin	"objpal_r2.bin"		; (round 2's sprite colours: build/objects)
 obj_palettes_b64: incbin	"objpal_r2_b64.bin"
+knight_pal:	incbin	"sprpal8.bin"		; Round 2's boss: sprite palette 8 (knight.asm).
 	.endif
 hud_palette:	incbin	"hudpal.bin"
 prop_palette:	incbin	"proppal.bin"

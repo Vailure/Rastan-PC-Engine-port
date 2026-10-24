@@ -52,8 +52,9 @@ def pose_counts():
         counts[m.group(1)] = len(m.group(2).splitlines())
     src = open(os.path.join(HERE, '..', 'src', 'enemies.asm')).read()
     m = re.search(r'^kind_ptab_l:(.*?)\n(?=\S)', src, re.M | re.S)
-    groups = re.findall(r'<(grp_\w+)_ptab', m.group(1))
-    return [counts[g] for g in groups]
+    groups = re.findall(r'<(\w+)', m.group(1))
+    # (BOSS_PTAB: the round's boss group; this audit plays round 1)
+    return [counts[{'BOSS_PTAB': 'grp_boss'}.get(g, g[:-5])] for g in groups]
 
 
 def warp(cp):

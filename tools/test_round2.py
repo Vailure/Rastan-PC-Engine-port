@@ -1,4 +1,4 @@
-"""test_round2.py rastan_r2.pce : round 2's build, headless (the snakes so far).
+"""test_round2.py rastan_r2.pce god_r2.pce : round 2's build, headless (its snakes and boss).
 
 Arcade values (sim/scripts/snake.txt; README, round 2):
 - Lizardmen and snakes take turns from the round's start.
@@ -96,6 +96,50 @@ r = run(1200, keys)
 dead = [i for i in range(1, len(r)) for k in range(17)
         if r[i]['e_kind'][k] == EK_SNAKE and r[i]['e_state'][k] == ES_DYING and r[i - 1]['e_state'][k] != ES_DYING]
 check('a standing swing passes over snakes', not dead, f'deaths at {dead}')
+
+# ---------------------------------------------------------------------------
+# The boss (sim/scripts/boss2*.txt): warp to the boss room (checkpoint 8), Rastan passive on
+# the ledge he starts on.
+from routes import warp, resume
+EK_BOSS, EK_FRAG, SPEC = 14, 16, 6
+ROOM = 11264
+b = resume(rom, 8)
+KOBJ = {'e_state': 17, 'e_kind': 17, 'e_xl': 17, 'e_xh': 17, 'e_yl': 17, 'e_yh': 17, 'e_alt': 17}
+r = peek(rom, b + 900, warp(8), KOBJ)
+h = peek(rom, b + 900, warp(8), {'p_hp': 1, 'p_x': 2})
+
+
+def pos(f, k):
+    return x_of(f, k) - ROOM, f['e_yl'][k] | f['e_yh'][k] << 8
+
+
+come = next(i for i in range(b, len(r)) if r[i]['e_state'][SPEC] and r[i]['e_kind'][SPEC] == EK_BOSS)
+check('the knight comes into the door', pos(r[come], SPEC) == (256, 408), f'at {pos(r[come], SPEC)}')
+ys = [pos(r[i], SPEC)[1] for i in range(come, come + 200)]
+floor = ys.index(472) if 472 in ys else None
+check('it stands there 56 frames, drops to the floor and jumps to his level',
+      ys[54] == 408 and floor and 408 in ys[floor:], f'y {ys[0]}, floor at {floor}, then {ys[floor:][:60:6] if floor else ""}')
+swings = [i for i in range(come, len(r)) if r[i]['e_alt'][SPEC] == 4 and r[i - 1]['e_alt'][SPEC] != 4]
+dx = [pos(r[i], SPEC)[0] - (x_of({'e_xl': h[i]['p_x'][:1], 'e_xh': h[i]['p_x'][1:]}, 0) - ROOM) for i in swings]
+check('it swings within 52 px of him', swings and all(0 < d <= 52 for d in dx), f'dx {dx}')
+drops = [h[i - 1]['p_hp'][0] - h[i]['p_hp'][0] for i in range(come, len(h)) if h[i]['p_hp'][0] < h[i - 1]['p_hp'][0]]
+check('its sword costs a standing Rastan 12 units', drops and all(d == 12 for d in drops), f'health steps {drops}')
+orbs = [(i - come, sorted(pos(r[i], k) for k in range(9, 17) if r[i]['e_state'][k] and r[i]['e_kind'][k] == EK_FRAG))
+        for i in range(come + 1, len(r))
+        if sum(1 for k in range(9, 17) if r[i]['e_state'][k] and r[i]['e_kind'][k] == EK_FRAG and not r[i - 1]['e_state'][k]) == 3]
+check('three orbs fall from the brazier nearest him, 206 frames after it comes, then every 300',
+      [o[0] for o in orbs][:2] == [206, 506] and orbs[0][1] == [(100, 312)] * 3, f'{orbs[:2]}')
+
+# Ten blows (from the god build: Rastan swinging on his ledge) kill it, for 15000; then the
+# round is clear.
+g = sys.argv[2] if len(sys.argv) > 2 else rom
+bg = resume(g, 8)
+keys = warp(8) + [bg + 100, bg + 110, '04'] + sum([[f, f + 3, '80'] for f in range(bg + 120, bg + 2400, 14)], [])
+r = peek(g, bg + 2400, keys, {'e_state': 17, 'e_kind': 17, 'score': 3, 'boss_clear': 1})
+dead = next((i for i in range(1, len(r)) if r[i]['e_state'][SPEC] == ES_DYING and r[i - 1]['e_state'][SPEC] != ES_DYING), None)
+check('ten blows kill it, for 15000', dead and bcd(r[dead]['score']) - bcd(r[dead - 1]['score']) == 150,
+      f'at {dead and dead - bg}, score {dead and bcd(r[dead]["score"])}')
+check('then the round is clear (240 frames on)', dead and any(r[i]['boss_clear'][0] == 1 for i in range(dead, len(r))))
 
 print(f'{len(fails)} failure(s)')
 sys.exit(1 if fails else 0)

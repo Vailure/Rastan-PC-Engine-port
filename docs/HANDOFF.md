@@ -574,10 +574,25 @@ The order is roughly by the value it adds to the demo for the effort.
      turn away at 48-51 px and flee at twice the speed to 104 px. Touch type 1, 1 hit point, 200 points.
      The arcade decides to strike at the lanes' `$3A` markers with a random byte; the port whenever
      Rastan is near and 16 frames have passed. `test_round2.py` checks them.
-   - **Round 2's own code goes in its build only** (`.if STAGE_ROUND - 1` around `include "snake.asm"`
-     and its dispatch): bank `$05` is full in round 1's build. Round 2's has about 0.5 KB left there
-     and 1 KB in bank `$04`; past that, leave round 1's own modules (gargoyle, woman, jets, boss,
-     props, traps, fire, column, wall, weights, items, boulders) out of round 2's build.
+   - **Each round's own code goes in its build only.** Round 2's (`snake.asm`, `knight.asm`) is
+     included under `.if STAGE_ROUND`; round 1's own modules (`props`, `column`, `boulder`,
+     `gargoyle`, `jets`, `boss`) keep their variables and constants in every build (so that the RAM
+     layout, which the tests read from `src/main.lst`, is the same) but their code only in round 1's,
+     with `rts` stubs for their entry points elsewhere (`snap_floor` and `sword_vs_box` stay: others
+     use them). Round 2's build has about 2.9 KB left in bank `$04` and 1 KB in bank `$05`.
+   - **The boss** (`src/knight.asm`, `sim/scripts/boss2*.txt`; arcade slot 17, type `$13`): the
+     caped knight comes into the room's door when Rastan enters, drops, and jumps to his level. It
+     keeps to two heights of its own (anchor 408 with Rastan on a ledge, 472 on the floor), not the
+     map's. It walks at him (8 px a 9-frame step), swings within 52 px (box `$93`, out in anim 223:
+     12 units, knocked back; crouching ducks it), hops back 68 px (over him if a wall is behind it)
+     and walks away two steps; far from him (over 128 px) it rises and floats down at him. Every 300
+     frames (the first 206 after it comes) three orbs fall from the brazier nearest him (room x 100,
+     188, 412; y 312), straight and at 1/2 px a frame to the sides. Ten blows kill it (a blow in the
+     air counts 3), for 15000; then the round is clear. It uses the round 1 boss's kinds (`EK_BOSS`,
+     `EK_BOSS2`, `EK_FRAG`; their table entries are per round, `BOSS_*` in `enemies.asm`) and draws in
+     sprite palette 8 with the colours the arcade loads for it (`FIXED_PALS` in `object_specs.py`:
+     `build/objects/sprpal8.bin`), which `boss_spawn` loads. Its float and the orbs' rule for the
+     brazier are from three captures; the arcade's exact decisions are not traced.
    - **Vines:** round 2's two (markers `$4F` at (5632, 208) and (8416, 240)) use round 1's code,
      placed from the marker as round 1's chasm vine is; their phases are not measured.
    - **Still to port** (the census of round 2 started properly, `patch 5ff9f fe` + `patch 50751 <cp>`;
@@ -588,7 +603,7 @@ The order is roughly by the value it adds to the demo for the effort.
      chains `$540`/14, `$290`/10), the castle's soldiers in round 2's colours (`$330`/5 axe, `$260`/4
      sword, `$340`/1 mace) and its fire (`$220`/0; markers `$4C`, `$52`-`$55` at 9312-10144), weights
      (`$45`, 8896), hanging column (`$47`, 10752) and other markers (`$48`, `$49`, `$64`, `$65`, `$6A`,
-     `$6B`), the boss (a caped blue knight that walks out of the room's door) and the music. The
+     `$6B`) and the music. The
      castle route needs Rastan to climb: from the stairs' foot at the castle checkpoint the way on is
      above (the arcade bot gets stuck there).
    - One ROM for every round needs `sf2_round` and the `^stage_*` bank references per round: a small

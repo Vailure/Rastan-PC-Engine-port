@@ -81,9 +81,10 @@ Two ROMs:
   collision and the arcade's nine restart checkpoints in the debug menu (it starts straight in the
   game; hold UP + SELECT for the menu). Its walkers: lizardmen and round 2's snakes, then throwers and
   chimeras, and the castle's soldiers; its two swinging vines; its own colours. Snakes are low:
-  as in the arcade, a standing swing passes over them; crouch and swing (DOWN + II). Still to come: its
-  dragonflies, demons, piranhas, golden women and tree-dropping throwers, the castle's traps, the
-  round's items, boss and music.
+  as in the arcade, a standing swing passes over them; crouch and swing (DOWN + II). The boss, a
+  caped knight with falling orbs, and the round clear after it. Still to come: its dragonflies,
+  demons, piranhas, golden women and tree-dropping throwers, the castle's traps, the round's items and
+  its music.
 
 The tests run on test builds the Makefile also makes: `testdbg.pce` (straight into the game, with the
 debug menu in play for their checkpoint warps), `god.pce`, `noenemy.pce`, `camtest.pce`, `bgcheck.pce`.
@@ -592,8 +593,8 @@ music gets the channel back, and that the voice shows in the audio.
 - [x] The first room's hanging column (marker `$47`) and the lava hall's sealing wall (marker `$4D`)
 - [x] The sprite colour bank: gold and blue castle soldiers, green after a death's restart at checkpoint 4 or 5
 - [x] Shaft 2's three spiked weights (marker `$45`, `src/weights.asm`)
-- [ ] Round 2 (`rastan_r2.pce`): stage, collision, castle and boss-room colours, checkpoints, snakes and
-      vines done; its other enemies and map objects, items, boss and music to do
+- [ ] Round 2 (`rastan_r2.pce`): stage, collision, colours, checkpoints, snakes, vines and the boss
+      done; its other enemies and map objects, items and music to do
 
 (Checked and not needed: Rastan shows no score popups when anything dies, and the "small castle
 flyers" seen in an early census are the blue throwers' clubs, which the port already has.)

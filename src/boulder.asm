@@ -22,6 +22,7 @@ RM_FALL		=	0		; e_alt
 RM_ROLL		=	1
 RM_LOOP		=	2		; Falls forever.
 
+	.if	STAGE_ROUND = 1
 rock_x_l:	db	<2898, <2898, <4601, <6674
 rock_x_h:	db	>2898, >2898, >4601, >6674
 rock_y_l:	db	<427, <139, <243, <123
@@ -31,9 +32,6 @@ rock_bit:	db	1, 2, 4, 8
 
 ; rock_spawn - boulders whose spot Rastan nears (uses etmp, ex).
 rock_spawn:
-	.if	STAGE_ROUND - 1		; (round 1's own: none in other rounds yet)
-		rts
-	.endif
 		cly
 .loop:		lda	rocks_done
 		and	rock_bit, y
@@ -134,6 +132,11 @@ rock_think:	jsr	touch_hurts
 		stz	e_alt, x		; RM_FALL
 		rts
 
+	.else
+; (round 1's own: other rounds' builds leave it out, bank space)
+rock_spawn:
+rock_think:	rts
+	.endif
 ; snap_floor - X's y = ((y + A) & ~7) - Y: the anchor Y px above the top of
 ; the floor cell probed A px below it.
 snap_floor:	clc
@@ -153,6 +156,7 @@ snap_floor:	clc
 		sta	e_yh, x
 		rts
 
+	.if	STAGE_ROUND = 1
 ; rock_floor - carry set if X stands on a floor (probe at x, y + ROCK_FOOT).
 rock_floor:	lda	e_xl, x
 		sta	<cx
@@ -170,3 +174,5 @@ rock_floor:	lda	e_xl, x
 		jsr	is_floor
 		plx
 		rts
+
+	.endif

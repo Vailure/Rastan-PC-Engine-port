@@ -713,14 +713,36 @@ rand:		lda	<rng
 !:		sta	<rng
 		rts
 
+; The boss's kinds (EK_BOSS, EK_BOSS2, EK_FRAG) are the round's own boss: round
+; 1's (src/boss.asm), round 2's caped knight and its orbs (src/knight.asm).
+	.if	STAGE_ROUND = 1
+BOSS_ANIM	=	anim_boss_walk
+BOSS2_ANIM	=	anim_boss2_walk
+FRAG_ANIM	=	anim_frag_form
+BOSS_BANK	=	GRP_BOSS_BANK
+BOSS_PTAB	=	grp_boss_ptab
+BOSS_TOP	=	36
+BOSS_BOT	=	30
+BOSS_HALF	=	16
+	.else
+BOSS_ANIM	=	anim_kn_stand
+BOSS2_ANIM	=	anim_kn2_stand
+FRAG_ANIM	=	anim_orb
+BOSS_BANK	=	GRP_KNIGHT_BANK
+BOSS_PTAB	=	grp_knight_ptab
+BOSS_TOP	=	20		; (box 0: x -12 .. 12, y -20 .. 16)
+BOSS_BOT	=	16
+BOSS_HALF	=	12
+	.endif
+
 ; Per-kind data: lizardman, blue thrower, club.
 kind_walk_l:	db	<anim_liz_walk, <anim_blue_walk, <anim_club, 0, <anim_bat, <anim_chim_walk, <anim_fireball
 		db	<anim_boulder, <anim_garg_body, <anim_garg_wings, <anim_woman_walk, <anim_sword_walk
-		db	<anim_mace_walk, <anim_jet_column, <anim_boss_walk, <anim_boss2_walk, <anim_frag_form
+		db	<anim_mace_walk, <anim_jet_column, <BOSS_ANIM, <BOSS2_ANIM, <FRAG_ANIM
 		db	<anim_vine_swing, <anim_snake_crawl
 kind_walk_h:	db	>anim_liz_walk, >anim_blue_walk, >anim_club, 0, >anim_bat, >anim_chim_walk, >anim_fireball
 		db	>anim_boulder, >anim_garg_body, >anim_garg_wings, >anim_woman_walk, >anim_sword_walk
-		db	>anim_mace_walk, >anim_jet_column, >anim_boss_walk, >anim_boss2_walk, >anim_frag_form
+		db	>anim_mace_walk, >anim_jet_column, >BOSS_ANIM, >BOSS2_ANIM, >FRAG_ANIM
 		db	>anim_vine_swing, >anim_snake_crawl
 kind_attack_l:	db	<anim_liz_attack, <anim_blue_throw, 0, 0, 0, 0, 0, 0, 0, 0, 0, <anim_sword_attack
 		db	<anim_mace_attack
@@ -753,24 +775,24 @@ kind_hp:	db	1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 1, 2, 2, 1, 10, 1, 1, 1, 1
 kind_bank:	db	GRP_SECT1_BANK, GRP_SECT1_BANK, GRP_SECT1_BANK, GRP_ITEMS_BANK, GRP_ITEMS_BANK
 		db	GRP_CHIMERA_BANK, GRP_CHIMERA_BANK, GRP_ROCKS_BANK, GRP_GARGOYLE_BANK, GRP_GARGOYLE_BANK
 		db	GRP_WOMAN_BANK, GRP_CASTLE_BANK, GRP_CASTLE_BANK, GRP_JETS_BANK
-		db	GRP_BOSS_BANK, GRP_BOSS_BANK, GRP_BOSS_BANK, GRP_VINE_BANK, GRP_SNAKE_BANK
+		db	BOSS_BANK, BOSS_BANK, BOSS_BANK, GRP_VINE_BANK, GRP_SNAKE_BANK
 kind_ptab_l:	db	<grp_sect1_ptab, <grp_sect1_ptab, <grp_sect1_ptab, <grp_items_ptab, <grp_items_ptab
 		db	<grp_chimera_ptab, <grp_chimera_ptab, <grp_rocks_ptab, <grp_gargoyle_ptab, <grp_gargoyle_ptab
 		db	<grp_woman_ptab, <grp_castle_ptab, <grp_castle_ptab, <grp_jets_ptab
-		db	<grp_boss_ptab, <grp_boss_ptab, <grp_boss_ptab, <grp_vine_ptab, <grp_snake_ptab
+		db	<BOSS_PTAB, <BOSS_PTAB, <BOSS_PTAB, <grp_vine_ptab, <grp_snake_ptab
 kind_ptab_h:	db	>grp_sect1_ptab, >grp_sect1_ptab, >grp_sect1_ptab, >grp_items_ptab, >grp_items_ptab
 		db	>grp_chimera_ptab, >grp_chimera_ptab, >grp_rocks_ptab, >grp_gargoyle_ptab, >grp_gargoyle_ptab
 		db	>grp_woman_ptab, >grp_castle_ptab, >grp_castle_ptab, >grp_jets_ptab
-		db	>grp_boss_ptab, >grp_boss_ptab, >grp_boss_ptab, >grp_vine_ptab, >grp_snake_ptab
+		db	>BOSS_PTAB, >BOSS_PTAB, >BOSS_PTAB, >grp_vine_ptab, >grp_snake_ptab
 ; Body box: x = anchor + cx +/- half, y = anchor - top .. anchor + bot: the
 ; arcade's ($0446BC: an index per object into the boxes at $044CE0), for all
 ; but the item, its bat and the vines (from their sprites' extent); the jets'
 ; ($37: x +/-16, y from 16 above to 64 below the column's height, 16..52) as
 ; the span it sweeps. The snake's: $95, x -10 .. 10, y -5 .. 14 (its ($3E,A4), 11,
 ; picks it from the table at $044796).
-kind_top:	db	20, 20, 8, 2, 25, 5, 8, 8, 16, 8, 20, 20, 20, 0, 36, 0, 8, 0, 5
-kind_bot:	db	16, 16, 8, 30, 7, 14, 8, 8, 24, 18, 16, 16, 16, 116, 30, 0, 8, 0, 14
-kind_half:	db	12, 12, 3, 20, 16, 20, 3, 3, 12, 12, 12, 12, 12, 16, 16, 0, 3, 0, 10
+kind_top:	db	20, 20, 8, 2, 25, 5, 8, 8, 16, 8, 20, 20, 20, 0, BOSS_TOP, 0, 8, 0, 5
+kind_bot:	db	16, 16, 8, 30, 7, 14, 8, 8, 24, 18, 16, 16, 16, 116, BOSS_BOT, 0, 8, 0, 14
+kind_half:	db	12, 12, 3, 20, 16, 20, 3, 3, 12, 12, 12, 12, 12, 16, BOSS_HALF, 0, 3, 0, 10
 kind_cx:	db	0, 0, 0, -8, -2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 
 ; sword_strike - X = slot: carry set if Rastan's weapon kills it now. A hit
@@ -1031,12 +1053,13 @@ weapon_hit:	lda	<p_x
 ; (lizardman, ..., sword soldier, mace soldier, then their low swings: the
 ; sword's $3C, 4 .. 52, -3 .. 3; the mace's $B0, 4 .. 60, -3 .. 3, which
 ; reach a crouching Rastan; the others do not swing; row 15 the snake's strike,
-; $5F, 16 .. 32, -20 .. -12: it ducks under it too)
-kind_hx_lo:	db	-8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -8, -8, -8, -8, 4
-kind_hx_w:	db	68, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 72, 80, 72, 80, 40
-kind_hy_lo:	db	-46, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -45, -45, -29, -29, -46
-kind_hy_w:	db	58, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56, 56, 56, 56, 58
-kind_hy_wc:	db	34, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32, 32, 32, 32, 34
+; $5F, 16 .. 32, -20 .. -12: it ducks under it too; row 16 round 2's boss's
+; sword, $93, 32 .. 48, -28 .. -20: ducked too)
+kind_hx_lo:	db	-8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -8, -8, -8, -8, 4, 20
+kind_hx_w:	db	68, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 72, 80, 72, 80, 40, 40
+kind_hy_lo:	db	-46, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -45, -45, -29, -29, -46, -54
+kind_hy_w:	db	58, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 56, 56, 56, 56, 58, 58
+kind_hy_wc:	db	34, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32, 32, 32, 32, 34, 34
 
 ; face_player - e_face = Rastan is to the right.
 face_player:	lda	<p_x

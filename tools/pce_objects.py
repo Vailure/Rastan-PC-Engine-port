@@ -26,12 +26,13 @@ import numpy as np
 from PIL import Image
 from arcade_gfx import load_region, decode_packed
 from snap import read_snaps, palette_rgb
-from object_specs import B64_GROUPS, BANK64_SNAP, ROUND_PAL_SNAPS, GROUP_BANK, CELL_SYMBOLS, FILES, GROUPS, POSE_SYMBOLS, GROUP_MAX, PATHS
+from object_specs import B64_GROUPS, BANK64_SNAP, ROUND_PAL_SNAPS, FIXED_PALS, GROUP_BANK, CELL_SYMBOLS, FILES, GROUPS, POSE_SYMBOLS, GROUP_MAX, PATHS
 import census_all
 
 ROMDIR = os.environ.get('RASTAN_ROMS', os.path.join(os.path.dirname(__file__), '..', 'roms', 'rastan'))
 PAL_SLOTS = [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12]   # 0 Rastan, 8 props, 13-14 floor spears, 15 HUD
 MAX_PIECES = 11                                           # walker slot buffers hold 11 cells
+FIXED = 1000                                              # palette keys of FIXED_PALS' slots
 JITTER = 3                                                # poses this close count as one (see below)
 
 
@@ -97,9 +98,11 @@ def main():
                 if not p and 'index' not in opt:     # (a split part may be empty: keep its timing)
                     continue
                 bank = GROUP_BANK.get(g, (s.sprctrl & 0xe0) >> 1)
-                p = [(attr, dy, code, dx, bank + (attr & 15)) for attr, dy, code, dx in p]
+                fixed = FIXED_PALS.get(g, {})
+                p = [(attr, dy, code, dx, FIXED + fixed[attr & 15][0] if attr & 15 in fixed else bank + (attr & 15))
+                     for attr, dy, code, dx in p]
                 for q in p:
-                    if q[4] not in used_pals:
+                    if q[4] < FIXED and q[4] not in used_pals:
                         used_pals[q[4]] = palette_rgb(s.pal)[q[4] * 16:q[4] * 16 + 16]
                 k = norm([q[:4] for q in p])
                 if k not in ids:
@@ -155,7 +158,18 @@ def main():
     rgb64 = palette_rgb(ref.pal)
     late = {q[4] for g in B64_GROUPS for p in groups[g][0] for q in p}
     pal9, slot_of = {}, {}
+    for g, fixed in FIXED_PALS.items():          # (slots of their own, loaded by the engine)
+        for col, (ps, cap, fr, ap) in fixed.items():
+            slot_of[FIXED + ps] = ps
+            src = palette_rgb(next(s for s in read_snaps(os.path.join(build, FILES[cap])) if s.frame == fr).pal)
+            v = bytearray()
+            for r, g_, b in (tuple(int(round(int(c) * 7 / 255)) for c in src[ap * 16 + i]) for i in range(16)):
+                v += ((g_ << 6) | (r << 3) | b).to_bytes(2, 'little')
+            open(f'{out}/sprpal{ps}.bin', 'wb').write(v)
+            used_pals[FIXED + ps] = src[ap * 16:ap * 16 + 16]    # (for the preview)
     for ap, cols in sorted(used_pals.items()):
+        if ap >= FIXED:
+            continue
         key = tuple(to9(c) for c in cols)
         alt = (tuple(to9(c) for c in rgb64[(ap + 16) * 16:(ap + 16) * 16 + 16])
                if 48 <= ap < 64 and ap in late else key)

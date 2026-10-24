@@ -68,6 +68,7 @@ WL_STEP		=	7			; Frames a step.
 
 		.code
 
+	.if	STAGE_ROUND = 1
 ; column_reset - at rest, waiting to be seen (restarts).
 column_reset:	stz	col_act
 		lda	#COL_REST
@@ -100,9 +101,6 @@ column_cells:	lda	col_on
 
 ; column_update - once a frame in the castle (traps_update).
 column_update:
-	.if	STAGE_ROUND - 1		; (round 1's own: none in other rounds yet)
-		rts
-	.endif
 		lda	col_act
 		bne	.run
 		lda	<scroll_x		; On the screen: scroll_x in (COL_X - 256,
@@ -337,9 +335,6 @@ col_emit:	sta	col_w
 ; wall_update - once a frame in the castle (enemies_update, after column_update).
 
 wall_update:
-	.if	STAGE_ROUND - 1		; (round 1's own: none in other rounds yet)
-		rts
-	.endif
 		lda	wl_act
 		bne	.run
 		lda	<p_y + 1		; Rastan come into the lava hall's square
@@ -580,3 +575,13 @@ wall_emit:	lda	<en_satb
 		stz	VDC_DH
 		inc	<en_satb
 .off:		rts
+
+	.else
+; (round 1's own: other rounds' builds leave it out, bank space)
+column_reset:
+column_cells:
+column_update:
+column_draw:
+wall_update:
+wall_draw:	rts
+	.endif

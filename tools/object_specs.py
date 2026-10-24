@@ -23,7 +23,10 @@ FILES = {
     'boss': 'boss.snp',          # sim/scripts/boss.txt: the boss (slot 17), its fire (slots 18-22)
     'vine': 'vine.snp',          # the bot run (build/vine.txt): the vine at x 2750, slot 0
     'swarm': 'swarm.snp',        # sim/scripts/swarm.txt: the hurry-up swarm at the round start
-    'snake': 'snake.snp',        # sim/scripts/snake.txt: round 2's snakes (slot 5 crawls, strikes, dies)
+    'snake': 'snake.snp',
+    'knight': 'boss2.snp',       # sim/scripts/boss2.txt: round 2's boss (slot 17), passive Rastan, its orbs
+    'knight_leap': 'boss2_leap.snp',  # sim/scripts/boss2_leap.txt: its float leap
+    'knight_kill': 'boss2_kill.snp',  # sim/scripts/boss2_kill.txt: its death        # sim/scripts/snake.txt: round 2's snakes (slot 5 crawls, strikes, dies)
 }
 
 GROUPS = {
@@ -115,6 +118,29 @@ GROUPS = {
         ('snake_strike', 'snake', 5, 744, 761),
         ('snake_death', 'snake', 5, 791, 820),
     ],
+    # Round 2's boss, the caped knight (arcade slot 17, up to 20 pieces: in two parts like round 1's
+    # boss, the first 13 pieces and the rest): standing in the door, in the air (jumps and hops),
+    # landing, walking (anims 215-218, 9 frames each), the swing (214, 220-223), the float leap
+    # (210-213 rising, 206-209 coming down), death (157-160). Its orbs (slots 18-20, anims 237-239).
+    'knight': [
+        ('kn_stand', 'knight', 17, 470, 475, {'index': (0, 13)}),
+        ('kn2_stand', 'knight', 17, 470, 475, {'index': (13, 99)}),
+        ('kn_air', 'knight', 17, 520, 525, {'index': (0, 13)}),
+        ('kn2_air', 'knight', 17, 520, 525, {'index': (13, 99)}),
+        ('kn_land', 'knight', 17, 595, 602, {'index': (0, 13)}),
+        ('kn2_land', 'knight', 17, 595, 602, {'index': (13, 99)}),
+        ('kn_walk', 'knight', 17, 823, 858, {'index': (0, 13)}),
+        ('kn2_walk', 'knight', 17, 823, 858, {'index': (13, 99)}),
+        ('kn_swing', 'knight', 17, 760, 778, {'index': (0, 13)}),
+        ('kn2_swing', 'knight', 17, 760, 778, {'index': (13, 99)}),
+        ('kn_rise', 'knight_leap', 17, 999, 1061, {'index': (0, 13)}),
+        ('kn2_rise', 'knight_leap', 17, 999, 1061, {'index': (13, 99)}),
+        ('kn_float', 'knight_leap', 17, 1062, 1101, {'index': (0, 13)}),
+        ('kn2_float', 'knight_leap', 17, 1062, 1101, {'index': (13, 99)}),
+        ('kn_death', 'knight_kill', 17, 731, 746, {'index': (0, 13)}),
+        ('kn2_death', 'knight_kill', 17, 731, 746, {'index': (13, 99)}),
+        ('orb', 'knight', 19, 667, 701),
+    ],
     # The hurry-up swarm's small bats (arcade slots 20-28): flapping (cells $268-$26A,
     # all bats on one global clock) and the cell a sword hit leaves ($276). src/swarm.asm
     # draws them itself (CELL_SYMBOLS); these captures only bring in the cells.
@@ -133,12 +159,17 @@ GROUPS = {
 # objpal_b64.bin, the same palette slots with bank 64's colours, from BANK64_SNAP.
 # (The boss capture also ran in bank 64.) B64_GROUPS: the groups a restart at checkpoint
 # 4 or 5 can show, whose colours objpal_b64.bin changes.
-GROUP_BANK = {'castle': 48, 'boss': 48}
+GROUP_BANK = {'castle': 48, 'boss': 48, 'knight': 48}
 # Rounds after the first: snapshots (file in the build directory, frame) with the round's
 # sprite colours in bank 48 and in bank 64 (pce_objects writes objpal_r<n>[_b64].bin).
 ROUND_PAL_SNAPS = {2: (('round2.snp', 420), ('round2_castle.snp', 420))}
+# Groups drawn with a PCE sprite palette of their own, whose colours the engine loads itself:
+# group -> {arcade colour: (PCE palette, capture, frame, arcade palette)}. Round 2's knight
+# (colour 15) in sprite palette 8 (round 1's props', unused in round 2), with the colours the
+# arcade loads for it in the boss room (bank 64's palette 79; build/objects/sprpal8.bin).
+FIXED_PALS = {'knight': {15: (8, 'knight', 700, 79)}}
 BANK64_SNAP = ('castle', 2600)
-B64_GROUPS = ('castle', 'jets', 'vine', 'swarm', 'items', 'boss')
+B64_GROUPS = ('castle', 'jets', 'vine', 'swarm', 'items', 'boss', 'knight')
 
 # Single cells the engine draws by itself: symbol -> (group, arcade cell). objects.inc
 # gets SYMBOL (the cell's number in objcells.bin) and SYMBOL_ATTR (its SATB attribute
@@ -158,7 +189,7 @@ PATHS = {
 
 # Pieces per pose (src/enemies.asm slot buffers): walkers 11 (the default), items and
 # bats 4, specials 13; projectiles 2 (single-piece here).
-GROUP_MAX = {'items': 4, 'rocks': 13, 'gargoyle': 13, 'jets': 13, 'boss': 13, 'vine': 13}
+GROUP_MAX = {'items': 4, 'rocks': 13, 'gargoyle': 13, 'jets': 13, 'boss': 13, 'vine': 13, 'knight': 13}
 
 # Poses the engine refers to by number: (group, animation, step) -> symbol.
 POSE_SYMBOLS = {
@@ -168,4 +199,5 @@ POSE_SYMBOLS = {
     ('castle', 'mace_low', 6): 'POSE_MACE_LOW',         # arcade anim 156: the low swing's reach
     ('castle', 'sword_low', 6): 'POSE_SWORD_LOW',
     ('snake', 'snake_strike', 3): 'POSE_SNAKE_OUT',     # arcade anim 185: the strike's reach
+    ('knight', 'kn_swing', 4): 'POSE_KN_OUT',           # arcade anim 223: its sword out (box $93)
 }

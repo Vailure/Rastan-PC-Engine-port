@@ -48,6 +48,7 @@ prop_done:	ds	NUM_PROPS	; Broken (until the stage restarts).
 
 		.code
 
+	.if	STAGE_ROUND = 1
 ; ---------------------------------------------------------------------------
 ; props_init - palette (once).
 
@@ -79,9 +80,6 @@ props_reset:	ldx	#NUM_PROPS - 1
 ; props_update - after player_update (the sword box is this frame's).
 
 props_update:
-	.if	STAGE_ROUND - 1		; (round 1's own: none in other rounds yet)
-		rts
-	.endif
 		lda	<pr_state
 		bne	.active
 		jmp	props_find
@@ -280,6 +278,14 @@ prop_coll:	lda	<cx			; cx >= x0
 .no:		clc
 		rts
 
+	.else
+; (round 1's own: other rounds' builds leave it out, bank space)
+props_init:
+props_reset:
+props_update:
+props_draw:
+prop_coll:	rts
+	.endif
 ; sword_vs_box - carry set if the sword box (sb_*) overlaps the solid box:
 ; sb_x0 < x1, x0 <= sb_x1, sb_y0 < y1, y0 <= sb_y1 (signed 16-bit).
 sword_vs_box:	lda	<sb_x0			; sb_x0 < x1
@@ -315,6 +321,7 @@ sword_vs_box:	lda	<sb_x0			; sb_x0 < x1
 .no:		clc
 		rts
 
+	.if	STAGE_ROUND = 1
 ; ---------------------------------------------------------------------------
 ; Animation: (pose, frames) pairs, $FF end.
 
@@ -352,9 +359,6 @@ prop_anim:	dec	<pr_animt
 ; props_draw - SATB entries from satb_n, after Rastan's (none when nothing is shown).
 
 props_draw:
-	.if	STAGE_ROUND - 1		; (round 1's own: none in other rounds yet)
-		rts
-	.endif
 		php				; VDC writes: IRQ held off (see stream_line).
 		sei
 		st0	#VDC_MAWR
@@ -477,3 +481,5 @@ props_draw:
 !:		adc	<cy + 1
 		sta	<cy + 1
 		rts
+
+	.endif

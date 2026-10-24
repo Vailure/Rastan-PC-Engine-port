@@ -45,12 +45,10 @@ BA_STAFF	=	2
 BA_LEAP		=	3
 BA_DEATH	=	4
 
+	.if	STAGE_ROUND = 1
 ; boss_spawn - once, when Rastan enters the room: body in slot SPEC_FIRST, the
 ; rest in the next.
 boss_spawn:
-	.if	STAGE_ROUND - 1		; (round 1's own: none in other rounds yet)
-		rts
-	.endif
 		lda	boss_done
 		bne	.r
 		lda	<p_x
@@ -470,3 +468,6 @@ frag_think:	jsr	sword_vs_enemy		; Knocked away.
 !:		clc
 		adc	<ctmp
 		rts
+
+; (Round 2's boss: src/knight.asm, with the same entry points.)
+	.endif
