@@ -239,8 +239,9 @@ check("then the arcade's round-clear screen, about 7 s", back and len(ending) >=
 SND_CLEAR = 3
 check('with its jingle (sound command $27)', any(r3[i]['snd_track'][0] == SND_CLEAR + 1 for i in ending),
       f"tracks {sorted({r3[i]['snd_track'][0] for i in ending})}")
-check('then a new game from the start of round 1', back is not None and bcd(r[back]['score']) == 0,
-      f'restart at frame {back}')
+rd = peek(god, 1600, keys, {'cur_round': 1})
+check('then round 2 from its start, the score kept', back is not None and rd[back]['cur_round'][0] == 2
+      and bcd(r[back]['score']) == bcd(r[dead + 2]['score']) > 0, f'restart at frame {back}')
 
 # The hurry-up swarm: Rastan waits at the round start (god build: the bites cost
 # nothing but still count), then swings at them.

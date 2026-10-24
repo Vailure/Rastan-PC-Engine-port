@@ -20,6 +20,7 @@ st_cnt:		ds	2		; Words to go.
 st_n:		ds	1		; The still shown.
 st_t:		ds	2		; Frames it has been up.
 still_on:	ds	1		; A still is up (tools/audit.py: no game frames then).
+ttl_sel:	ds	1		; The title's choice (TTL_*).
 
 		.code
 
@@ -228,18 +229,25 @@ still_wait:	sta	<st_t + 1
 .r:		rts
 
 ; ---------------------------------------------------------------------------
-; title_screen - the arcade's title, "PUSH RUN BUTTON" blinking, until RUN:
-; then a new game (3 lives, no score) from the start of round 1. UP + SELECT
-; held (the debug build: SELECT) opens the debug menu, a screen of its own
-; (title_menu): it starts the new game where and as it says, or comes back
-; here. There is no debug menu in play.
+; title_screen - the arcade's title, with two choices where it says "PUSH RUN
+; BUTTON": START GAME and DEBUG MENU (LEFT/RIGHT or SELECT choose; the one
+; chosen blinks, the other is dim). RUN or I takes it: START GAME, a new game
+; (3 lives, no score) from the start of round 1; DEBUG MENU, a screen of its
+; own (title_menu, src/debug.asm) that starts the new game where and as it
+; says, or comes back here. There is no debug menu in play.
+
+TTL_GO		=	0			; (ttl_sel)
+TTL_DEBUG	=	1
+TTL_OPT2	=	12			; DEBUG MENU's first cell in the text.
+TTL_OPT_LEN	=	10
 
 title_screen:
 	.if	TITLE
 		jsr	sound_stop
-		ldx	#STILL_TITLE
+.show:		ldx	#STILL_TITLE
 		jsr	still_show
 		stz	<st_t
+		jsr	title_choice
 .loop:		call	wait_vsync
 		inc	<st_t
 		lda	<st_t			; Every 32 frames: on, off.
@@ -248,36 +256,26 @@ title_screen:
 		lda	<st_t
 		and	#$20
 		jsr	title_blink
-.key:
-	.if	DEBUG_MENU			; The debug build: SELECT alone opens
-		lda	joytrg			; the debug menu.
-		bit	#JOY_SEL
-		bne	.open
-	.endif
-		lda	joynow			; UP + SELECT held: the debug menu.
-		and	#JOY_SEL | JOY_U
-		cmp	#JOY_SEL | JOY_U
-		beq	.held
-		stz	<dbg_hold
-		lda	joytrg
-		bit	#JOY_RUN
-		beq	.loop
-		bra	.start
-.held:		inc	<dbg_hold
-		lda	<dbg_hold
-		cmp	#DBG_HOLD
-		bcc	.loop
-.open:		stz	<dbg_hold		; The debug menu, a screen of its own
-		jsr	title_menu		; (src/debug.asm): it sets the checkpoint,
-		bcs	.chosen			; the lives and the weapon, or goes back.
-		ldx	#STILL_TITLE
-		jsr	still_show
+.key:		lda	joytrg
+		bit	#JOY_L | JOY_R | JOY_SEL
+		beq	!+
+		lda	ttl_sel			; The other choice, shown at once.
+		eor	#1
+		sta	ttl_sel
+		jsr	title_choice
 		stz	<st_t
+		cla
+		jsr	title_blink
 		bra	.loop
-.chosen:	jsr	still_end
-		bra	.new
-.start:		stz	<dbg_hold
+!:		bit	#JOY_RUN | JOY_B1
+		beq	.loop
+		lda	ttl_sel
+		beq	.start
+		jsr	title_menu		; (src/debug.asm): it sets the checkpoint,
+		bcc	.show			; the lives and the weapon, or goes back.
 		jsr	still_end
+		bra	.new
+.start:		jsr	still_end
 	.endif					; (test builds: straight into a new game)
 		lda	#START_LIVES
 		sta	<lives
@@ -289,8 +287,51 @@ title_screen:
 		stz	<score + 2
 		jmp	hud_reset
 
-; title_blink - A = 0: "PUSH RUN BUTTON" shown, else hidden (its palette's
-; colours, or black).
+	.if	TITLE
+; title_choice - the choices' cells in the tile map: the one chosen (ttl_sel)
+; in the text's palette (which blinks), the other in its dim copy.
+title_choice:	php
+		sei
+		lda	#^still_title
+		tam3
+		inc	a
+		tam4
+		cly				; Y: the cell in the text.
+.cell:		lda	ttl_sel			; Chosen: cells 0-9 for START GAME,
+		cpy	#TTL_OPT2		; 12-21 for DEBUG MENU.
+		bcc	!+
+		eor	#1
+!:		cmp	#1
+		lda	#TITLE_BLINK_PAL << 4
+		bcc	!+
+		lda	#TITLE_DIM_PAL << 4
+!:		sta	<st_cnt			; (palette nibble)
+		tya				; BAT address: row * 64 + column.
+		clc
+		adc	#<(TITLE_TEXT_ROW * 64 + TITLE_TEXT_COL)
+		st0	#VDC_MAWR
+		sta	VDC_DL
+		lda	#>(TITLE_TEXT_ROW * 64 + TITLE_TEXT_COL)
+		sta	VDC_DH
+		tya				; The still's map: (row * 32 + column) * 2.
+		asl	a
+		tax
+		st0	#VDC_VWR
+		lda	$6000 + TITLE_MAP_OFS + (TITLE_TEXT_ROW * 32 + TITLE_TEXT_COL) * 2, x
+		sta	VDC_DL
+		lda	$6000 + TITLE_MAP_OFS + (TITLE_TEXT_ROW * 32 + TITLE_TEXT_COL) * 2 + 1, x
+		and	#$0F
+		ora	<st_cnt
+		sta	VDC_DH
+		iny
+		cpy	#TTL_OPT2 + TTL_OPT_LEN
+		bne	.cell
+		plp
+		rts
+	.endif
+
+; title_blink - A = 0: the chosen choice shown, else hidden (the text's
+; palette's colours, or black).
 title_blink:	php
 		sei
 		pha
@@ -338,7 +379,8 @@ game_over:	jsr	sound_stop
 
 ; ---------------------------------------------------------------------------
 ; round_end - the boss is dead: the arcade's round-clear screen with its
-; jingle (RUN skips it after 2 s), then, with only round 1 ported, the title.
+; jingle (RUN skips it after 2 s), then the next round from its start, the
+; score and lives kept; after the last round ported, the title.
 
 ROUND_END_FRAMES =	420			; The arcade: this screen, then "ROUND 2
 						; READY", 7 s in all before round 2.
@@ -351,6 +393,15 @@ round_end:	jsr	sound_stop
 		ldy	#(>ROUND_END_FRAMES) + 1
 		lda	#120
 		jsr	still_wait
-		jsr	title_screen
+		ldy	<cur_round		; The next round: its first checkpoint
+		cpy	#NUM_ROUNDS		; (rnd_cp0, from round 1: Y = this one).
+		bcs	.last
+		lda	rnd_cp0, y
+		sta	<cur_cp
+		lda	#1
+		sta	new_game
+		jsr	still_end
+		jmp	stage_start
+.last:		jsr	title_screen
 		jsr	stage_start
 		jmp	start_weapon

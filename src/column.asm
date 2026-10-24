@@ -68,7 +68,6 @@ WL_STEP		=	7			; Frames a step.
 
 		.code
 
-	.if	STAGE_ROUND = 1
 ; column_reset - at rest, waiting to be seen (restarts).
 column_reset:	stz	col_act
 		lda	#COL_REST
@@ -575,13 +574,3 @@ wall_emit:	lda	<en_satb
 		stz	VDC_DH
 		inc	<en_satb
 .off:		rts
-
-	.else
-; (round 1's own: other rounds' builds leave it out, bank space)
-column_reset:
-column_cells:
-column_update:
-column_draw:
-wall_update:
-wall_draw:	rts
-	.endif

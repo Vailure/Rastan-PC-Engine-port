@@ -17,36 +17,26 @@
 ;
 ; ***************************************************************************
 
-	.if	STAGE_ROUND = 1
-NUM_VINES	=	4
-	.else
-NUM_VINES	=	2
-	.endif
+NUM_VINES	=	6		; (all rounds': vr_first)
 VINE_NEAR	=	240		; Present while |p_x - x| < this.
 VINE_GRAB_X	=	40		; Caught within this of the hanging point,
 VINE_GRAB_Y	=	24
 VINE_NOGRAB	=	20		; and not again this many frames after a jump.
 
-	.if	STAGE_ROUND = 1
-vine_x_l:	db	<2750, <8830, <8990, <9150
-vine_x_h:	db	>2750, >8830, >8990, >9150
-vine_y_l:	db	<-16, <-496, <-496, <-496
-vine_y_h:	db	>-16, >-496, >-496, >-496
-vine_bit:	db	1, 2, 4, 8
+; Round 1's: the chasm's, then the lava hall's three.
+; Round 2's: markers $4F at (5632, 208) and (8416, 240), placed as round 1's
+; chasm vine is from its marker at (2720, 80): + (30, -96).
+vine_x_l:	db	<2750, <8830, <8990, <9150, <5662, <8446
+vine_x_h:	db	>2750, >8830, >8990, >9150, >5662, >8446
+vine_y_l:	db	<-16, <-496, <-496, <-496, <112, <144
+vine_y_h:	db	>-16, >-496, >-496, >-496, >112, >144
+vine_bit:	db	1, 2, 4, 8, 16, 32
 ; Phase offset (frames) within the 180-frame swing. The lava hall's middle vine
 ; swings opposite its neighbours, so a hop always meets the next vine coming
 ; back: measured only for the chasm's vine, chosen for the hall's.
-vine_phase:	db	0, 0, 90, 0
-	.else
-; Round 2: markers $4F at (5632, 208) and (8416, 240), placed as round 1's
-; chasm vine is from its marker at (2720, 80): + (30, -96).
-vine_x_l:	db	<5662, <8446
-vine_x_h:	db	>5662, >8446
-vine_y_l:	db	<112, <144
-vine_y_h:	db	>112, >144
-vine_bit:	db	1, 2
-vine_phase:	db	0, 0
-	.endif
+vine_phase:	db	0, 0, 90, 0, 0, 0
+; Each round's vines: vr_first[round - 1] .. vr_first[round] - 1.
+vr_first:	db	0, 4, 6
 
 ; Per phase: the swing's half-step (signed), Rastan's x and y from the anchor.
 vine_h:		db	0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14
@@ -70,7 +60,10 @@ vine_dy:		db	107, 107, 107, 107, 106, 106, 106, 106, 105, 105, 104, 104, 103, 10
 
 ; vines_spawn - vines whose anchor Rastan is near (uses etmp).
 vines_spawn:
-		cly
+		ldx	<cur_round
+		lda	vr_first, x
+		sta	vn_end
+		ldy	vr_first - 1, x
 .loop:		lda	vines_done
 		and	vine_bit, y
 		bne	.next
@@ -113,7 +106,7 @@ vines_spawn:
 		tya				; Which vine (after start_walk, which
 		sta	e_range, x		; sets e_range).
 .next:		iny
-		cpy	#NUM_VINES
+		cpy	vn_end
 		bne	.loop
 		rts
 

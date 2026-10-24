@@ -14,7 +14,7 @@
 ;
 ; ***************************************************************************
 
-FIRE_VRAM	=	FIRE_TILE0 << 4
+FIRE_VRAM	=	R1_FIRE_TILE0 << 4
 
 		.zp
 fire_t:		ds	1		; Frame count: the phase is bits 2-3.
@@ -24,9 +24,7 @@ fire_on:	ds	1		; The tiles are in VRAM (bg_palettes clears it).
 
 ; fire_update - once a frame, in VBLANK.
 fire_update:
-	.if	STAGE_ROUND - 1		; (round 1's own: none in other rounds yet)
-		rts
-	.endif
+		R1_ONLY				; (round 1's own: none in other rounds yet)
 		lda	<bg_set			; Outdoors the tiles are the props'.
 		bne	!+
 		stz	<fire_on

@@ -38,7 +38,7 @@ def main():
     assert len(data) <= 8192
     open(f'{out}/collision.bin', 'wb').write(data)
     with open(f'{out}/coll.inc', 'w') as f:
-        f.write(f'\nCOLL_PATTERNS\t= {len(table) + len(squares)}\t; offset of 4x4 patterns in collision.bin\n')
+        f.write(f'\nR{world.ROUND}_COLL_PATTERNS\t= {len(table) + len(squares)}\t; offset of 4x4 patterns in collision.bin\n')
     print(f'collision: {len(pats)} patterns, {len(data)} bytes')
 
 

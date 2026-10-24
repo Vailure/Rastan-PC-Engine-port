@@ -275,9 +275,9 @@ swarm_update:	lda	<dbg_noenemy		; (debug menu: enemies off)
 
 ; sw_timer - the wave timer (arcade $049FB2).
 sw_timer:	lda	<next_col		; The boss room (past the door's line): none.
-		cmp	#<(STAGE_DOOR_LINE + 1)
+		cmp	rd_boss_line
 		lda	<next_col + 1
-		sbc	#>(STAGE_DOOR_LINE + 1)
+		sbc	rd_boss_line + 1
 		bcc	!+
 		rts
 !:		lda	<next_col		; Pair = (last line streamed) / 128: the

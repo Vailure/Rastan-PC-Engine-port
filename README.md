@@ -64,27 +64,24 @@ Requirements: Python 3 with numpy and Pillow, gcc and zlib, and a built checkout
 [HuC](https://github.com/pce-devel/huc), which provides `pceas` and the `tgemu` core used by the tests.
 
 ```sh
-make HUC=/path/to/huc          # -> build/rastan.pce (the demo) and build/rastan_debug.pce
+make HUC=/path/to/huc          # -> build/rastan.pce
 make HUC=/path/to/huc test     # the test scripts, headless (about 3 minutes)
 make HUC=/path/to/huc audit    # a whole playthrough checked frame by frame (about 2 minutes)
 python3 tools/trace_player.py build/testdbg.pce 600 60 300 04   # walk right, print Rastan's state
 ```
 
-Two ROMs:
-- **`rastan.pce`, the demo:** the arcade's title screen (PUSH RUN BUTTON), round 1, the arcade's
-  round-clear screen and jingle after the boss, GAME OVER when the last life goes, and back to the
-  title. The debug menu is on the start screen only: hold UP + SELECT on the title (about ¾ s).
-  There is none in play.
-- **`rastan_debug.pce`:** the same, but SELECT alone on the title opens the debug menu.
-- **`rastan_r2.pce` (`make HUC=... build/rastan_r2.pce`), round 2 in progress:** the forest, the castle
-  from x 8192 and the boss room (map segments `$17`-`$2D`, all scrolled to the right), with their
-  collision and the arcade's nine restart checkpoints in the debug menu (it starts straight in the
-  game; hold UP + SELECT for the menu). Its walkers: lizardmen and round 2's snakes, then throwers and
-  chimeras, and the castle's soldiers; its two swinging vines; its own colours. Snakes are low:
-  as in the arcade, a standing swing passes over them; crouch and swing (DOWN + II). Its weapon items,
-  guarded by dragonflies. The boss, a caped knight with falling orbs, and the round clear after it.
-  Still to come: its demons, piranhas, golden women and tree-dropping throwers, the castle's traps and
-  its music.
+**`rastan.pce`:** rounds 1 and 2 in one ROM. The arcade's title screen, its "PUSH RUN BUTTON" row
+two choices, START GAME and DEBUG MENU; round 1, the arcade's round-clear screen and jingle after
+its boss, then round 2 with the score and lives kept; after round 2's boss, the title. GAME OVER
+when the last life goes, and back to the title. There is no debug menu in play.
+
+Round 2 (in progress): the forest, the castle from x 8192 and the boss room (map segments
+`$17`-`$2D`, all scrolled to the right), with their collision and the arcade's nine restart
+checkpoints. Its walkers: lizardmen and round 2's snakes, then throwers and chimeras, and the
+castle's soldiers; its two swinging vines; its own colours. Snakes are low: as in the arcade, a
+standing swing passes over them; crouch and swing (DOWN + II). Its weapon items, guarded by
+dragonflies. The boss, a caped knight with falling orbs. Still to come: its demons, piranhas,
+golden women and tree-dropping throwers, the castle's traps and its music.
 
 The tests run on test builds the Makefile also makes: `testdbg.pce` (straight into the game, with the
 debug menu in play for their checkpoint warps), `god.pce`, `noenemy.pce`, `camtest.pce`, `bgcheck.pce`.
@@ -106,24 +103,29 @@ The build:
 
 The camera only scrolls forward. A death restarts at the last checkpoint reached, as in the arcade.
 
-**Debug menu** (the start screen only): on the title, hold UP + SELECT together for about ¾ s
-(`rastan_debug.pce`: SELECT). It is a screen of its own that sets up a new game; there is no menu in
-play (it used to open over the stage, and its colours and tiles showed through it).
-UP/DOWN pick a line, LEFT/RIGHT change a value; I on the checkpoint or on START GAME, or RUN, starts
-the game; SELECT or II goes back to the title.
+**Title:** LEFT/RIGHT (or SELECT) choose between START GAME and DEBUG MENU, RUN or I takes it.
+The chosen one blinks, the other is dim (`tools/pce_still.py` writes the text's palette and a dim
+copy; `src/still.asm` sets the cells' palettes).
+
+**Debug menu** (DEBUG MENU on the title): a screen of its own that sets up a new game; there is
+no menu in play. UP/DOWN pick a line, LEFT/RIGHT change a value; I on the checkpoint or on START
+GAME, or RUN, starts the game; SELECT or II goes back to the title.
 
 | Line | What it does |
 |---|---|
-| Start at checkpoint 0-6 | Start at one of the arcade's round 1 checkpoints (segments 0, 4, 8, 12, 16, 19), or 6: the boss room |
+| Round | 1 or 2 (the checkpoint goes to the round's first) |
+| Checkpoint | One of the round's restart checkpoints (the arcade's: round 1 at segments 0, 4, 8, 12, 16, 19; round 2 at `$17`, `$19`, `$1D`, `$20`, `$22`, `$24`, `$27`, `$2A`, `$2D`), or BOSS: the boss room |
 | Invincible | Enemies, water and deadly tiles do no harm (falling off the map still kills) |
 | Enemies | Walkers on/off (items and their bats still come) |
 | Lives | 1-9 |
 | Slow motion | Game logic at 1/2, 1/4 or 1/8 speed |
-| Weapon | 1 sword, 2 axe, 3 morning star, 4 fire sword (for 3000 frames) |
+| Weapon | Sword, axe, morning star, fire sword (for 3000 frames) |
 | Start game | Start it |
 
 (The test build `testdbg.pce` keeps the menu in play, opened by UP + SELECT held, for the tests'
-warps: there it also has Refill health and Resume, and shows Rastan's position.)
+warps: there the warp runs through every round's checkpoints, 0-16 (round 1: 0-5 and its boss room 6;
+round 2: 7-15 and its boss room 16), shown as round-checkpoint; it also has Refill health and Resume,
+and shows Rastan's position.)
 
 ## Simulator quick start
 
@@ -366,9 +368,10 @@ Not done yet: slopes, waterfall currents, the other collision codes, rope attack
   (anchor y 446). It walks at him, leaps when he is far, and alternates fire (five fragments form at the top of the
   screen in front of it, then rain down at him in a fan) and a staff swing reaching about 80 px. Ten sword hits kill it
   (it is untouchable for 20 frames after each), for 5000. The arcade draws it with up to 18 sprites: the converter
-  splits every pose by piece order (13 + the rest) and two objects draw it. Then the round is clear: with only round 1
-  ported, it starts again with the score and lives kept. The debug menu's warp has a 7th target, the boss room.
-- The later object code (gargoyle, woman, jets, boss) lives in bank 5 with the debug menu, which is always mapped.
+  splits every pose by piece order (13 + the rest) and two objects draw it. Then the round is clear: round 2 follows,
+  with the score and lives kept. The debug menu's warp has a target for each round's boss room.
+- The woman's code lives in bank 5 with the debug menu, which is always mapped; the gargoyle's, the jets', the snake's
+  and both bosses' in bank `$01` (`XBANK`), which `src/xbank.asm` maps into MPR2 in its place while they run.
 - **No torn frames:** the SATB is DMA'd at the start of VBLANK, before the object cell uploads, so `enemies_draw`
   plans which slots will get new cells at the next VBLANK (same order and budget) and draws each slot with the pose
   its buffer will hold. A frame never shows an old layout over new cells.
@@ -442,13 +445,13 @@ size (`tools/pad_sf2.py`; emulators recognise the mapper by size, MAME only by e
 Banks `$00-$3F` are fixed; banks `$40-$7F` show one of four 512 KB pages, chosen by a write to
 physical `$001FF0-$001FF3` (`stz $FFF0 + overlay(label)`, with bank 0 in MPR7).
 
-- **Fixed half:** everything the game needs whatever the round: the code (banks 0, 4, 5), palettes,
+- **Fixed half:** everything the game needs whatever the round: the code (banks 0, 1, 4, 5), palettes,
   Rastan, weapons, HUD, props, the objects (`$13-$25`), music and effects (`$26-$2B`), voices
-  (`$2C-$2E`), the screens. `$01` and `$30-$3F` are free (136 KB).
+  (`$2C-$2E`), the screens. `$30-$3F` are free (128 KB).
 - **Pages:** a round's own data: its stage stream, the pattern and quad dictionaries, its collision
-  map. Round 1 is in page 1 (file banks `$80-$9B`, 224 KB), not page 0, so that the page switch is
-  exercised (and tested) from the first round; `sf2_round` maps it at boot and at every stage start. Page 0 and pages 2-3 are free: at round 1's size, the other five rounds fit two to a
-  page.
+  map and BG palettes, at the same banks of every page. Round n is in page n: round 1 in page 1 (file
+  banks `$80-$AF`), round 2 in page 2 (`$C0-$EF`). `sf2_round` maps the round's page at boot and at every
+  stage start (`src/rounds.asm`). Pages 0 and 3 are free.
 
 `tools/tgemu/` is HuC's `tgemu` (GPLv2) with the mapper added, used by `tools/tgrun`. Like the card,
 it answers the page writes only at offsets `$1FF0-$1FF3` of bank `$00`.
@@ -593,13 +596,15 @@ music gets the channel back, and that the voice shows in the audio.
 - [x] The first room's hanging column (marker `$47`) and the lava hall's sealing wall (marker `$4D`)
 - [x] The sprite colour bank: gold and blue castle soldiers, green after a death's restart at checkpoint 4 or 5
 - [x] Shaft 2's three spiked weights (marker `$45`, `src/weights.asm`)
-- [ ] Round 2 (`rastan_r2.pce`): stage, collision, colours, checkpoints, snakes, vines, items and the
+- [x] Rounds 1 and 2 in one ROM (a page each), the round chosen at run time; the round clear goes on to the next
+- [x] Title choices (START GAME / DEBUG MENU) and the debug menu as a new-game screen: round, checkpoint, ...
+- [ ] Round 2: stage, collision, colours, checkpoints, snakes, vines, items and the
       boss done; its other enemies and map objects and music to do
 
 (Checked and not needed: Rastan shows no score popups when anything dies, and the "small castle
 flyers" seen in an early census are the blue throwers' clubs, which the port already has.)
 - [x] Restart at the arcade's checkpoints after a death (stream fast-forward, no preload data)
-- [x] Debug menu (UP + SELECT, held): checkpoint warp, invincible, enemies on/off, health, lives, slow motion, weapon
+- [x] Debug menu (the title's DEBUG MENU): round, checkpoint, invincible, enemies on/off, lives, slow motion, weapon
 
 ## Licenses
 

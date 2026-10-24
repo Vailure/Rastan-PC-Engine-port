@@ -24,9 +24,7 @@ WM_FALL		=	4
 
 ; woman_spawn - once a life, when Rastan reaches WOMAN_X - 168 (a free walker slot).
 woman_spawn:
-	.if	STAGE_ROUND - 1		; (round 1's own: none in other rounds yet)
-		rts
-	.endif
+		R1_ONLY				; (round 1's own: none in other rounds yet)
 		lda	woman_done
 		bne	.r
 		lda	<p_x			; p_x - (x - 168) in 0 .. 195?

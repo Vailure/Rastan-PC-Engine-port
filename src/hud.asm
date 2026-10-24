@@ -58,6 +58,26 @@ hud_chars:	ds	HIGH_CHARS
 		.code
 
 ; ---------------------------------------------------------------------------
+; hud_round - "ROUND n" for the round cur_round (its last two cells: slots 10,
+; 11; src/rounds.asm).
+hud_round:	php
+		sei
+		lda	<cur_round
+		asl	a
+		clc
+		adc	#HUD_ROUNDS - 2
+		tax
+		phx
+		ldy	#10
+		jsr	hud_copy
+		plx
+		inx
+		ldy	#11
+		jsr	hud_copy
+		plp
+		rts
+
+; ---------------------------------------------------------------------------
 ; hud_init - palette, static cells and the 7 SATB entries.
 
 hud_init:	php
@@ -70,17 +90,11 @@ hud_init:	php
 		sta	VCE_CTA + 1
 		tia	hud_palette, VCE_CTW, 32
 
-		ldx	#HUD_TEXT		; "ROUND 1" -> slots 8..11.
+		ldx	#HUD_TEXT		; "ROUND" -> slots 8, 9 (hud_round: 10, 11).
 		ldy	#8
 		jsr	hud_copy
 		ldx	#HUD_TEXT + 1
 		ldy	#9
-		jsr	hud_copy
-		ldx	#HUD_TEXT + 2
-		ldy	#10
-		jsr	hud_copy
-		ldx	#HUD_TEXT + 3
-		ldy	#11
 		jsr	hud_copy
 		ldx	#HUD_ICON + 2		; Icon right half -> slot 7.
 		ldy	#7
@@ -459,8 +473,7 @@ draw_chars:	sta	<hud_cell
 		include	"hudfont.inc"
 
 ; ---------------------------------------------------------------------------
-; round_clear - the boss is dead: round 1 again from its start (the only round
-; so far), with the score and lives kept.
+; round_clear - the boss is dead: the next round (src/still.asm: round_end).
 
 round_clear:	jmp	round_end		; (src/still.asm)
 

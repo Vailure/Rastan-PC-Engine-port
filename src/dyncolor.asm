@@ -21,7 +21,8 @@ dyn_ptr:	ds	2
 
 ; dyn_reset - a (re)start: first cycle state, the checkpoint's sky (the
 ; arcade's restart loads the step its checkpoint is at).
-dyn_reset:	stz	<dyn_timer
+dyn_reset:	R1_ONLY				; (round 1's own colours)
+		stz	<dyn_timer
 		stz	<dyn_phase
 		lda	#^dyn_sky_col
 		tam3
@@ -44,7 +45,8 @@ dyn_reset:	stz	<dyn_timer
 		jmp	vce_list
 
 ; dyn_update - once a frame, in VBLANK.
-dyn_update:	lda	#^dyn_sky_col
+dyn_update:	R1_ONLY
+		lda	#^dyn_sky_col
 		tam3
 		inc	<dyn_timer
 		lda	<dyn_timer

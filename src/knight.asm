@@ -23,8 +23,8 @@
 ; down at 2 px a frame, and 1/2 px a frame to either side at 1.5 down, through
 ; everything, to the bottom of the room. Touching one is a type 3 hit.
 ;
-; The body (13 pieces, EK_BOSS) thinks; the rest of the pieces follow it
-; (EK_BOSS2), as round 1's boss's do. The second part's spare fields hold the
+; The body (13 pieces, EK_KNIGHT) thinks; the rest of the pieces follow it
+; (EK_KNIGHT2), as round 1's boss's do. The second part's spare fields hold the
 ; body's vertical speed: e_timer + 1 / e_sub + 1 (8.8 px a frame), e_range + 1
 ; the fraction of y, e_alt + 1 the gravity, e_dmg + 1 the speed across.
 ;
@@ -69,8 +69,8 @@ kn_hop:		ds	1		; In the air: 1 a hop back (then away from him).
 kn_target:	ds	1		; The level it lands on (low byte: y $1xx).
 		.code
 
-; boss_spawn - once, when Rastan enters the room: the knight in the door.
-boss_spawn:	lda	boss_done
+; kn_spawn - once, when Rastan enters the room: the knight in the door.
+kn_spawn:	lda	boss_done
 		bne	.r
 		lda	<p_x
 		cmp	#<KN_COME
@@ -89,10 +89,10 @@ boss_spawn:	lda	boss_done
 		tia	knight_pal, VCE_CTW, 32
 		plp
 		ldx	#SPEC_FIRST
-		lda	#EK_BOSS
+		lda	#EK_KNIGHT
 		jsr	.place
 		ldx	#SPEC_FIRST + 1
-		lda	#EK_BOSS2
+		lda	#EK_KNIGHT2
 		jsr	.place
 		ldx	#SPEC_FIRST
 		stz	e_alt, x		; KS_DOOR
@@ -194,9 +194,9 @@ kn_jump:	stz	e_range + 1, x		; (y fraction)
 		rts
 
 ; ---------------------------------------------------------------------------
-; boss_think - X = the body.
+; kn_think - X = the body.
 
-boss_think:	lda	e_state, x
+kn_think:	lda	e_state, x
 		cmp	#ES_DYING
 		bne	.alive
 		lda	e_animend, x		; Dying: when its fall ends, both go.
@@ -274,7 +274,7 @@ boss_think:	lda	e_state, x
 
 ; kn_walk - X = body: at him, a step at a time; swing near, float when far,
 ; jump to his level.
-kn_walk:	jsr	boss_dist		; etmp = |dx|
+kn_walk:	jsr	kn_dist		; etmp = |dx|
 		jsr	kn_level
 		cmp	e_yl, x
 		bne	.level
@@ -425,7 +425,7 @@ kn_rise:	dec	e_timer, x
 kn_air:		lda	e_alt + 1, x		; (the float: gathering speed at him)
 		cmp	#31
 		bne	!+
-		jsr	boss_dist
+		jsr	kn_dist
 		jsr	face_player
 		lda	<etmp + 1		; (stops 32 px from him)
 		bne	.go
@@ -546,8 +546,8 @@ kn_clamp:	lda	e_xl, x
 		sta	e_xh, x
 !:		rts
 
-; boss_dist - etmp = |p_x - e_x| (X = the body).
-boss_dist:	lda	<p_x
+; kn_dist - etmp = |p_x - e_x| (X = the body).
+kn_dist:	lda	<p_x
 		sec
 		sbc	e_xl, x
 		sta	<etmp
@@ -566,8 +566,8 @@ boss_dist:	lda	<p_x
 		sta	<etmp + 1
 !:		rts
 
-; boss2_think - X = the second part: on the body (slot X - 1).
-boss2_think:	lda	e_state - 1, x
+; kn2_think - X = the second part: on the body (slot X - 1).
+kn2_think:	lda	e_state - 1, x
 		bne	!+
 		stz	e_state, x
 		rts
@@ -640,7 +640,7 @@ kn_orbs:	lda	kn_orbt
 		sta	e_yh, y
 		lda	<etmp + 1
 		sta	e_alt, y
-		lda	#EK_FRAG
+		lda	#EK_ORB
 		sta	e_kind, y
 		lda	#$FF
 		sta	e_shown, y
@@ -661,8 +661,8 @@ kn_orbs:	lda	kn_orbt
 kn_orb_x:	db	100, 188, 412 & $FF
 kn_orb_xh:	db	0, 0, 1
 
-; frag_think - X = an orb: falling (1/2 px a frame across, 1.5 down; or 2 down).
-frag_think:	jsr	touch_hurts
+; orb_think - X = an orb: falling (1/2 px a frame across, 1.5 down; or 2 down).
+orb_think:	jsr	touch_hurts
 		inc	e_sub, x
 		lda	e_alt, x
 		cmp	#1

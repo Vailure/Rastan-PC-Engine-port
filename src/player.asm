@@ -13,10 +13,8 @@
 ; ***************************************************************************
 
 		include	"player.inc"
-		include	"coll.inc"		; (the round's: pce_coll.py, in its stage directory)
 
 PLAYER_BANK	=	^player_data
-COLL_BANK	=	^collision_data
 
 SPR_BUF_A	=	$5000		; Two pattern buffers, 24 cells each:
 SPR_BUF_B	=	$5600		; the pose's (up to 20), then the weapon's (up to 4).
@@ -1586,23 +1584,23 @@ camera_clamp:	ldx	<cam_region
 		sta	<scroll_y + 1
 		rts
 
-; cam_rest - in the lava hall (Rastan in CAM_REST_X0..X1) the arcade holds the
+; cam_rest - in the lava hall (Rastan in rd_rest_x0 .. x1, src/rounds.asm) the arcade holds the
 ; camera low, its fire filling the bottom of the screen: cv (scroll_y) sinks a
 ; pixel a frame toward CAM_REST_Y, but no lower than keeps his head 8 px below
 ; the top (cv <= p_y - 36). Carry set if it applied.
 cam_rest:	lda	<p_x
-		cmp	#<CAM_REST_X0
+		cmp	rd_rest_x0
 		lda	<p_x + 1
-		sbc	#>CAM_REST_X0
+		sbc	rd_rest_x0 + 1
 		bcc	.no
 		lda	<p_x
-		cmp	#<CAM_REST_X1
+		cmp	rd_rest_x1
 		lda	<p_x + 1
-		sbc	#>CAM_REST_X1
+		sbc	rd_rest_x1 + 1
 		bcs	.no
-		lda	#<CAM_REST_Y		; Sink: cv = min(cv + 1, CAM_REST_Y) ...
+		lda	rd_rest_y		; Sink: cv = min(cv + 1, CAM_REST_Y) ...
 		sta	<cl
-		lda	#>CAM_REST_Y
+		lda	rd_rest_y + 1
 		sta	<cl + 1
 		inc	<cv
 		bne	!+
@@ -1643,7 +1641,6 @@ smin:		lda	<cl
 !:		bmi	scopy
 		rts
 
-		include	"stage_regions.inc"
 
 ; ---------------------------------------------------------------------------
 ; player_draw - upload a new pose into the idle buffer, then write the SATB.

@@ -61,12 +61,18 @@ ROUTE_V = [200, 350, '04', 360, 363, '41', 364, 600, '01', 610, 613, '44', 614, 
 ROUTE_V = shift(ROUTE_V, -173)          # (and at 173 from checkpoint 1)
 
 
+def warp_at(cp):
+    """The frame warp(cp) applies its checkpoint: 150 (later for the later rounds')."""
+    return max(150, 100 + 6 * cp + 6)
+
+
 def warp(cp):
-    """Debug menu: open it, pick checkpoint cp, apply (frame 150)."""
+    """Debug menu: open it, pick checkpoint cp (numbered through every round: src/debug.asm),
+    apply (frame warp_at(cp))."""
     if cp == 0:
         return []
     return ([40, 90, OPEN] + sum([[100 + 6 * k, 100 + 6 * k, RIGHT] for k in range(cp)], [])
-            + [150, 150, I])
+            + [warp_at(cp), warp_at(cp), I])
 
 
 _resumed = {}
@@ -77,8 +83,8 @@ def resume(rom, cp):
     warp in which player_update runs (p_frame moves)."""
     if (rom, cp) not in _resumed:
         from peek import peek
-        r = peek(rom, 400, warp(cp), {'p_frame': 1})
-        start = 151 if cp else 1
+        r = peek(rom, 500, warp(cp), {'p_frame': 1})
+        start = warp_at(cp) + 1 if cp else 1
         _resumed[rom, cp] = next(i for i in range(start, len(r)) if r[i]['p_frame'] != r[i - 1]['p_frame'])
     return _resumed[rom, cp]
 

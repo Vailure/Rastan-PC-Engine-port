@@ -48,25 +48,17 @@ prop_done:	ds	NUM_PROPS	; Broken (until the stage restarts).
 
 		.code
 
-	.if	STAGE_ROUND = 1
 ; ---------------------------------------------------------------------------
-; props_init - palette (once).
+; props_init - palette (once; prop_pal: again, after round 2's boss has had
+; that palette).
 
-props_init:	lda	#^prop_palette
-		tam3
-		php
-		sei
-		lda	#<(256 + PROP_PAL * 16)
-		sta	VCE_CTA + 0
-		lda	#>(256 + PROP_PAL * 16)
-		sta	VCE_CTA + 1
-		tia	prop_palette, VCE_CTW, 32
-		plp
-		lda	#$FF
+props_init:	jsr	prop_pal
+
+; props_reset - stage (re)start: everything unbroken, nothing active, its
+; cells to load again (other rounds' tiles, the lava hall's fire, use them).
+props_reset:	lda	#$FF
 		sta	<pr_loaded
-
-; props_reset - stage (re)start: everything unbroken, nothing active.
-props_reset:	ldx	#NUM_PROPS - 1
+		ldx	#NUM_PROPS - 1
 !:		stz	prop_done, x
 		dex
 		bpl	!-
@@ -80,6 +72,7 @@ props_reset:	ldx	#NUM_PROPS - 1
 ; props_update - after player_update (the sword box is this frame's).
 
 props_update:
+		R1_ONLY
 		lda	<pr_state
 		bne	.active
 		jmp	props_find
@@ -278,14 +271,18 @@ prop_coll:	lda	<cx			; cx >= x0
 .no:		clc
 		rts
 
-	.else
-; (round 1's own: other rounds' builds leave it out, bank space)
-props_init:
-props_reset:
-props_update:
-props_draw:
-prop_coll:	rts
-	.endif
+prop_pal:	lda	#^prop_palette
+		tam3
+		php
+		sei
+		lda	#<(256 + PROP_PAL * 16)
+		sta	VCE_CTA + 0
+		lda	#>(256 + PROP_PAL * 16)
+		sta	VCE_CTA + 1
+		tia	prop_palette, VCE_CTW, 32
+		plp
+		rts
+
 ; sword_vs_box - carry set if the sword box (sb_*) overlaps the solid box:
 ; sb_x0 < x1, x0 <= sb_x1, sb_y0 < y1, y0 <= sb_y1 (signed 16-bit).
 sword_vs_box:	lda	<sb_x0			; sb_x0 < x1
@@ -321,7 +318,6 @@ sword_vs_box:	lda	<sb_x0			; sb_x0 < x1
 .no:		clc
 		rts
 
-	.if	STAGE_ROUND = 1
 ; ---------------------------------------------------------------------------
 ; Animation: (pose, frames) pairs, $FF end.
 
@@ -359,6 +355,7 @@ prop_anim:	dec	<pr_animt
 ; props_draw - SATB entries from satb_n, after Rastan's (none when nothing is shown).
 
 props_draw:
+		R1_ONLY
 		php				; VDC writes: IRQ held off (see stream_line).
 		sei
 		st0	#VDC_MAWR
@@ -481,5 +478,3 @@ props_draw:
 !:		adc	<cy + 1
 		sta	<cy + 1
 		rts
-
-	.endif

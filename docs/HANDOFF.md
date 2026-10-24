@@ -68,9 +68,8 @@ Branch: `section1-parity` on `github.com/Vailure/Rastan-PC-Engine-port`. Last up
 
 | ROM | Options (`build/opt*/options.inc`) | Use |
 |---|---|---|
-| `rastan.pce` | `TITLE=1 DEBUG_MENU=0` | **The demo.** Title → round 1 → round-clear → title; GAME OVER → title. The debug menu is a screen of its own from the title (UP+SELECT held), never in play. |
-| `rastan_debug.pce` | `TITLE=1 DEBUG_MENU=1` | The same; SELECT alone on the title opens the menu. |
-| `testdbg.pce` | `TITLE=0 DEBUG_MENU=1` | Test build: straight into play, with the old in-play debug menu (hold UP+SELECT) for checkpoint warps. Most tests run on it. Not for playing. |
+| `rastan.pce` | `TITLE=1 DEBUG_MENU=0` | **The game.** Title (START GAME / DEBUG MENU) → round 1 → round-clear → round 2 → round-clear → title; GAME OVER → title. The debug menu is a screen of its own from the title's DEBUG MENU, never in play. |
+| `testdbg.pce` | `TITLE=0 DEBUG_MENU=1` | Test build: straight into play, with the old in-play debug menu (hold UP+SELECT) for checkpoint warps (numbered through every round: `routes.warp`). Most tests run on it. Not for playing. |
 | `god.pce` | `GOD_MODE=1` | Rastan takes no damage; for bots that must reach the end of a section. |
 | `noenemy.pce` | `NO_ENEMIES=1` | Rastan alone (player and effects tests). |
 | `camtest.pce` | `CAMERA_TEST=1` | The pad moves the camera; BG only. Used by `test_scroll.py`. |
@@ -197,7 +196,7 @@ Pages 0, 2 and 3 are empty.
 - A round's data must sit in one page, and `sf2_round` must select it before the stage streams. It runs at boot and from `stream_reset`.
 - Round 1 is deliberately in page 1, not page 0, so a missing or wrong page write breaks the tests at once.
 
-**Code space is the tight resource now:** bank $00 has 0.6 KB left, bank $04 (game code) 1.4 KB and bank $05 (debug and late objects) 1 KB. The next sizeable module needs a third code bank. Map it in MPR2 alongside bank $05 (swap around calls), or move a module out to a bank of its own.
+**Code space:** bank $00 has 0.3 KB left, bank $04 (game code) 0.7 KB and bank $05 (debug, checkpoints, the woman, vines, traps, stills, rounds) 1.7 KB. Bank $01 (`XBANK`) holds the rounds' own object code (gargoyle, jets, snake, both bosses) with 5 KB left: it runs in MPR2 in place of bank $05, entered through `x_*` trampolines in bank $04 (`src/xbank.asm`), so it may call only bank $04 and the core. `main.asm` fails the build when bank $05 or $01 overflows (pceas would otherwise carry on into the next bank silently).
 
 Check bank usage with `make … build/rastan.pce 2>&1 | grep ^BANK`. That build has the listing on, and `pceas` prints used and free space per bank.
 
@@ -498,7 +497,7 @@ tgrun rom.pce frames out.ppm [from to padhex]...
 
 1. Write a capture script in `sim/scripts/` that makes the enemy appear, and add it to the Makefile's snapshot rules.
 2. Add the capture to `FILES`/`GROUPS` in `tools/object_specs.py`, with `PATHS` if it flies a fixed path. Re-run `pce_objects.py`.
-3. Add the kind to `kind_ptab_l` and the related tables in `src/enemies.asm`, and write its update routine. Late kinds live in bank 5 and are reached from `enemies_update`.
+3. Add the kind to `kind_ptab_l` and the related tables in `src/enemies.asm`, and write its update routine. Late kinds live in bank 5 or, if they call only bank 4 and the core, in `XBANK` through an `XCALL` trampoline (`src/xbank.asm`); both are reached from `enemies_update`.
 4. Spawn it from its map marker. The collision map's high byte holds markers.
 5. Add checks to the relevant `test_*.py`. Run `AUDIT_CPS=<n> make audit` on its section.
 
@@ -546,14 +545,30 @@ The order is roughly by the value it adds to the demo for the effort.
    - A cheap per-pattern code would save about 15%: a bit mask for zero bytes and for rows that repeat the row above.
    - zlib-class LZ would save about 35%, but would need a RAM window and more CPU time in the frame.
    - At the current size, two rounds fit in each free page, so this is not urgent.
-4. **Rounds 2–6.** Round 2 has a build of its own, `rastan_r2.pce`:
-   - `RASTAN_ROUND=2` makes `world.py` lay out the round's segments (`$17 × (round − 1)` on, the boss
-     room last; round 2 scrolls only to the right, its castle from `$27`, x 8192) and `pce_stage.py`,
-     `pce_coll.py` (the collision, split out of `pce_player.py`) and `pce_hud.py` write `build/stage2`
-     and `build/hud2`, which the round 2 build puts first in its include path. `STAGE_ROUND` (in
-     `stage.inc`) switches the round's tables in `src/` (checkpoints in `debug.asm`, spawn kinds in
-     `enemies.asm`) and turns off round 1's own objects (props, traps, fire, column, wall, weights,
-     items, boulders, gargoyle, woman, jets, vines, boss).
+4. **Rounds 2–6.** Rounds 1 and 2 are in one ROM, the round chosen at run time (`cur_round`):
+   - `RASTAN_ROUND=n` makes `world.py` lay out the round's segments (`$17 × (round − 1)` on, the boss
+     room last; round 2 scrolls only to the right, its castle from `$27`, x 8192) and `pce_stage.py`
+     and `pce_coll.py` (the collision, split out of `pce_player.py`) write `build/stageN`, every name
+     prefixed `Rn_` (`stage.inc`, `coll.inc`; `rn_region_*` in `stage_regions.inc`), so `main.asm`
+     includes every round's.
+   - **Each round's data sits in an SF2 page of its own** (round n in page n), at the same banks of
+     every page: line records from bank `$40`, quads `$50`, patterns `$54`, collision `$6E`, BG
+     palettes `$6F` (`STAGE_BANK0` ... in `main.asm`; `.fail` checks that a round fits). The stream
+     code reads any round's the same way once `sf2_round` has mapped its page.
+   - `src/rounds.asm`: `round_setup` (called by `checkpoint_start` for the checkpoint's round) maps the
+     round's page and copies what differs into RAM: its number of lines, the camera box after the
+     last, the boss door's line (`rd_boss_line`), the lava hall's camera (`rd_rest_*`) and its camera
+     boxes (`region_*`, up to `MAX_REGIONS`); and puts "ROUND n" in the HUD (`hud_round`: `pce_hud.py`
+     makes the digits of rounds 1-6, `HUD_ROUNDS`).
+   - **Checkpoints are numbered through the rounds** (`cp_*` in `debug.asm`: round 1's 0-5 and its
+     boss room 6, round 2's 7-15 and its boss room 16; `cp_round`, `rnd_cp0`, `rnd_cplast`,
+     `rnd_castle`). `routes.warp(cp)` presses RIGHT cp times in the test build's menu; past checkpoint
+     8 it applies later than frame 150 (`warp_at`).
+   - **Round 1's own objects** (props, traps, fire, column, wall, weights, boulders, gargoyle,
+     woman, jets, its sky and waterfall colours) run only in round 1: `enemies_update` calls their
+     spawners in round 1 only, and the routines called from elsewhere start with `R1_ONLY` (a macro
+     in `main.asm`: `rts` in other rounds). Items, vines and the walkers' kinds have one table for
+     every round (`ir_first`, `vr_first`, `rs_*`); the sprite colours a set per round (`enemies_load`).
    - **Start the arcade in the round itself.** The ROM word `$5FF9E` is a start switch (`$045282`,
      `$04529C`): the game starts in round (~`$5FF9F` & 7) + 1 at its first segment, + `$16` (the boss
      room) with bit 3 clear, + `$10` (the castle) with bit 5 clear: `patch 5ff9f fe` round 2's start,
@@ -574,12 +589,8 @@ The order is roughly by the value it adds to the demo for the effort.
      turn away at 48-51 px and flee at twice the speed to 104 px. Touch type 1, 1 hit point, 200 points.
      The arcade decides to strike at the lanes' `$3A` markers with a random byte; the port whenever
      Rastan is near and 16 frames have passed. `test_round2.py` checks them.
-   - **Each round's own code goes in its build only.** Round 2's (`snake.asm`, `knight.asm`) is
-     included under `.if STAGE_ROUND`; round 1's own modules (`props`, `column`, `boulder`,
-     `gargoyle`, `jets`, `boss`) keep their variables and constants in every build (so that the RAM
-     layout, which the tests read from `src/main.lst`, is the same) but their code only in round 1's,
-     with `rts` stubs for their entry points elsewhere (`snap_floor` and `sword_vs_box` stay: others
-     use them). Round 2's build has about 2.9 KB left in bank `$04` and 1 KB in bank `$05`.
+   - **Round clear:** `round_end` (`src/still.asm`) goes on to the next round's first checkpoint, the
+     score and lives kept; after the last round, the title.
    - **The boss** (`src/knight.asm`, `sim/scripts/boss2*.txt`; arcade slot 17, type `$13`): the
      caped knight comes into the room's door when Rastan enters, drops, and jumps to his level. It
      keeps to two heights of its own (anchor 408 with Rastan on a ledge, 472 on the floor), not the
@@ -588,10 +599,10 @@ The order is roughly by the value it adds to the demo for the effort.
      and walks away two steps; far from him (over 128 px) it rises and floats down at him. Every 300
      frames (the first 206 after it comes) three orbs fall from the brazier nearest him (room x 100,
      188, 412; y 312), straight and at 1/2 px a frame to the sides. Ten blows kill it (a blow in the
-     air counts 3), for 15000; then the round is clear. It uses the round 1 boss's kinds (`EK_BOSS`,
-     `EK_BOSS2`, `EK_FRAG`; their table entries are per round, `BOSS_*` in `enemies.asm`) and draws in
-     sprite palette 8 with the colours the arcade loads for it (`FIXED_PALS` in `object_specs.py`:
-     `build/objects/sprpal8.bin`), which `boss_spawn` loads. Its float and the orbs' rule for the
+     air counts 3), for 15000; then the round is clear. It has kinds of its own (`EK_KNIGHT`,
+     `EK_KNIGHT2`, `EK_ORB`) and draws in sprite palette 8 with the colours the arcade loads for it
+     (`FIXED_PALS` in `object_specs.py`: `build/objects/sprpal8.bin`), which `kn_spawn` loads (round
+     1's props get theirs back from `enemies_load`). Its float and the orbs' rule for the
      brazier are from three captures; the arcade's exact decisions are not traced.
    - **Vines:** round 2's two (markers `$4F` at (5632, 208) and (8416, 240)) use round 1's code,
      placed from the marker as round 1's chasm vine is; their phases are not measured.

@@ -41,9 +41,7 @@ trap_delay:	db	0, 32
 
 ; traps_load - cells and palettes (enemies_load: at start, after the menu).
 traps_load:
-	.if	STAGE_ROUND - 1		; (round 2 streams BG tiles to $4B00-$4FFF)
-		rts
-	.endif
+		R1_ONLY				; (other rounds stream BG tiles to $4B00-$4FFF)
 		php
 		sei
 		lda	#^trap_cells
@@ -127,9 +125,7 @@ traps_room:	lda	<p_y + 1
 ; traps_update - once a frame (enemies_update): the spears appear (the camera
 ; up past the middle room's floor), then the clock, and the spears' touch.
 traps_update:
-	.if	STAGE_ROUND - 1		; (round 1's own: none in other rounds yet)
-		rts
-	.endif
+		R1_ONLY				; (round 1's own: none in other rounds yet)
 		lda	trap_on
 		bne	.tick
 		jsr	traps_room
@@ -214,9 +210,7 @@ traps_update:
 
 ; traps_draw - SATB entries (VWR already selected, enemies_draw), en_satb counts.
 traps_draw:
-	.if	STAGE_ROUND - 1		; (round 1's own: none in other rounds yet)
-		rts
-	.endif
+		R1_ONLY				; (round 1's own: none in other rounds yet)
 		jsr	column_draw		; (src/column.asm)
 		jsr	wall_draw
 		jsr	weights_draw		; (src/weights.asm)

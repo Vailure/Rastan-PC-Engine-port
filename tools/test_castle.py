@@ -103,7 +103,7 @@ boss = next((i for i in range(door or 0, len(r)) if any(r[i]['e_kind'][k] == 14 
 check('the boss comes', boss is not None and boss - door < 60, f'frame {boss}')
 won = next((i for i in range(door or 0, len(r)) if r[i]['score'][0] == 0x50), None) if door else None
 clear = next((i for i in range(won or 0, len(r)) if w16(r[i]['p_x']) == 48), None) if won else None
-check('killing it scores 5000, and the round is clear (then a new game: test build)',
+check('killing it scores 5000, and the round is clear (then round 2)',
       won is not None and clear is not None, f"5000 at frame {won}, restart at {clear}")
 
 # V: the vine over the chasm.

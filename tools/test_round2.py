@@ -1,4 +1,5 @@
-"""test_round2.py rastan_r2.pce god_r2.pce : round 2's build, headless (its snakes and boss).
+"""test_round2.py testdbg.pce god.pce : round 2, headless (its snakes, items and boss), from the
+checkpoint warps (round 2's: 7-15, its boss room's 16).
 
 Arcade values (sim/scripts/snake.txt; README, round 2):
 - Lizardmen and snakes take turns from the round's start.
@@ -11,6 +12,7 @@ Arcade values (sim/scripts/snake.txt; README, round 2):
 """
 import sys
 from peek import peek
+from routes import warp, resume, shift
 
 rom = sys.argv[1]
 fails = []
@@ -23,6 +25,7 @@ def check(name, ok, detail=''):
 
 
 EK_LIZARD, EK_SNAKE = 0, 18
+CP0 = 7                         # round 2's first checkpoint
 ES_WALK, ES_ATTACK, ES_DYING = 1, 2, 4
 OBJ = {'e_state': 17, 'e_kind': 17, 'e_xl': 17, 'e_xh': 17, 'e_alt': 17, 'e_face': 17}
 
@@ -46,7 +49,8 @@ def p_x(f):
 
 
 # Rastan stands still at the round's start.
-r = run(700, [])
+b0 = resume(rom, CP0)
+r = run(b0 + 700, warp(CP0))[b0:]
 kinds = []
 for i in range(1, len(r)):
     for k in range(4):
@@ -75,13 +79,13 @@ check('and flees at 7/4 px a frame to 104 px', flee and all(1.6 <= v <= 1.9 and 
 # Walking into a strike (from its first frame, 16 frames right): its reach drains 8 units.
 F = next(i for i in range(1, len(r)) for k in range(4)
          if r[i]['e_kind'][k] == EK_SNAKE and r[i]['e_state'][k] == ES_ATTACK and r[i - 1]['e_state'][k] != ES_ATTACK)
-h = peek(rom, F + 70, [F + 1, F + 16, '04'], {'p_hp': 1})
+h = peek(rom, b0 + F + 70, warp(CP0) + [b0 + F + 1, b0 + F + 16, '04'], {'p_hp': 1})[b0:]
 drops = [h[i - 1]['p_hp'][0] - h[i]['p_hp'][0] for i in range(F, F + 70) if h[i]['p_hp'][0] != h[i - 1]['p_hp'][0]]
 check('walking into a strike costs 8 units', drops == [8], f'health steps {drops}')
 
 # Crouched, swinging (DOWN, II every 20 frames): snakes die to it, for 200.
 keys = [250, 1000, '02'] + sum([[f, f + 3, '82'] for f in range(250, 1000, 20)], [])
-r = run(1000, keys)
+r = run(b0 + 1000, warp(CP0) + shift(keys, b0))[b0:]
 kills = []
 for i in range(1, len(r)):
     for k in range(17):
@@ -92,17 +96,16 @@ check('a crouching swing kills snakes, 200 each', len(kills) >= 2 and all(v == 2
 # Standing, swinging (II every 12 frames): no snake dies (the arcade's neither, at any distance:
 # its sword passes over them; a crouching swing kills them at 61-65 px).
 keys = sum([[f, f + 3, '80'] for f in range(250, 1200, 12)], [])
-r = run(1200, keys)
+r = run(b0 + 1200, warp(CP0) + shift(keys, b0))[b0:]
 dead = [i for i in range(1, len(r)) for k in range(17)
         if r[i]['e_kind'][k] == EK_SNAKE and r[i]['e_state'][k] == ES_DYING and r[i - 1]['e_state'][k] != ES_DYING]
 check('a standing swing passes over snakes', not dead, f'deaths at {dead}')
 
 # Round 2's first weapon item: the axe at (1848, 200), with its guard (the dragonfly), when Rastan
-# reaches 1684 (god build, from checkpoint 1, walking and hopping right).
+# reaches 1684 (god build, from round 2's checkpoint 1, walking and hopping right).
 g = sys.argv[2] if len(sys.argv) > 2 else rom
-from routes import warp, resume
-b1 = resume(g, 1)
-keys = warp(1) + [b1, b1 + 600, '04'] + sum([[f, f + 3, '40'] for f in range(b1 + 20, b1 + 600, 45)], [])
+b1 = resume(g, CP0 + 1)
+keys = warp(CP0 + 1) + [b1, b1 + 600, '04'] + sum([[f, f + 3, '40'] for f in range(b1 + 20, b1 + 600, 45)], [])
 r = peek(g, b1 + 600, keys, {'e_state': 17, 'e_kind': 17, 'e_xl': 17, 'e_xh': 17, 'e_yl': 17, 'e_yh': 17, 'p_x': 2})
 i = next((i for i in range(1, len(r)) if r[i]['e_state'][4] and not r[i - 1]['e_state'][4]), None)
 check('the first item (an axe) comes at (1848, 200) when Rastan reaches 1684, with its guard',
@@ -110,15 +113,15 @@ check('the first item (an axe) comes at (1848, 200) when Rastan reaches 1684, wi
       and 1684 <= p_x(r[i]) < 1692, f'{i and (x_of(r[i], 4), p_x(r[i]), r[i]["e_kind"][5])}')
 
 # ---------------------------------------------------------------------------
-# The boss (sim/scripts/boss2*.txt): warp to the boss room (checkpoint 8), Rastan passive on
-# the ledge he starts on.
-from routes import warp, resume
-EK_BOSS, EK_FRAG, SPEC = 14, 16, 6
+# The boss (sim/scripts/boss2*.txt): warp to the boss room (round 2's checkpoint 8), Rastan
+# passive on the ledge he starts on.
+EK_BOSS, EK_FRAG, SPEC = 19, 21, 6   # (EK_KNIGHT, EK_ORB)
+CPB = CP0 + 8
 ROOM = 11264
-b = resume(rom, 8)
+b = resume(rom, CPB)
 KOBJ = {'e_state': 17, 'e_kind': 17, 'e_xl': 17, 'e_xh': 17, 'e_yl': 17, 'e_yh': 17, 'e_alt': 17}
-r = peek(rom, b + 900, warp(8), KOBJ)
-h = peek(rom, b + 900, warp(8), {'p_hp': 1, 'p_x': 2})
+r = peek(rom, b + 900, warp(CPB), KOBJ)
+h = peek(rom, b + 900, warp(CPB), {'p_hp': 1, 'p_x': 2})
 
 
 def pos(f, k):
@@ -145,8 +148,8 @@ check('three orbs fall from the brazier nearest him, 206 frames after it comes, 
 # Ten blows (from the god build: Rastan swinging on his ledge) kill it, for 15000; then the
 # round is clear.
 g = sys.argv[2] if len(sys.argv) > 2 else rom
-bg = resume(g, 8)
-keys = warp(8) + [bg + 100, bg + 110, '04'] + sum([[f, f + 3, '80'] for f in range(bg + 120, bg + 2400, 14)], [])
+bg = resume(g, CPB)
+keys = warp(CPB) + [bg + 100, bg + 110, '04'] + sum([[f, f + 3, '80'] for f in range(bg + 120, bg + 2400, 14)], [])
 r = peek(g, bg + 2400, keys, {'e_state': 17, 'e_kind': 17, 'score': 3, 'boss_clear': 1})
 dead = next((i for i in range(1, len(r)) if r[i]['e_state'][SPEC] == ES_DYING and r[i - 1]['e_state'][SPEC] != ES_DYING), None)
 check('ten blows kill it, for 15000', dead and bcd(r[dead]['score']) - bcd(r[dead - 1]['score']) == 150,

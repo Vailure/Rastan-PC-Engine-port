@@ -39,7 +39,7 @@ os.makedirs(out, exist_ok=True)
 PREVIEW = os.environ.get('AUDIT_PREVIEW')
 if PREVIEW:
     Y0 = next(int(ln.split('=')[1].split(';')[0]) for ln in open(os.path.join(os.path.dirname(PREVIEW), 'stage.inc'))
-              if ln.startswith('PREVIEW_Y0'))
+              if ln.split('=')[0].strip().endswith('PREVIEW_Y0'))
     q3 = lambda a: np.rint(a.astype(int) * 7 / 255).astype(int)
     PREV = q3(np.array(Image.open(PREVIEW)))
 
@@ -170,9 +170,10 @@ for cp in CPS:
                     f"sy {s16(x['scroll_y'])} lives {x['lives'][0]} objs {objs}\n")
     wrong = []
     for f, shot in sorted(shots.items()):
-        if f < (200 if cp else 20) or (shot == shot[0, 0]).all() or \
+        if f < (200 if cp else 20) or (shot == shot[112, 128]).all(-1).mean() > 0.98 or \
                 any(r[g]['still_on'][0] for g in range(max(0, f - 2), min(len(r), f + 3))):
-            continue                      # (the warp's menu; a blank screen: a restart; a still)
+            continue                      # (the warp's menu; a blank screen, but for a line where
+                                          # colour 0 changed: a restart; a still)
         best = None
         xs_, ys_ = set(), set()               # the displayed position lags the variables, and
         for g in range(f - 3, f + 4):         # RAM is read at one point of the frame: any

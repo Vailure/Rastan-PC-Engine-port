@@ -19,7 +19,7 @@ KEYS = [k for spec in os.environ['KEYS'].split(',') for k in spec.split(':')] if
 rom, preview, out = sys.argv[1], sys.argv[2], sys.argv[3]
 # preview.png starts at world y PREVIEW_Y0 (stage.inc, next to it).
 Y0 = next(int(ln.split('=')[1].split(';')[0]) for ln in open(os.path.join(os.path.dirname(preview), 'stage.inc'))
-          if ln.startswith('PREVIEW_Y0'))
+          if ln.split('=')[0].strip().endswith('PREVIEW_Y0'))
 frames = [int(f) for f in sys.argv[4:]]
 q3 = lambda a: np.rint(a.astype(int) * 7 / 255).astype(int)   # compare in PCE 3-bit color
 prev = q3(np.array(Image.open(preview)))

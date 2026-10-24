@@ -12,10 +12,10 @@ BUILD      := build
 STAGE      := $(BUILD)/stage1
 PLAYER     := $(BUILD)/player
 
-export PCE_INCLUDE := $(abspath $(STAGE)):$(abspath $(PLAYER)):$(abspath $(BUILD)/objects):$(abspath $(BUILD)/hud):$(abspath $(BUILD)/props):$(abspath $(BUILD)/traps):$(abspath $(BUILD)/sound):$(abspath $(BUILD)/voice):$(abspath $(BUILD)/still):$(abspath $(BUILD)/debug):$(abspath src):$(abspath $(HUC))/include/hucc
+export PCE_INCLUDE := $(abspath $(BUILD)):$(abspath $(PLAYER)):$(abspath $(BUILD)/objects):$(abspath $(BUILD)/hud):$(abspath $(BUILD)/props):$(abspath $(BUILD)/traps):$(abspath $(BUILD)/sound):$(abspath $(BUILD)/voice):$(abspath $(BUILD)/still):$(abspath $(BUILD)/debug):$(abspath src):$(abspath $(HUC))/include/hucc
 export RASTAN_ROMS := $(abspath $(ROMS))
 
-all: $(BUILD)/rastan.pce $(BUILD)/rastan_debug.pce
+all: $(BUILD)/rastan.pce
 
 sim/maincpu.bin: tools/extract_roms.py tools/arcade_gfx.py
 	python3 tools/extract_roms.py $(ROMS) sim
@@ -37,8 +37,8 @@ $(STAGE)/stage.bin: tools/pce_stage.py tools/pce_coll.py tools/world.py tools/fg
 
 # Round 2 (the forest, then a castle; map segments $17-$2D): the arcade started in round 2
 # at its first segment, its castle ($27) and its boss room ($2D) (the start switch $5FF9F:
-# sim/scripts/round2.txt), its palette at frame 420 of each. The stage and collision go to $(STAGE2),
-# which the round 2 build puts ahead of $(STAGE) in its include path.
+# sim/scripts/round2.txt), its palette at frame 420 of each. The stage and collision go to
+# $(STAGE2), every name in its .inc files prefixed R2_ (src/main.asm includes every round's).
 STAGE2     := $(BUILD)/stage2
 $(BUILD)/round2.snp: sim/sim sim/maincpu.bin sim/scripts/round2.txt
 	sim/sim sim/maincpu.bin sim/scripts/round2.txt $@ 20 300
@@ -172,9 +172,6 @@ $(OBJECTS)/objcells.bin: tools/pce_objects.py tools/object_specs.py tools/census
 $(BUILD)/hud/hud.bin: tools/pce_hud.py $(BUILD)/actions.snp
 	cd tools && python3 pce_hud.py ../$(BUILD)/actions.snp ../$(BUILD)/hud
 
-$(BUILD)/hud2/hud.bin: tools/pce_hud.py $(BUILD)/actions.snp
-	cd tools && RASTAN_ROUND=2 python3 pce_hud.py ../$(BUILD)/actions.snp ../$(BUILD)/hud2
-
 # Music and sound effects: sim/snd runs the arcade's Z80 sound driver and logs
 # its YM2151 writes; pce_sound.py turns each command's tune or effect into a
 # stream the PC Engine's PSG can play.
@@ -193,14 +190,15 @@ $(BUILD)/ending.snp: sim/sim sim/maincpu.bin sim/scripts/ending.txt
 $(BUILD)/still/ending.bin: tools/pce_still.py tools/pce_stage.py $(BUILD)/ending.snp
 	cd tools && python3 pce_still.py ending ../$(BUILD)/ending.snp 2500 60 8 0 0 ../$(BUILD)/still
 
-# The title screen and GAME OVER, from the arcade's power-on attract sequence.
+# The title screen and GAME OVER, from the arcade's power-on attract sequence. The title's
+# "PUSH RUN BUTTON" row becomes its two choices (src/still.asm: title_screen).
 $(BUILD)/title.snp: sim/sim sim/maincpu.bin sim/scripts/attract_stills.txt
 	@mkdir -p $(BUILD)
 	sim/sim sim/maincpu.bin sim/scripts/attract_stills.txt $@ 1 155
 
 $(BUILD)/still/title.bin: tools/pce_still.py tools/pce_stage.py $(BUILD)/title.snp
 	cd tools && python3 pce_still.py title ../$(BUILD)/title.snp 160 24 16 01 0 ../$(BUILD)/still \
-		--text 96,232,"PUSH RUN BUTTON" --clear 216,232,320,240
+		--text 64,232,"START GAME  DEBUG MENU" --clear 216,232,320,240
 
 $(BUILD)/still/gameover.bin: tools/pce_still.py tools/pce_stage.py $(BUILD)/title.snp
 	cd tools && python3 pce_still.py gameover ../$(BUILD)/title.snp 2730 40 0 - 1 ../$(BUILD)/still \
@@ -249,22 +247,13 @@ $(BUILD)/debug/font.bin: $(HUC)/examples/asm/elmer/font/font8x8-ascii-bold-short
 # emulators recognise the mapper (MAME only accepts exactly that size).
 SF2PAD     := python3 tools/pad_sf2.py
 
-GAME_DEPS  := $(wildcard src/*.asm) $(BUILD)/debug/font.bin $(STAGE)/stage.bin $(PLAYER)/player.bin $(OBJECTS)/objcells.bin $(BUILD)/hud/hud.bin $(BUILD)/props/props.bin $(BUILD)/traps/traps.bin $(BUILD)/sound/sound.bin $(BUILD)/voice/voice.bin $(BUILD)/still/ending.bin $(BUILD)/still/title.bin $(BUILD)/still/gameover.bin
+GAME_DEPS  := $(wildcard src/*.asm) $(BUILD)/debug/font.bin $(STAGE)/stage.bin $(STAGE2)/stage.bin $(PLAYER)/player.bin $(OBJECTS)/objcells.bin $(BUILD)/hud/hud.bin $(BUILD)/props/props.bin $(BUILD)/traps/traps.bin $(BUILD)/sound/sound.bin $(BUILD)/voice/voice.bin $(BUILD)/still/ending.bin $(BUILD)/still/title.bin $(BUILD)/still/gameover.bin
 
 $(BUILD)/rastan.pce: $(GAME_DEPS)
 	@mkdir -p $(BUILD)/opt
 	printf "CAMERA_TEST = 0\nNO_ENEMIES = 0\nGOD_MODE = 0\nBG_CHECK = 0\nTITLE = 1\nDEBUG_MENU = 0\n" > $(BUILD)/opt/options.inc
 	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt):$$PCE_INCLUDE $(PCEAS) --newproc --sf2 --strip -m -l 2 -S -gA --raw ../src/main.asm -o rastan.pce
 	$(SF2PAD) $(BUILD)/rastan.pce
-
-# The debug build: the demo, but on the title SELECT alone opens the debug
-# menu (the demo: UP + SELECT held). The menu is a screen of its own before a
-# new game, never in play.
-$(BUILD)/rastan_debug.pce: $(GAME_DEPS)
-	@mkdir -p $(BUILD)/opt_dbg
-	printf "CAMERA_TEST = 0\nNO_ENEMIES = 0\nGOD_MODE = 0\nBG_CHECK = 0\nTITLE = 1\nDEBUG_MENU = 1\n" > $(BUILD)/opt_dbg/options.inc
-	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_dbg):$$PCE_INCLUDE $(PCEAS) --newproc --sf2 --strip -l 0 --raw ../src/main.asm -o rastan_debug.pce
-	$(SF2PAD) $(BUILD)/rastan_debug.pce
 
 # Test build: straight into the game, with the debug menu in play (UP + SELECT
 # held) for the tests' checkpoint warps. Not for playing: the menu draws over
@@ -274,21 +263,6 @@ $(BUILD)/testdbg.pce: $(GAME_DEPS)
 	printf "CAMERA_TEST = 0\nNO_ENEMIES = 0\nGOD_MODE = 0\nBG_CHECK = 0\nTITLE = 0\nDEBUG_MENU = 1\n" > $(BUILD)/opt_tdbg/options.inc
 	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_tdbg):$$PCE_INCLUDE $(PCEAS) --newproc --sf2 --strip -l 0 --raw ../src/main.asm -o testdbg.pce
 	$(SF2PAD) $(BUILD)/testdbg.pce
-
-# Round 2 (a build of its own for now: the round's stage, collision and checkpoints in
-# place of round 1's), straight into the game with the debug menu in play.
-$(BUILD)/rastan_r2.pce: $(GAME_DEPS) $(STAGE2)/stage.bin $(BUILD)/hud2/hud.bin
-	@mkdir -p $(BUILD)/opt_r2
-	printf "CAMERA_TEST = 0\nNO_ENEMIES = 0\nGOD_MODE = 0\nBG_CHECK = 0\nTITLE = 0\nDEBUG_MENU = 1\n" > $(BUILD)/opt_r2/options.inc
-	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_r2):$(abspath $(STAGE2)):$(abspath $(BUILD)/hud2):$$PCE_INCLUDE $(PCEAS) --newproc --sf2 --strip -l 0 --raw ../src/main.asm -o rastan_r2.pce
-	$(SF2PAD) $(BUILD)/rastan_r2.pce
-
-# Test build: round 2 with god mode.
-$(BUILD)/god_r2.pce: $(GAME_DEPS) $(STAGE2)/stage.bin $(BUILD)/hud2/hud.bin
-	@mkdir -p $(BUILD)/opt_god_r2
-	printf "CAMERA_TEST = 0\nNO_ENEMIES = 0\nGOD_MODE = 1\nBG_CHECK = 0\nTITLE = 0\nDEBUG_MENU = 1\n" > $(BUILD)/opt_god_r2/options.inc
-	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_god_r2):$(abspath $(STAGE2)):$(abspath $(BUILD)/hud2):$$PCE_INCLUDE $(PCEAS) --newproc --sf2 --strip -l 0 --raw ../src/main.asm -o god_r2.pce
-	$(SF2PAD) $(BUILD)/god_r2.pce
 
 # Test build: the pad drives the camera directly and Rastan is not drawn.
 $(BUILD)/camtest.pce: $(GAME_DEPS)
@@ -320,7 +294,7 @@ $(BUILD)/bgcheck.pce: $(GAME_DEPS)
 	cd $(BUILD) && PCE_INCLUDE=$(abspath $(BUILD)/opt_bg):$$PCE_INCLUDE $(PCEAS) --newproc --sf2 --strip -l 0 --raw ../src/main.asm -o bgcheck.pce
 	$(SF2PAD) $(BUILD)/bgcheck.pce
 
-test: $(BUILD)/camtest.pce $(BUILD)/noenemy.pce $(BUILD)/rastan.pce $(BUILD)/rastan_debug.pce $(BUILD)/testdbg.pce $(BUILD)/god.pce $(BUILD)/rastan_r2.pce $(BUILD)/god_r2.pce tools/tgrun/tgrun
+test: $(BUILD)/camtest.pce $(BUILD)/noenemy.pce $(BUILD)/rastan.pce $(BUILD)/testdbg.pce $(BUILD)/god.pce tools/tgrun/tgrun
 	python3 tools/test_scroll.py $(BUILD)/camtest.pce $(STAGE)/preview.png $(BUILD)/test $$(seq 62 37 2950)
 	PAD=46 python3 tools/test_scroll.py $(BUILD)/camtest.pce $(STAGE)/preview.png $(BUILD)/test_down 80 120 160 300
 	KEYS=61:2175:44,2176:2540:01,2541:2930:44,2931:3300:01 python3 tools/test_scroll.py $(BUILD)/camtest.pce $(STAGE)/preview.png $(BUILD)/test_castle $$(seq 2150 30 3300)
@@ -333,7 +307,7 @@ test: $(BUILD)/camtest.pce $(BUILD)/noenemy.pce $(BUILD)/rastan.pce $(BUILD)/ras
 	python3 tools/test_castle.py $(BUILD)/testdbg.pce $(BUILD)/god.pce $(BUILD)/noenemy.pce
 	python3 tools/test_sound.py $(BUILD)/testdbg.pce $(BUILD)/god.pce $(BUILD)
 	python3 tools/test_demo.py $(BUILD)/rastan.pce $(BUILD)/still
-	python3 tools/test_round2.py $(BUILD)/rastan_r2.pce $(BUILD)/god_r2.pce
+	python3 tools/test_round2.py $(BUILD)/testdbg.pce $(BUILD)/god.pce
 
 # A whole playthrough, checkpoint by checkpoint (about 2 minutes): object
 # poses, slowdown, SATB use, and the tile map against the converter's preview.

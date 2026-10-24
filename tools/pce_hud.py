@@ -63,10 +63,16 @@ def main():
     text = np.full((16, 64, 3), -1, int)
     for i, code in enumerate((52, 53, 54)):
         text[:, i * 16:i * 16 + 16] = np.where(rgb_cell(code) >= 0, rgb_cell(code), text[:, i * 16:i * 16 + 16])
-    one = rgb_cell(42 + int(os.environ.get('RASTAN_ROUND', '1')))   # the round's digit
-    region = text[:, 40:56]
-    text[:, 40:56] = np.where(one >= 0, one, region)
+    base = text.copy()
+    one = rgb_cell(43)                                  # "ROUND 1"
+    text[:, 40:56] = np.where(one >= 0, one, base[:, 40:56])
     cells += [text[:, i * 16:i * 16 + 16] for i in range(4)]
+    rounds = []                                         # cells 2 and 3 for "ROUND 1" .. "ROUND 6"
+    for r in range(1, 7):
+        t = base.copy()
+        d = rgb_cell(42 + r)
+        t[:, 40:56] = np.where(d >= 0, d, base[:, 40:56])
+        rounds += [t[:, 32:48], t[:, 48:64]]
 
     # Top line: "1UP" and "HIGH SCORE" (arcade sprites at y 0, glyph rows 8-14,
     # and "RE" at y 8), drawn into two blocks of 16x16 cells whose top 8 rows hold
@@ -82,6 +88,7 @@ def main():
         cells += [top[:, x0 + 16 * i:x0 + 16 * i + 16] for i in range(n)]
     # Digit font: cells 42+d, glyph in rows 0-6, x 8-15.
     font = [rgb_cell(42 + d)[0:8, 8:16] for d in range(10)]
+    cells += rounds
 
     to9 = lambda c: tuple(int(round(v * 7 / 255)) for v in c)
     counts = {}
@@ -127,6 +134,7 @@ def main():
         f.write('HUD_DIGIT0\t= 12\n')
         f.write('HUD_TEXT\t= 22\t\t; "ROUND n", 4 cells\n')
         f.write('HUD_TOP\t\t= 26\t\t; top line label cells: 4 left ("1UP"), 6 right ("HIGH SCORE")\n')
+        f.write('HUD_ROUNDS\t= 36\t\t; per round 1-6: "ROUND n" cells 2, 3\n')
         f.write(f'HUD_CELLS\t= {len(cells)}\n')
     Image.fromarray(np.concatenate(prev, 1)).resize((len(prev) * 48, 48), Image.NEAREST).save(f'{out}/hud.png')
     print(f'HUD: {len(cells)} cells, {len(pal9)} colors')

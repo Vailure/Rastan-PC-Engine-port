@@ -25,7 +25,6 @@ JP_RISE		=	0		; e_alt
 JP_PAUSE	=	1
 JP_COLUMN	=	2
 
-	.if	STAGE_ROUND = 1
 jet_x_l:	db	<9870, <9966, <10062
 jet_x_h:	db	>9870, >9966, >10062
 jet_y_l:	db	<-232, <-235, <-232
@@ -127,9 +126,3 @@ jet_think:	lda	e_alt, x		; The flame hurts only as the column
 		jmp	enemy_set_anim
 .done:		stz	e_state, x		; Column done: gone till the next eruption.
 .r:		rts
-
-	.else
-; (round 1's own: other rounds' builds leave it out, bank space)
-jets_spawn:
-jet_think:	rts
-	.endif

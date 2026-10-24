@@ -23,14 +23,9 @@
 ;
 ; ***************************************************************************
 
-	.if	STAGE_ROUND = 1
-NUM_CP		=	6			; The arcade's checkpoints,
-CP_CASTLE	=	4			; (the first in the castle)
-	.else
-NUM_CP		=	9
-CP_CASTLE	=	6
-	.endif
-NUM_WARP	=	NUM_CP + 1		; and a debug warp to the boss room.
+; Checkpoints are numbered through all the rounds (cp_round): each round's
+; (the arcade's), then a debug warp to its boss room.
+NUM_WARP	=	17
 
 FONT_VRAM	=	$5C00			; Enemy cells (reloaded on close).
 FONT_TILE	=	FONT_VRAM >> 4		; Tile number of ' '.
@@ -68,6 +63,7 @@ obj_b64:	ds	1		; The arcade's sprite colour bank is 64 (enemies_load).
 new_game:	ds	1		; The next checkpoint_start begins a game (title_screen).
 dbg_ttl:	ds	1		; The menu is the start screen's (title_menu).
 dbg_wpn:	ds	1		; Weapon for the game the start screen begins.
+dbg_round:	ds	1		; Its round (dbg_cp: its checkpoint).
 dbg_save:	ds	MENU_W * MENU_H * 2	; The tile map under the menu.
 
 		.code
@@ -89,9 +85,15 @@ txt_slow:	db	"SLOW MOTION", 0
 txt_weapon:	db	"WEAPON", 0
 txt_resume:	db	"RESUME", 0
 txt_title2:	db	"RASTAN DEBUG - NEW GAME", 0
-txt_help2:	db	"SELECT BACK  I/RUN START", 0
-txt_start:	db	"START AT CHECKPOINT", 0
+txt_help2:	db	"SELECT BACK  RUN START", 0
+txt_round:	db	"ROUND", 0
+txt_start:	db	"CHECKPOINT", 0
 txt_go:		db	"START GAME", 0
+txt_boss:	db	"BOSS", 0
+txt_sword:	db	"SWORD", 0
+txt_axe:	db	"AXE", 0
+txt_star:	db	"STAR", 0
+txt_fire:	db	"FIRE", 0
 txt_end:
 
 	.if	(txt_end - txt_page) > 256
@@ -107,35 +109,43 @@ txt_end:
 ; first line of the camera's segment (64 per segment; the boss warp also takes
 ; the door line). Measured in the arcade by starting the round at each one.
 
-	.if	STAGE_ROUND = 1
+; Round 1: checkpoints 0-5, the boss warp 6 (first line of each table).
+; Round 2: checkpoints 7-15, the boss warp 16 (second line). It restarts at
+; segments $17, $19, $1D, $20, $22, $24, $27, $2A and $2D (squares 0, 2, 6, 9,
+; 11, 13, 16, 19, 22): Rastan 16 px right of the arcade's screen x 32 (24 at
+; $19 and $20; at $22 the camera is 160 on and he 184), on the floor below him
+; (the collision map: tools/world.py), the camera 128 px above it as far as
+; the box allows. (sim/scripts/round2*.txt and the checkpoints' captures.)
+; The last is the boss room, and the warp the same.
 cp_cam_x:	dw	0, 2048, 4096, 6144, 8192, 9216, 11264
+		dw	0, 1024, 3072, 4608, 5792, 6656, 8192, 9728, 11264, 11264
 cp_cam_y:	dw	192, 160, 192, 192, 265, -247, 265
+		dw	192, 32, 192, 288, 160, 192, 288, 32, 288, 288
 cp_p_x:		dw	48, 2096, 4144, 6192, 8240, 9296, 11320
+		dw	48, 1064, 3120, 4648, 5992, 6704, 8240, 9776, 11312, 11312
 cp_p_y:		dw	295, 263, 295, 295, 455, -57, 455
-cp_line:	dw	0, 0, 0, 0, 0, $12 * 64, STAGE_DOOR_LINE + 1
+		dw	295, 135, 295, 455, 263, 295, 455, 135, 391, 391
+cp_line:	dw	0, 0, 0, 0, 0, $12 * 64, R1_STAGE_DOOR_LINE + 1
+		dw	0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 ; The sky's step a restart shows (src/dyncolor.asm; the arcade's restarts at
-; segments 5, 9 and 13 load steps 3, 5 and 7 of 8; the castle has none).
+; segments 5, 9 and 13 load steps 3, 5 and 7 of 8; the castle has none; nor
+; round 2).
 cp_sky:		db	0, 2, 4, 6, 0, 0, 0
-	.else
-; Round 2 restarts at segments $17, $19, $1D, $20, $22, $24, $27, $2A and $2D
-; (squares 0, 2, 6, 9, 11, 13, 16, 19, 22): Rastan 16 px right of the arcade's
-; screen x 32 (24 at $19 and $20; at $22 the camera is 160 on and he 184), on
-; the floor below him (the collision map: tools/world.py), the camera 128 px above
-; it as far as the box allows. (sim/scripts/round2*.txt and the checkpoints'
-; captures.) The last is the boss room, and the warp the same.
-cp_cam_x:	dw	0, 1024, 3072, 4608, 5792, 6656, 8192, 9728, 11264, 11264
-cp_cam_y:	dw	192, 32, 192, 288, 160, 192, 288, 32, 288, 288
-cp_p_x:		dw	48, 1064, 3120, 4648, 5992, 6704, 8240, 9776, 11312, 11312
-cp_p_y:		dw	295, 135, 295, 455, 263, 295, 455, 135, 391, 391
-cp_line:	dw	0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-cp_sky:		db	0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-	.endif
+		db	0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+cp_round:	db	1, 1, 1, 1, 1, 1, 1
+		db	2, 2, 2, 2, 2, 2, 2, 2, 2, 2
+; Per round: its first checkpoint, its last (before the warp), its first in
+; the castle.
+rnd_cp0:	db	0, 7, NUM_WARP		; (and the next round's: the end)
+rnd_cplast:	db	5, 15
+rnd_castle:	db	4, 13
 
 ; checkpoint_track - once a frame: the checkpoint moves on when the camera
 ; reaches the next one's segment (the arcade picks it by segment).
 checkpoint_track:
+		ldx	<cur_round
 		lda	<cur_cp
-		cmp	#NUM_CP - 1
+		cmp	rnd_cplast - 1, x
 		bcs	.done
 		inc	a
 		asl	a
@@ -153,6 +163,10 @@ checkpoint_track:
 ; checkpoint_start - (re)start the stage at checkpoint cur_cp.
 checkpoint_start:
 		jsr	screen_cut
+		ldx	<cur_cp			; Its round.
+		lda	cp_round, x
+		sta	<cur_round
+		jsr	round_setup
 		lda	<cur_cp
 		asl	a
 		tax
@@ -191,9 +205,10 @@ checkpoint_start:
 		lda	new_game		; restart from segment 16 on (checkpoints 4
 		stz	new_game		; and 5: the castle soldiers turn green),
 		bne	!+			; else 48 - and 48 for a game begun there
-		lda	<cur_cp			; (the start screen's menu: the arcade's
-		cmp	#CP_CASTLE		; game started at segment $10 keeps 48,
-		bcc	!+			; its restart there after a death is 64).
+		ldy	<cur_round		; (the start screen's menu: the arcade's
+		lda	<cur_cp			; game started at segment $10 keeps 48,
+		cmp	rnd_castle - 1, y	; its restart there after a death is 64).
+		bcc	!+
 		inx
 !:		stx	obj_b64
 		jsr	enemies_load
@@ -269,8 +284,9 @@ door_enter:	stz	<p_door
 		bmi	.boss			; Above row 0: the shaft's door.
 		lda	<p_x + 1		; The gate: before the castle.
 		cmp	#>8192
-		bcs	.no
-		jsr	screen_cut
+		bcc	!+
+		rts
+!:		jsr	screen_cut
 		jsr	swarm_save		; (bats keep their place on the screen)
 		lda	#<8240
 		sta	<p_x
@@ -290,9 +306,9 @@ door_enter:	stz	<p_door
 		bra	.show
 .boss:
 		jsr	screen_cut
-		lda	#<(STAGE_DOOR_LINE + 1)	; The rest of the shaft, the door line,
+		lda	rd_boss_line		; The rest of the shaft, the door line,
 		sta	<stream_min		; and what the camera needs.
-		lda	#>(STAGE_DOOR_LINE + 1)
+		lda	rd_boss_line + 1
 		sta	<stream_min + 1
 		lda	#<(11728 - 136)
 		sta	<scroll_x
@@ -324,7 +340,6 @@ door_enter:	stz	<p_door
 		jsr	props_draw
 		jsr	enemies_draw
 		jmp	screen_show
-.no:		rts
 
 ; ---------------------------------------------------------------------------
 ; debug_check - once a frame, before the game logic. UP and SELECT held
@@ -394,7 +409,6 @@ title_menu:	jsr	screen_cut		; (display off from the next VBLANK)
 		stz	<dbg_col
 		stz	<dbg_row
 		stz	<dbg_sel
-		stz	<dbg_cp
 		lda	#START_LIVES
 		sta	<lives
 		lda	#WPN_SWORD
@@ -558,12 +572,33 @@ menu_change:	pha
 		jsr	line_fn
 		tax
 		pla
-		cpx	#0			; Warp target.
-		bne	.god
+		cpx	#0			; Warp target (the start screen's: in
+		bne	.round			; the round chosen).
 		clc
 		adc	<dbg_cp
+		bit	dbg_ttl
+		bmi	.incp
 		cmp	#NUM_WARP
 		bcs	.done			; (also catches -1)
+		sta	<dbg_cp
+		rts
+.incp:		ldy	dbg_round
+		cmp	rnd_cp0 - 1, y
+		bcc	.done
+		cmp	rnd_cp0, y		; (-1: catches 255)
+		bcs	.done
+		sta	<dbg_cp
+		rts
+.round:		cpx	#8			; The start screen's round: its first
+		bne	.god			; checkpoint.
+		clc
+		adc	dbg_round
+		beq	.done
+		cmp	#NUM_ROUNDS + 1
+		bcs	.done
+		sta	dbg_round
+		tay
+		lda	rnd_cp0 - 1, y
 		sta	<dbg_cp
 		rts
 .god:		cpx	#1
@@ -886,9 +921,20 @@ menu_body:	php
 		lda	<p_y + 1
 		sta	<dbg_num + 1
 		jsr	print_num5
+		lda	<cur_cp		; (two digits from 10)
+		cmp	#10
+		bcc	!+
+		sbc	#10
+		pha
+		lda	#1
 		ldx	#21
 		ldy	#3
-		lda	<cur_cp
+		jsr	print_digit
+		pla
+		ldx	#22
+		bra	!++
+!:		ldx	#21
+!:		ldy	#3
 		jsr	print_digit
 
 .lines:		stz	<dbg_line		; The selectable lines, box rows 5, 7, ...
@@ -932,8 +978,11 @@ menu_body:	php
 
 ; menu_value - the value column of line Y (row in dbg_y).
 menu_value:	cpy	#0
+		bne	.round
+		jmp	print_cp
+.round:		cpy	#8
 		bne	.god
-		lda	<dbg_cp			; Warp: "< n >"
+		lda	dbg_round
 		jmp	print_digit_arrows
 .god:		cpy	#1
 		bne	.enemies
@@ -955,9 +1004,49 @@ menu_value:	cpy	#0
 		jmp	print_digit_arrows_div
 .weapon:	cpy	#6
 		bne	.done
-		lda	<p_weapon
-		jmp	print_digit_arrows
+		ldy	<p_weapon		; Its name.
+		lda	wpn_names - 1, y
+		jmp	print_value
 .done:		rts
+
+; print_cp - the warp target dbg_cp at the value column: the start screen's,
+; "< n >" in its round (or "BOSS", the warp to its boss room); in play,
+; "round-n" (or "round-B").
+print_cp:	ldx	dbg_round		; (the start screen)
+		bit	dbg_ttl
+		bmi	!+
+		ldy	<dbg_cp
+		ldx	cp_round, y
+!:		lda	rnd_cp0, x		; The boss warp: the round's last.
+		dec	a
+		cmp	<dbg_cp
+		beq	.boss
+		lda	<dbg_cp
+		sec
+		sbc	rnd_cp0 - 1, x
+		bit	dbg_ttl
+		bpl	.game
+		jmp	print_digit_arrows
+.boss:		bit	dbg_ttl
+		bpl	.gboss
+		lda	#<txt_boss
+		jmp	print_value
+.gboss:		lda	#'B' - '0'
+.game:		pha				; "r-n"
+		lda	#MENU_COL + 1 + 20
+		sta	<dbg_x
+		txa
+		clc
+		adc	#'0'
+		jsr	put_char
+		lda	#'-'
+		jsr	put_char
+		pla
+		clc
+		adc	#'0'
+		jmp	put_char
+
+wpn_names:	db	<txt_sword, <txt_axe, <txt_star, <txt_fire
 
 ; ---------------------------------------------------------------------------
 ; Text helpers. Coordinates are relative to the box; the text is upper case.
@@ -985,14 +1074,17 @@ print_at_l:	sta	<dbg_ptr
 .done:		rts
 
 ; print_onoff - A nonzero "ON", else "OFF", at column dbg_x of row dbg_y.
-print_onoff:	ldx	#MENU_COL + 1 + 20
-		stx	<dbg_x
-		tax
+print_onoff:	tax
 		lda	#<txt_off
 		cpx	#0
-		beq	!+
+		beq	print_value
 		lda	#<txt_on
-!:		sta	<dbg_ptr
+		; (fall through)
+
+; print_value - string txt page (A = low byte) at the value column of row dbg_y.
+print_value:	ldx	#MENU_COL + 1 + 20
+		stx	<dbg_x
+		sta	<dbg_ptr
 		lda	#>txt_page
 		sta	<dbg_ptr + 1
 		cly
@@ -1139,9 +1231,9 @@ bat_addr:	lda	<dbg_y
 menu_labels:	db	<txt_warp, <txt_god, <txt_enemies, <txt_health
 		db	<txt_lives, <txt_slow, <txt_weapon, <txt_resume
 ; The start screen's lines (title_menu) and their functions: no REFILL HEALTH.
-title_labels:	db	<txt_start, <txt_god, <txt_enemies, <txt_lives
+title_labels:	db	<txt_round, <txt_start, <txt_god, <txt_enemies, <txt_lives
 		db	<txt_slow, <txt_weapon, <txt_go
-title_fns:	db	0, 1, 2, 4, 5, 6, 7
+title_fns:	db	8, 0, 1, 2, 4, 5, 6, 7
 
 ; line_fn - A = menu line: A = its function (menu_change's numbering). Uses X.
 line_fn:	ldx	dbg_ttl
@@ -1150,9 +1242,6 @@ line_fn:	ldx	dbg_ttl
 		lda	title_fns, x
 !:		rts
 
-; menu_lines - A = the number of lines (the start screen has one fewer).
+; menu_lines - A = the number of lines.
 menu_lines:	lda	#MENU_LINES
-		bit	dbg_ttl
-		bpl	!+
-		dec	a
-!:		rts
+		rts
