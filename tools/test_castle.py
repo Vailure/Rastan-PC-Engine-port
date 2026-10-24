@@ -254,7 +254,11 @@ slots = [int(v) for v in open(os.path.join(objdir, 'objects.inc')).read().split(
          .split('\n')[0].replace('db', '').split(',')]
 want48 = np.frombuffer(open(os.path.join(objdir, 'objpal.bin'), 'rb').read(), '<u2')
 want64 = np.frombuffer(open(os.path.join(objdir, 'objpal_b64.bin'), 'rb').read(), '<u2')
-held = lambda v: np.concatenate([v[ps * 16:ps * 16 + 16] for ps in slots])
+# (slots 13 and 14 are the late slots: round 1 loads its floor spears' palettes there.)
+early = [i for i, ps in enumerate(slots) if ps not in (13, 14)]
+held = lambda v: np.concatenate([v[ps * 16:ps * 16 + 16] for ps in slots if ps not in (13, 14)])
+want48 = np.concatenate([want48[i * 16:i * 16 + 16] for i in early])
+want64 = np.concatenate([want64[i * 16:i * 16 + 16] for i in early])
 v3 = held(sprite_pals(warp(3), 300))
 v4 = held(sprite_pals(warp(4), 300))
 check('colour bank 48 after a restart before the castle (gold and blue soldiers)', (v3 == want48).all())

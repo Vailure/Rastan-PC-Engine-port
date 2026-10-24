@@ -1284,10 +1284,16 @@ coll_at:	phx				; (X and Y kept)
 		plx
 		rts
 coll_world:	lda	<prop_solid		; A solid prop (the cave block) first.
-		beq	.map
+		beq	.mo
 		jsr	prop_coll
-		bcc	.map
+		bcc	.mo
 		lda	#1
+		rts
+.mo:		lda	mo_nplat		; Then the map objects' platforms
+		beq	.map			; (src/mobj.asm): floors to jump
+		jsr	mobj_coll		; up through.
+		bcc	.map
+		lda	#3
 		rts
 .map:		lda	<cy + 1			; Square row (y >> 9) + 3: 0..3.
 		cmp	#$80

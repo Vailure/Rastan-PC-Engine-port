@@ -196,7 +196,7 @@ Pages 0, 2 and 3 are empty.
 - A round's data must sit in one page, and `sf2_round` must select it before the stage streams. It runs at boot and from `stream_reset`.
 - Round 1 is deliberately in page 1, not page 0, so a missing or wrong page write breaks the tests at once.
 
-**Code space:** bank $00 has 0.3 KB left, bank $04 (game code) 0.7 KB and bank $05 (debug, checkpoints, the woman, vines, traps, stills, rounds) 1.7 KB. Bank $01 (`XBANK`) holds the rounds' own object code (gargoyle, jets, snake, both bosses) with 5 KB left: it runs in MPR2 in place of bank $05, entered through `x_*` trampolines in bank $04 (`src/xbank.asm`), so it may call only bank $04 and the core. `main.asm` fails the build when bank $05 or $01 overflows (pceas would otherwise carry on into the next bank silently).
+**Code space:** bank $00 has 0.3 KB left, bank $04 (game code) 0.7 KB and bank $05 (debug, checkpoints, the woman, vines, traps, stills, rounds) 1.7 KB. Bank $01 (`XBANK`) holds the rounds' own object code (gargoyle, jets, snake, both bosses) with 5 KB left: it runs in MPR2 in place of bank $05, entered through `x_*` trampolines in bank $04 (`src/xbank.asm`), so it may call only bank $04 and the core. Bank $03 (`XBANK2`, `XCALL2` trampolines) holds rounds 2 and 3's map objects (`src/mobj.asm`) and beasts (`src/beasts.asm`) the same way, with about 4.5 KB left (the castle fire's data moved to bank $12 to make room). `main.asm` fails the build when bank $05, $01 or $03 overflows (pceas would otherwise carry on into the next bank silently).
 
 Check bank usage with `make … build/rastan.pce 2>&1 | grep ^BANK`. That build has the listing on, and `pceas` prints used and free space per bank.
 
@@ -207,7 +207,7 @@ Check bank usage with `make … build/rastan.pce 2>&1 | grep ^BANK`. That build 
 | `$0000` | BAT, 64×64 |
 | `$1000–$4A7F` | Streamed BG tiles: 936 slots (`NUM_SLOTS` in `pce_stage.py`), peak use 930. The converter fails if a line would need more. |
 | `$4A80–$4AFF` | The swarm's bat cells (`$268`, `$269`) |
-| `$4B00–$4BFF` | The floor spears' cells (round 2: streamed BG tiles, `$4B00-$4FFF`) |
+| `$4B00–$4BFF` | Round 1: the floor spears' cells. Rounds 2 and 3: the map objects' cells (`MOB_VRAM`, 13 and 20 cells; `$4B00-$4FFF` is free of streamed tiles there) |
 | `$4C00–$4FFF` | Props: outside, the cave block. In the castle, the fire's 32 tiles (`$4C00-$4DFF`) and the hanging column's 6 cells (`$4E00-$4F7F`). |
 | `$5000` / `$5600` | Rastan's two pattern buffers (double-buffered) |
 | `$5C00–$76BF` | Object slot buffers |
@@ -603,15 +603,21 @@ The order is roughly by the value it adds to the demo for the effort.
      (`zn_*` in `enemies.asm`, a cycle of kinds for every zone of every round). New kinds: the
      horned man and the skeleton (generic melee walkers: three swings, the lizardman's weapon box,
      not measured), the harpy (a thrower: two blades at 9 and 32 frames, `EK_BLADE` flying as the
-     clubs do). Not ported: the demon and the frog (map objects in slots 9-10, types 0), the
-     chimera and woman warrior placed by the map (type `$2A`), the boulders, the castle's flame
-     jets (types `$73`/`$74`, `$53`/`$54`) and other map objects (types `$45`, `$46`, `$4F`,
-     `$65`/`$66`, `$6C`, `$71`/`$72`).
+     clubs do). Since ported: the green demon (slots 9-10, `src/beasts.asm`), the walkers the
+     map places (type `$2A`: `place_spawn`), the boulders, the logs, blocks, spears and rising
+     rocks (`src/mobj.asm`). Not ported: the frog, the castle's flame jets (types `$73`/`$74`,
+     `$53`/`$54`) and other map objects (types `$45`, `$46`, `$4F`, `$65`/`$66`, `$6C`,
+     `$71`/`$72`).
    - **Sprite palette slots** are shared between arcade palettes that no round uses together
      (`GROUP_ROUNDS` in `object_specs.py`); each round loads its own set (`objpal_r<n>.bin`).
      Boss rooms draw in colour bank 64: the knight's colour and the wizard's (and its fire) are
      `FIXED_PALS` (sprite palettes 8 and 13: round 1's props' and floor spears'), written as
      `<group>_pal<n>.bin` and loaded by the boss's spawn.
+     Slots 13 and 14 are late slots: round 1 fills them with its floor spears' palettes
+     (`traps_load`, after the objects' palettes), so `pce_objects.py` gives them only to
+     palettes rounds 2 and 3 use (round 1's palettes are placed first, in the other slots).
+     The horned man is a group of its own (`horn`, rounds 2 and 3) so round 3's other walkers
+     (`r3walk`) stay out of round 2's palettes.
    - **The wizard** (`src/wizard.asm`; `sim/scripts/boss3*.txt`; arcade slot 17, type `$14`
      from the table at `$0444E0`, its state machine at `$04D650` with its variables in
      `$10CF10`-`$10CF46` and its state in `$10C272`): it appears at x 256 of the room (y 384),

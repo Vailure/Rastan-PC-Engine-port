@@ -222,6 +222,7 @@ core_main:	lda	#GAME_BANK		; (the boot mapping already has it there)
 		jsr	stream_ahead		; Make its columns resident.
 		jsr	player_draw		; SATB for the next frame.
 		jsr	props_draw
+		jsr	x_mobj_draw		; (rounds 2 and 3: their map objects)
 		jsr	enemies_draw
 		jsr	hud_update
 		jsr	checkpoint_track
@@ -838,6 +839,18 @@ xbank_end:
 	.fail	bank XBANK is full
 	.endif
 
+; The map objects of rounds 2 and 3: bank XBANK2, in MPR2 the same way.
+XBANK2		=	$03
+		.code
+		.bank	XBANK2
+		.page	2
+		include	"mobj.asm"
+		include	"beasts.asm"
+xbank2_end:
+	.if	bank(xbank2_end) != XBANK2
+	.fail	bank XBANK2 is full
+	.endif
+
 ; ---------------------------------------------------------------------------
 ; Data.
 
@@ -895,6 +908,7 @@ obj_palettes_r3_b64: incbin	"objpal_r3_b64.bin"
 knight_pal:	incbin	"knight_pal8.bin"	; Round 2's boss: sprite palette 8 (knight.asm).
 wizard_pal:	incbin	"wizard_pal8.bin"	; Round 3's boss: sprite palettes 8 and 13
 wizard_pal13:	incbin	"wizard_pal13.bin"	; (wizard.asm).
+fire_data:	incbin	"stage1/fire.bin"	; The lava hall's fire (build/stage1).
 data12_end:
 	.if	bank(data12_end) != $12
 	.fail	bank $12 is full
@@ -1001,7 +1015,10 @@ proc_pad:	ds	$8000 - PROC_ROOM - *
 		.bank	$02
 		.page	3
 still_gameover:	incbin	"gameover.bin"		; GAME OVER.
+mobj_cells_r2:	incbin	"objects/mobj_r2.bin"	; The map objects' cells (src/mobj.asm).
+mobj_cells_r3:	incbin	"objects/mobj_r3.bin"
+data2_end:
+	.if	bank(data2_end) != $02
+	.fail	bank $02 is full
+	.endif
 
-		.bank	$03
-		.page	3
-fire_data:	incbin	"stage1/fire.bin"	; The lava hall's fire (build/stage1).

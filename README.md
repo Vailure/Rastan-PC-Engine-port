@@ -41,6 +41,8 @@ from the ROMs (`*.bin`, snapshots, renders, disassembly) is git-ignored.
 | `src/woman.asm` | The woman warrior |
 | `src/jets.asm` | Fire jets over the castle's lava |
 | `src/vines.asm` | Swinging vines |
+| `src/mobj.asm` | Rounds 2 and 3's map objects: logs, sinking blocks, mud, wall and floor spears, rising rocks (`XBANK2`) |
+| `src/beasts.asm` | Round 2's piranhas and rounds 2 and 3's green demon (`XBANK2`) |
 | `src/traps.asm` | The castle's floor spears |
 | `src/sound.asm` | Music and sound effects (PSG) |
 | `src/boss.asm` | The round 1 boss and its fire; the round clear |
@@ -381,7 +383,32 @@ Not done yet: slopes, waterfall currents, the other collision codes, rope attack
   splits every pose by piece order (13 + the rest) and two objects draw it. Then the round is clear: round 2 follows,
   with the score and lives kept. The debug menu's warp has a target for each round's boss room.
 - The woman's code lives in bank 5 with the debug menu, which is always mapped; the gargoyle's, the jets', the snake's
-  and both bosses' in bank `$01` (`XBANK`), which `src/xbank.asm` maps into MPR2 in its place while they run.
+  and both bosses' in bank `$01` (`XBANK`), which `src/xbank.asm` maps into MPR2 in its place while they run; the
+  map objects' and the beasts' in bank `$03` (`XBANK2`, `XCALL2` trampolines), the same way.
+
+### Rounds 2 and 3: map objects and the rest (approximate)
+
+Measured on the bot's runs through each round (`build/r2run.snp`, `build/r3run.snp`: `tools/make_bot.py` with
+floor pokes where the bot can't cross a hazard; `R2RUN_POKES`, `R3RUN_POKES` in the Makefile).
+
+- **Map objects** (`src/mobj.asm`, cells from `MOBJ_CELLS` in `tools/object_specs.py`, VRAM `$4B00`, up to 6 live):
+  the arcade's map objects draw sprites but write no collision, so here each one that carries Rastan registers a
+  platform rectangle that `coll_world` checks before the map (floor code 3; `mobj_coll` in `src/props.asm`).
+  - Logs (type `$17`): bob on the arcade's offset table, a step every 3 frames, 72 frames at each end; Rastan
+    rides them. Round 2's two waters.
+  - Sinking blocks (type `$15`): rest 151 frames at the top, sink 2 px every 5 frames, rest 151 under, rise.
+  - Mud (type `$16`): 2x4 cells, 4 phases (drawn only).
+  - Wall spears (type `$13`): rest 99, out 2 px/frame to 46, hold 3, back; hurt (23 untouchable frames).
+  - Floor spears and rising rocks (types `$1D`, `$21`, the arcade's `$0442BA`): rest 99, up 2 px/frame to 64,
+    hold 4, down; touching one kills.
+- **Piranhas** (`src/beasts.asm`, round 2): leap from the water as Rastan nears (a 210-frame two-leap cycle);
+  touch knocks back (code 3), one hit, 400 points.
+- **Green demon** (rounds 2 and 3): flies in as the gargoyle does, then hunts Rastan for 720 frames and leaves;
+  touch drains (code 1), one hit on the wings, 500 points a half. Beasts take a special slot, else a walker's.
+- Placed walkers (`place_spawn`), the rounds' gargoyles, boulders (rolling either way), items and vines are per-round
+  tables at the arcade's spots.
+- Not yet ported: the fire strips over round 3's lava, bubbles, round 3's jets, wall flames and weights, and round
+  2's castle objects.
 - **No torn frames:** the SATB is DMA'd at the start of VBLANK, before the object cell uploads, so `enemies_draw`
   plans which slots will get new cells at the next VBLANK (same order and budget) and draws each slot with the pose
   its buffer will hold. A frame never shows an old layout over new cells.

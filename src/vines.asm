@@ -17,7 +17,7 @@
 ;
 ; ***************************************************************************
 
-NUM_VINES	=	6		; (all rounds': vr_first)
+NUM_VINES	=	8		; (all rounds': vr_first)
 VINE_NEAR	=	240		; Present while |p_x - x| < this.
 VINE_GRAB_X	=	40		; Caught within this of the hanging point,
 VINE_GRAB_Y	=	24
@@ -25,18 +25,19 @@ VINE_NOGRAB	=	20		; and not again this many frames after a jump.
 
 ; Round 1's: the chasm's, then the lava hall's three.
 ; Round 2's: markers $4F at (5632, 208) and (8416, 240), placed as round 1's
-; chasm vine is from its marker at (2720, 80): + (30, -96).
-vine_x_l:	db	<2750, <8830, <8990, <9150, <5662, <8446
-vine_x_h:	db	>2750, >8830, >8990, >9150, >5662, >8446
-vine_y_l:	db	<-16, <-496, <-496, <-496, <112, <144
-vine_y_h:	db	>-16, >-496, >-496, >-496, >112, >144
-vine_bit:	db	1, 2, 4, 8, 16, 32
+; chasm vine is from its marker at (2720, 80): + (30, -96). Round 3's: $4F at
+; (4608, 320), over the lava, and (9568, -288), in the castle's shaft.
+vine_x_l:	db	<2750, <8830, <8990, <9150, <5662, <8446, <4638, <9598
+vine_x_h:	db	>2750, >8830, >8990, >9150, >5662, >8446, >4638, >9598
+vine_y_l:	db	<-16, <-496, <-496, <-496, <112, <144, <224, <-384
+vine_y_h:	db	>-16, >-496, >-496, >-496, >112, >144, >224, >-384
+vine_bit:	db	1, 2, 4, 8, 16, 32, 64, 128
 ; Phase offset (frames) within the 180-frame swing. The lava hall's middle vine
 ; swings opposite its neighbours, so a hop always meets the next vine coming
 ; back: measured only for the chasm's vine, chosen for the hall's.
-vine_phase:	db	0, 0, 90, 0, 0, 0
+vine_phase:	db	0, 0, 90, 0, 0, 0, 0, 0
 ; Each round's vines: vr_first[round - 1] .. vr_first[round] - 1.
-vr_first:	db	0, 4, 6, 6		; (round 3: none)
+vr_first:	db	0, 4, 6, 8
 
 ; Per phase: the swing's half-step (signed), Rastan's x and y from the anchor.
 vine_h:		db	0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14

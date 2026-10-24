@@ -31,6 +31,8 @@ FILES = {
     'r3_32': 'r3bot_32.snp',     # the bot (tools/make_bot.py) from round 3's checkpoint $32,
     'r3_34': 'r3bot_34.snp',     # $34
     'r3_39': 'r3bot_39.snp',     # and $39 (every frame from 380)
+    'r2run': 'r2run.snp',        # the bot through round 2 (water and pits floored over: Makefile R2RUN_POKES)
+    'r3run': 'r3run.snp',        # and through round 3
     'knight_kill': 'boss2_kill.snp',  # sim/scripts/boss2_kill.txt: its death        # sim/scripts/snake.txt: round 2's snakes (slot 5 crawls, strikes, dies)
 }
 
@@ -152,10 +154,12 @@ GROUPS = {
     # skeleton (221-224; three swings, 235-238), the harpy (96-98; the throw, 99-104, two
     # blades leaving at 9 and 32 frames), and the harpy's blades (type $2B, slots 18-19,
     # anims 170-177 spinning, 1.5 px a frame like the blue throwers' clubs).
-    'r3walk': [
+    'horn': [
         ('horn_walk', 'r3_32', 8, 1132, 1162),
         ('horn_attack', 'r3_32', 8, 441, 501),
         ('horn_death', 'r3_34', 8, 447, 476),
+    ],
+    'r3walk': [
         ('skel_walk', 'r3_32', 3, 2443, 2474),
         ('skel_attack', 'r3_34', 5, 517, 577),
         ('skel_death', 'r3_39', 8, 2884, 2913),
@@ -178,6 +182,20 @@ GROUPS = {
         ('wz_death', 'r3_34', 8, 447, 476, {'index': (0, 13)}),
         ('wz2_death', 'r3_34', 8, 447, 476, {'index': (13, 99)}),
         ('wfire', 'wiz', 22, 843, 858),
+    ],
+    # Rounds 2 and 3's green demon (arcade slots 9 and 10, like the gargoyle's): body and wings
+    # flapping as it flies (anims 93, 94), its death the gargoyle's burst.
+    'garg2': [
+        ('g2_body', 'r2run', 9, 5624, 5659),
+        ('g2_wings', 'r2run', 10, 5624, 5659),
+        ('g2_death', 'gargkill', 9, 1163, 1179),
+        ('g2_wdeath', 'gargkill', 10, 1163, 1179),
+    ],
+    # Round 2's piranhas (arcade slots 15-17): one whole cycle, a leap to the left and one back
+    # (anims 186-190, 210 frames), its death the walkers' burst.
+    'piranha': [
+        ('piranha', 'r2run', 15, 5538, 5747),
+        ('pir_death', 'lizard', 8, 1536, 1566),
     ],
     # The hurry-up swarm's small bats (arcade slots 20-28): flapping (cells $268-$26A,
     # all bats on one global clock) and the cell a sword hit leaves ($276). src/swarm.asm
@@ -217,8 +235,8 @@ B64_GROUPS = ('castle', 'jets', 'vine', 'swarm', 'items', 'boss', 'knight')
 # The rounds a group's objects appear in (default: every round). Arcade palettes used only
 # in rounds that never meet can share a PCE sprite palette slot: each round loads its own
 # colours (objpal.bin for round 1, objpal_r<n>.bin).
-GROUP_ROUNDS = {'boss': {1}, 'gargoyle': {1}, 'woman': {1}, 'jets': {1}, 'rocks': {1, 3},
-                'vine': {1, 2}, 'snake': {2, 3}, 'knight': {2}, 'r3walk': {3}, 'wizard': {3}}
+GROUP_ROUNDS = {'boss': {1}, 'woman': {1, 2}, 'jets': {1}, 'snake': {2, 3}, 'knight': {2}, 'r3walk': {3}, 'horn': {2, 3},
+                'wizard': {3}, 'garg2': {2, 3}, 'piranha': {2}}
 NUM_ROUNDS = 3
 
 # Single cells the engine draws by itself: symbol -> (group, arcade cell). objects.inc
@@ -231,15 +249,39 @@ CELL_SYMBOLS = {
     'SWARM_DEAD': ('swarm', 0x276),
 }
 
+# Map objects' cells (src/mobj.asm), resident in VRAM ($4B00-$4FFF, which rounds 2 and 3 leave
+# to them) while their round is played: round -> [(symbol, capture, frame, arcade cell)].
+# objects.inc gets SYMBOL (the cell's number in build/objects/mobj_r<n>.bin) and SYMBOL_PAL
+# (its PCE sprite palette). Round 2: the floating log (marker $59-$5D, the arcade's object type
+# $17, four of this cell), the sinking block ($61-$63, type $15: 2x2) and the mud in the
+# gaps ($5E-$60, type $16: 2x4, one of its four phases). Round 3: the wall spears ($65/$66, type
+# $13: tip, shaft, the mount of the upper and the lower), the floor spears ($46/$6C/$6D, type
+# $1D: head, shaft, the left and right cover), the block over the lava ($6E-$70) and the rock
+# spike ($71/$72, type $21: tip, shaft, two pairs of side spikes, the two base halves).
+MOBJ_CELLS = {
+    2: [('MO2_LOG', 'r2run', 1849, 0x546)]
+       + [(f'MO2_BLK{i}', 'r2run', 6001, 0x9f2 + i) for i in range(4)]
+       + [(f'MO2_MUD{i}', 'r2run', 2352, 0x5f1 + i) for i in range(8)],
+    3: [('MO3_WSP_TIP', 'r3run', 3751, 0x9f7), ('MO3_WSP_SHAFT', 'r3run', 3751, 0x9f8),
+        ('MO3_WSP_MNT0', 'r3run', 3751, 0xa0b), ('MO3_WSP_MNT1', 'r3run', 3751, 0xa0c),
+        ('MO3_FSP_HEAD', 'r3run', 4282, 0x266), ('MO3_FSP_SHAFT', 'r3run', 4282, 0x267),
+        ('MO3_FSP_BASE0', 'r3run', 4284, 0xa0d), ('MO3_FSP_BASE1', 'r3run', 4284, 0xa0e)]
+       + [(f'MO3_BLK{i}', 'r3run', 5641, 0x9f2 + i) for i in range(4)]
+       + [(f'MO3_RIS{i}', 'r3run', 6779, 0x9ea + i) for i in range(6)]
+       + [('MO3_RIS_B0', 'r3run', 6779, 0xa10), ('MO3_RIS_B1', 'r3run', 6779, 0xa11)],
+}
+
 # Scripted flights, replayed relative to the spawn point:
 # name -> (group, capture, slot, first frame, last frame).
 PATHS = {
     'gargoyle': ('gargoyle', 'gargoyle', 9, 861, 1271),
+    'garg2': ('garg2', 'r2run', 9, 5538, 5718),       # (its glide and dive; then it hunts Rastan)
+    'piranha': ('piranha', 'r2run', 15, 5538, 5748),  # (one cycle, looped)
 }
 
 # Pieces per pose (src/enemies.asm slot buffers): walkers 11 (the default), items and
 # bats 4, specials 13; projectiles 2 (single-piece here).
-GROUP_MAX = {'items': 4, 'rocks': 13, 'gargoyle': 13, 'jets': 13, 'boss': 13, 'vine': 13, 'knight': 13, 'wizard': 13}
+GROUP_MAX = {'items': 4, 'rocks': 13, 'gargoyle': 13, 'garg2': 13, 'piranha': 13, 'jets': 13, 'boss': 13, 'vine': 13, 'knight': 13, 'wizard': 13}
 
 # Poses the engine refers to by number: (group, animation, step) -> symbol.
 POSE_SYMBOLS = {
@@ -250,6 +292,6 @@ POSE_SYMBOLS = {
     ('castle', 'sword_low', 6): 'POSE_SWORD_LOW',
     ('snake', 'snake_strike', 3): 'POSE_SNAKE_OUT',     # arcade anim 185: the strike's reach
     ('knight', 'kn_swing', 4): 'POSE_KN_OUT',           # arcade anim 223: its sword out (box $93)
-    ('r3walk', 'horn_attack', 3): 'POSE_HORN_OUT',      # arcade anim 207: the swing's reach (6 frames)
+    ('horn', 'horn_attack', 3): 'POSE_HORN_OUT',      # arcade anim 207: the swing's reach (6 frames)
     ('r3walk', 'skel_attack', 3): 'POSE_SKEL_OUT',      # arcade anim 238
 }

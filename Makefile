@@ -74,6 +74,26 @@ $(BUILD)/r3bot_%.txt: tools/make_bot.py
 $(BUILD)/r3bot_%.snp: sim/sim sim/maincpu.bin $(BUILD)/r3bot_%.txt
 	sim/sim sim/maincpu.bin $(BUILD)/r3bot_$*.txt $@ 1 380
 
+# Rounds 2 and 3 run through from their start (to the castle) by the same bot, with the
+# water, pits and climbs it cannot cross floored over while it passes (make_bot.py's floor
+# pokes): the census of their map objects (logs, blocks, spears ...) and the captures of
+# their poses, every frame from 380.
+R2RUN_POKES = 1800:2112:40:32:63 1955:2355:40:0:51 2328:2525:40:12:15 2397:2584:40:24:27 2498:2660:40:40:43 \
+	5303:5554:28:56:63 5338:5805:36:0:43 5928:6231:40:36:63
+R3RUN_POKES = 966:1194:56:0:3 1012:1306:56:8:11 1100:1383:52:20:23 1569:1917:40:12:15 1790:2091:44:24:27 \
+	1832:2204:40:32:35 1890:2221:36:40:43 2007:2463:44:56:59 2110:2478:40:0:3 2267:2665:36:16:19 \
+	2379:2766:32:24:27 2470:2774:28:32:35 2986:3262:40:40:63 3126:3507:47:0:35 3767:4169:34:36:47 \
+	3793:4169:30:42:47 4203:4393:36:20:20 4254:4519:48:32:32 4311:4619:56:40:40 4506:4764:56:60:60 \
+	4749:5087:52:24:27 4786:5335:44:32:35 5079:5554:32:56:63 5593:5785:40:36:36 5593:5938:40:36:63
+$(BUILD)/r2run.txt: tools/make_bot.py Makefile
+	@mkdir -p $(BUILD)
+	python3 tools/make_bot.py $@ 14000 - 2 $(R2RUN_POKES)
+$(BUILD)/r3run.txt: tools/make_bot.py Makefile
+	@mkdir -p $(BUILD)
+	python3 tools/make_bot.py $@ 14000 - 3 $(R3RUN_POKES)
+$(BUILD)/r2run.snp $(BUILD)/r3run.snp: $(BUILD)/%.snp: sim/sim sim/maincpu.bin $(BUILD)/%.txt
+	sim/sim sim/maincpu.bin $(BUILD)/$*.txt $@ 1 380
+
 # The sky darkens toward dusk in eight steps along the outdoor stage. The same bot from
 # checkpoints 1 and 3 (the arcade's restart table byte: segments 4 and 12) sees the
 # later steps (the round-start bot dies before them).
@@ -186,7 +206,7 @@ $(BUILD)/item_%.snp: sim/sim sim/maincpu.bin sim/scripts/item_%.txt
 # Object (enemy, projectile, item) poses: groups and captures in tools/object_specs.py.
 # Cells start at bank $60; each group's poses and anims get the next banks.
 OBJECTS    := $(BUILD)/objects
-$(OBJECTS)/objcells.bin: tools/pce_objects.py tools/object_specs.py tools/census_all.py $(BUILD)/lizard.snp $(BUILD)/blue.snp $(BUILD)/item.snp $(BUILD)/item_fire.snp $(BUILD)/item_star.snp $(BUILD)/item_r2.snp $(BUILD)/chimera.snp $(BUILD)/gargoyle.snp $(BUILD)/gargkill.snp $(BUILD)/woman.snp $(BUILD)/castle.snp $(BUILD)/boss.snp $(BUILD)/vine.snp $(BUILD)/hall.snp $(BUILD)/swarm.snp $(BUILD)/snake.snp $(BUILD)/boss2.snp $(BUILD)/boss2_leap.snp $(BUILD)/boss2_kill.snp $(BUILD)/round2.snp $(BUILD)/round2_castle.snp $(BUILD)/round3.snp $(BUILD)/round3_castle.snp $(BUILD)/r3bot_32.snp $(BUILD)/r3bot_34.snp $(BUILD)/r3bot_39.snp $(BUILD)/boss3.snp
+$(OBJECTS)/objcells.bin: tools/pce_objects.py tools/object_specs.py tools/census_all.py $(BUILD)/lizard.snp $(BUILD)/blue.snp $(BUILD)/item.snp $(BUILD)/item_fire.snp $(BUILD)/item_star.snp $(BUILD)/item_r2.snp $(BUILD)/chimera.snp $(BUILD)/gargoyle.snp $(BUILD)/gargkill.snp $(BUILD)/woman.snp $(BUILD)/castle.snp $(BUILD)/boss.snp $(BUILD)/vine.snp $(BUILD)/hall.snp $(BUILD)/swarm.snp $(BUILD)/snake.snp $(BUILD)/boss2.snp $(BUILD)/boss2_leap.snp $(BUILD)/boss2_kill.snp $(BUILD)/round2.snp $(BUILD)/round2_castle.snp $(BUILD)/round3.snp $(BUILD)/round3_castle.snp $(BUILD)/r3bot_32.snp $(BUILD)/r3bot_34.snp $(BUILD)/r3bot_39.snp $(BUILD)/boss3.snp $(BUILD)/r2run.snp $(BUILD)/r3run.snp
 	cd tools && python3 pce_objects.py ../$(BUILD) ../$(OBJECTS) 0x13
 
 # HUD cells (lives, icon, health bar, ROUND) from the arcade's HUD sprites.

@@ -26,11 +26,12 @@ import numpy as np
 from PIL import Image
 from arcade_gfx import load_region, decode_packed
 from snap import read_snaps, palette_rgb
-from object_specs import B64_GROUPS, BANK64_SNAP, ROUND_PAL_SNAPS, GROUP_ROUNDS, NUM_ROUNDS, FIXED_PALS, GROUP_BANK, CELL_SYMBOLS, FILES, GROUPS, POSE_SYMBOLS, GROUP_MAX, PATHS
+from object_specs import MOBJ_CELLS, B64_GROUPS, BANK64_SNAP, ROUND_PAL_SNAPS, GROUP_ROUNDS, NUM_ROUNDS, FIXED_PALS, GROUP_BANK, CELL_SYMBOLS, FILES, GROUPS, POSE_SYMBOLS, GROUP_MAX, PATHS
 import census_all
 
 ROMDIR = os.environ.get('RASTAN_ROMS', os.path.join(os.path.dirname(__file__), '..', 'roms', 'rastan'))
-PAL_SLOTS = [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12]   # 0 Rastan, 8 props, 13-14 floor spears, 15 HUD
+PAL_SLOTS = [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 14, 13]   # 0 Rastan, 8 props, 13-14 floor spears, 15 HUD
+LATE_SLOTS = (13, 14)    # round 1's floor spears' (enemies_load loads theirs after): not for round 1's colours
 MAX_PIECES = 11                                           # walker slot buffers hold 11 cells
 FIXED = 1000                                              # palette keys of FIXED_PALS' slots
 JITTER = 3                                                # poses this close count as one (see below)
@@ -70,6 +71,9 @@ def main():
     for seqs in GROUPS.values():
         for name, cap, slot, a, b, *rest in seqs:
             want.setdefault(cap, set()).update(range(a, b + 1))
+    for rnd, lst in MOBJ_CELLS.items():
+        for sym, cap, fr, code in lst:
+            want.setdefault(cap, set()).add(fr)
     frames = {}
     for cap, fs in want.items():
         for s in read_snaps(os.path.join(build, FILES[cap])):
@@ -132,6 +136,21 @@ def main():
             assert len(p) <= GROUP_MAX.get(g, MAX_PIECES), f'{g} pose {i} has {len(p)} pieces'
         groups[g] = (poses, anims)
 
+    # Map objects' cells (MOBJ_CELLS): resident in VRAM per round (src/mobj.asm), not in
+    # objcells.bin; their arcade palettes take PCE slots like the groups' do.
+    mobj = {}                                # round -> [(sym, code, ap)]
+    for rnd, lst in MOBJ_CELLS.items():
+        for sym, cap, fr, code in lst:
+            s = frames[cap, fr]
+            e = next((e for e in range(256) if int(s.spr[e * 4 + 2]) & 0x1fff == code), None)
+            if e is None:
+                raise SystemExit(f'MOBJ_CELLS {sym}: cell {code:#x} not drawn in {cap} frame {fr}')
+            ap = ((s.sprctrl & 0xe0) >> 1) + (int(s.spr[e * 4]) & 15)
+            if ap not in used_pals:
+                used_pals[ap] = palette_rgb(s.pal)[ap * 16:ap * 16 + 16]
+            ap_rounds.setdefault(ap, set()).add(rnd)
+            mobj.setdefault(rnd, []).append((sym, code, ap))
+
     # Scripted flight paths: world position per frame (census_all), as runs of
     # equal per-frame steps.
     paths = {}
@@ -173,16 +192,23 @@ def main():
     # Slots: an arcade palette shares one with others whose colours agree, or which no
     # round uses together with it (each round loads its own colours into the slots).
     slot_aps = {}                                # PCE slot -> [(ap, key, alt)]
-    for ap, cols in sorted(used_pals.items()):
+    # (round 1's palettes first: they may not take the late slots)
+    for ap, cols in sorted(used_pals.items(), key=lambda kv: (1 not in ap_rounds.get(kv[0], {1}), kv[0])):
         if ap >= FIXED:
             continue
         key = tuple(to9(c) for c in cols)
         alt = (tuple(to9(c) for c in rgb64[(ap + 16) * 16:(ap + 16) * 16 + 16])
                if 48 <= ap < 64 and ap in late else key)
-        for ps in PAL_SLOTS:
+        order = [ps for ps in PAL_SLOTS if ps not in LATE_SLOTS] + ([] if 1 in ap_rounds[ap] else list(LATE_SLOTS))
+        for ps in order:
             if all((k2, a2) == (key, alt) or not (ap_rounds[ap] & ap_rounds[ap2]) for ap2, k2, a2 in slot_aps.get(ps, [])):
                 break
         else:
+            for ps2, lst in sorted(slot_aps.items()):
+                print('slot', ps2, [(hex(e[0]), sorted(ap_rounds[e[0]])) for e in lst])
+            print('unplaced', hex(ap), sorted(ap_rounds[ap]), [g for g, (poses, _) in groups.items() if any(q[4] == ap for p in poses for q in p)])
+            for g, (poses, _) in groups.items():
+                print('  group', g, sorted(hex(a) for a in {q[4] for p in poses for q in p}))
             raise SystemExit('too many sprite palettes')
         slot_aps.setdefault(ps, []).append((ap, key, alt))
         slot_of[ap] = ps
@@ -213,7 +239,7 @@ def main():
                     cell_ids[img.tobytes(), ps] = len(cells)
                     cell_of[code, ps] = (len(cells), 0, 0)
                     cells.append(code)
-    assert len(cells) <= 1024
+    assert len(cells) <= 1024, len(cells)
     blob = bytearray()
     for code in cells:
         g = spr[code]
@@ -229,6 +255,29 @@ def main():
         blob += b
     open(f'{out}/objcells.bin', 'wb').write(blob)
     cell_banks = (len(blob) + 8191) // 8192
+
+    def pce_cell(code):
+        g = spr[code]
+        b = bytearray(128)
+        for pl in range(4):
+            for y in range(16):
+                v = 0
+                for x in range(16):
+                    if (g[y, x] >> pl) & 1:
+                        v |= 0x8000 >> x
+                b[pl * 32 + y * 2] = v & 0xff
+                b[pl * 32 + y * 2 + 1] = v >> 8
+        return b
+    mobj_syms = []
+    for rnd, lst in sorted(mobj.items()):
+        order = []
+        for sym, code, ap in lst:
+            if (code, ap) not in order:
+                order.append((code, ap))
+            mobj_syms.append((sym, order.index((code, ap)), slot_of[ap]))
+        open(f'{out}/mobj_r{rnd}.bin', 'wb').write(b''.join(pce_cell(c) for c, _ in order))
+        mobj_syms.append((f'MOBJ_R{rnd}_CELLS', len(order), None))
+        print(f'round {rnd}: {len(order)} map object cells')
 
     vce, vce64, changed = bytearray(), bytearray(), []
     for (key, alt, _), ps in sorted(pal9.items(), key=lambda kv: kv[1]):
@@ -308,6 +357,10 @@ def main():
             c, fx, fy = cell_of[code, slot_of[ap]]
             a = slot_of[ap] | ((c >> 8) << 4) | (0x40 if fx else 0) | (0x80 if fy else 0)
             f.write(f'{sym}\t= {c}\n{sym}_ATTR\t= ${a:02X}\n')
+        for sym, v, ps in mobj_syms:
+            f.write(f'{sym}\t= {v}\n')
+            if ps is not None:
+                f.write(f'{sym}_PAL\t= {ps}\n')
         f.write(f'OBJ_PAL_COUNT\t= {len(pal9)}\n')
         f.write('obj_pal_slots:\tdb\t' + ', '.join(str(ps) for ps in sorted(pal9.values())) + '\n')
         f.write('; Arcade palette (bank + color) -> PCE sprite palette:\n')

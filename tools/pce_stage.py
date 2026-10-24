@@ -64,8 +64,7 @@ FIRE_X0, FIRE_X1, FIRE_Y = 8768, 9168, -320
 FIRE_CELL = 0x224
 FIRE_TILE0 = 0x4C0     # VRAM $4C00: the stage props' cells, unused in the castle
 NUM_SLOTS = 936       # $1000-$4A7F; $4A80-$4AFF the swarm's bat cells, $4B00-$4BFF the floor spears'
-                      # cells, $4C00-$4FFF stage props
-EXTRA_SLOT0, EXTRA_SLOT1 = 0x4B0, 0x500   # rounds without round 1's spears and props: $4B00-$4FFF
+                      # cells, $4C00-$4FFF stage props (rounds 2 and 3: their map objects' cells)
 ROWS = 64
 QUAD_SHORT = 0xE0   # line codes: $00-$DF quad #, $E0-$EF repeat, $F0-$FF long quad #
 
@@ -429,8 +428,6 @@ def main():
     # it brings that are not resident.
     lines = world.lines()
     slots_all = list(range(FIRST_SLOT, FIRST_SLOT + NUM_SLOTS))
-    if world.ROUND != 1:          # (no floor spears, cave block or fire: their cells too)
-        slots_all += list(range(EXTRA_SLOT0, EXTRA_SLOT1))
     free = slots_all[::-1]
     resident = {}        # pattern -> slot
     refs = {}            # pattern -> number of live BAT cells showing it

@@ -38,6 +38,24 @@ x_\1:		lda	#XBANK
 		XCALL	weights_update
 		XCALL	weights_draw
 
+; Bank XBANK2 the same way: the map objects of rounds 2 and 3 (src/mobj.asm).
+XCALL2		.macro
+x_\1:		lda	#XBANK2
+		tam2
+		jsr	\1
+		jmp	x_back
+		.endm
+
+		XCALL2	mobj_reset
+		XCALL2	mobj_update
+		XCALL2	mobj_cells
+		XCALL2	mobj_draw
+		XCALL2	beasts_reset
+		XCALL2	pir_spawn
+		XCALL2	pir_think
+		XCALL2	g2_spawn
+		XCALL2	g2_think
+
 x_back:		lda	#DEBUG_BANK
 		tam2
 		rts

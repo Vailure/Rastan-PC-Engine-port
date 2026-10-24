@@ -11,8 +11,6 @@
 ;
 ; ***************************************************************************
 
-NUM_ROCKS	=	4
-ROCK_AHEAD	=	169
 ROCK_WINDOW	=	196
 ROCK_FOOT	=	9		; Floor probe below the anchor (it rests 9 px above a floor).
 SPEC_FIRST	=	NUM_EN + 2	; Special slots 6..8.
@@ -22,25 +20,39 @@ RM_FALL		=	0		; e_alt
 RM_ROLL		=	1
 RM_LOOP		=	2		; Falls forever.
 
-rock_x_l:	db	<2898, <2898, <4601, <6674
-rock_x_h:	db	>2898, >2898, >4601, >6674
-rock_y_l:	db	<427, <139, <243, <123
-rock_y_h:	db	>427, >139, >243, >123
-rock_mode:	db	RM_LOOP, RM_LOOP, RM_FALL, RM_FALL
-rock_bit:	db	1, 2, 4, 8
+; Round 1's four; round 2's one; round 3's four (the bot through the rounds,
+; build/r2run.snp and r3run.snp: arcade slots 14/15). Most come as Rastan nears
+; from the left (169 px off) and roll left once down; round 3's on its slopes
+; come once he is past (64 px right of their spot) and roll right, down after him.
+rock_x_l:	db	<2898, <2898, <4601, <6674, <5042, <753, <6120, <6288, <7888
+rock_x_h:	db	>2898, >2898, >4601, >6674, >5042, >753, >6120, >6288, >7888
+rock_y_l:	db	<427, <139, <243, <123, <243, <91, <171, <69, <243
+rock_y_h:	db	>427, >139, >243, >123, >243, >91, >171, >69, >243
+rock_mode:	db	RM_LOOP, RM_LOOP, RM_FALL, RM_FALL, RM_FALL, RM_FALL, RM_LOOP, RM_FALL, RM_FALL
+rock_dir:	db	0, 0, 0, 0, 0, 1, 0, 1, 0	; (e_face: 1 rolls right)
+rock_ahead_l:	db	<169, <169, <169, <169, <169, <-64, <169, <-64, <169
+rock_ahead_h:	db	>169, >169, >169, >169, >169, >-64, >169, >-64, >169
+rock_bit:	db	1, 2, 4, 8, 1, 1, 2, 4, 8
+rk_first:	db	0, 4, 5, 9		; (round n's: [n - 1] .. [n] - 1)
 
 ; rock_spawn - boulders whose spot Rastan nears (uses etmp, ex).
 rock_spawn:
-		cly
+		ldx	<cur_round
+		lda	rk_first, x
+		sta	<ey			; (the round's last + 1)
+		ldy	rk_first - 1, x
+		cpy	<ey
+		bne	.loop
+		rts
 .loop:		lda	rocks_done
 		and	rock_bit, y
 		bne	.next
-		lda	rock_x_l, y		; p_x - (x - 169) in 0 .. 195?
+		lda	rock_x_l, y		; p_x - (x - ahead) in 0 .. 195?
 		sec
-		sbc	#<ROCK_AHEAD
+		sbc	rock_ahead_l, y
 		sta	<etmp
 		lda	rock_x_h, y
-		sbc	#>ROCK_AHEAD
+		sbc	rock_ahead_h, y
 		sta	<etmp + 1
 		lda	<p_x
 		sec
@@ -72,7 +84,8 @@ rock_spawn:
 		sta	e_yh, x
 		lda	rock_mode, y
 		sta	e_alt, x
-		stz	e_face, x
+		lda	rock_dir, y
+		sta	e_face, x
 		stz	e_sub, x
 		stz	e_timer, x
 		lda	#$FF
@@ -84,9 +97,10 @@ rock_spawn:
 		jsr	start_walk		; (ES_WALK: the spin loops)
 		ply
 .next:		iny
-		cpy	#NUM_ROCKS
-		bne	.loop
-		rts
+		cpy	<ey
+		beq	!+
+		jmp	.loop
+!:		rts
 
 ; rock_think - X = boulder.
 rock_think:	jsr	touch_hurts
@@ -117,15 +131,19 @@ rock_think:	jsr	touch_hurts
 		lda	#RM_ROLL
 		sta	e_alt, x
 .r:		rts
-.roll:		inc	e_sub, x		; 7 px every 6 frames, to the left.
-		lda	e_sub, x
+.roll:		inc	e_sub, x		; 7 px every 6 frames, to the left
+		lda	e_sub, x		; (or right).
 		cmp	#6
 		bcc	!+
 		stz	e_sub, x
-		lda	#$FE
+		lda	#2
 		bra	.step
-!:		lda	#$FF
-.step:		jsr	add_x
+!:		lda	#1
+.step:		ldy	e_face, x
+		bne	!+
+		eor	#$FF
+		inc	a
+!:		jsr	add_x
 		jsr	rock_floor		; Nothing under it: fall.
 		bcs	.r
 		stz	e_alt, x		; RM_FALL

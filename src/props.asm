@@ -271,6 +271,37 @@ prop_coll:	lda	<cx			; cx >= x0
 .no:		clc
 		rts
 
+; mobj_coll - carry set if (cx, cy) is on a map object's platform (src/mobj.asm:
+; x0 <= cx < x1, top <= cy < top + 8). X and Y not kept.
+mobj_coll:	ldx	#MO_MAX - 1
+.loop:		lda	mo_pf, x
+		beq	.next
+		lda	<cy
+		sec
+		sbc	mo_ptl, x
+		tay
+		lda	<cy + 1
+		sbc	mo_pth, x
+		bne	.next
+		cpy	#8
+		bcs	.next
+		lda	<cx
+		cmp	mo_px0l, x
+		lda	<cx + 1
+		sbc	mo_px0h, x
+		bmi	.next
+		lda	<cx
+		cmp	mo_px1l, x
+		lda	<cx + 1
+		sbc	mo_px1h, x
+		bpl	.next
+		sec
+		rts
+.next:		dex
+		bpl	.loop
+		clc
+		rts
+
 prop_pal:	lda	#^prop_palette
 		tam3
 		php
