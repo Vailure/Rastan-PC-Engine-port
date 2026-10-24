@@ -598,6 +598,34 @@ The order is roughly by the value it adds to the demo for the effort.
    - Rounds 2 and 3 need more resident tiles at their peaks (round 3: 909), so they also stream into
      `$4B00-$4FFF` (slots `$4B0-$4FF`), which round 1's spears, props and fire use; their uploads
      are off outside round 1 (`R1_ONLY`).
+   - **Round 3's objects** come from the bot (`tools/make_bot.py out end checkpoint round`) run from
+     its restart checkpoints (`build/r3bot_*.snp`) and `census_all.py`. Walker kinds per x zone
+     (`zn_*` in `enemies.asm`, a cycle of kinds for every zone of every round). New kinds: the
+     horned man and the skeleton (generic melee walkers: three swings, the lizardman's weapon box,
+     not measured), the harpy (a thrower: two blades at 9 and 32 frames, `EK_BLADE` flying as the
+     clubs do). Not ported: the demon and the frog (map objects in slots 9-10, types 0), the
+     chimera and woman warrior placed by the map (type `$2A`), the boulders, the castle's flame
+     jets (types `$73`/`$74`, `$53`/`$54`) and other map objects (types `$45`, `$46`, `$4F`,
+     `$65`/`$66`, `$6C`, `$71`/`$72`).
+   - **Sprite palette slots** are shared between arcade palettes that no round uses together
+     (`GROUP_ROUNDS` in `object_specs.py`); each round loads its own set (`objpal_r<n>.bin`).
+     Boss rooms draw in colour bank 64: the knight's colour and the wizard's (and its fire) are
+     `FIXED_PALS` (sprite palettes 8 and 13: round 1's props' and floor spears'), written as
+     `<group>_pal<n>.bin` and loaded by the boss's spawn.
+   - **The wizard** (`src/wizard.asm`; `sim/scripts/boss3*.txt`; arcade slot 17, type `$14`
+     from the table at `$0444E0`, its state machine at `$04D650` with its variables in
+     `$10CF10`-`$10CF46` and its state in `$10C272`): it appears at x 256 of the room (y 384),
+     stands 57 frames, drops to the floor, walks at Rastan 8 px a 9-frame step and stops 72 px
+     away (88-97 when he has his back to a wall); it casts (anims 37-40) 309 frames after landing
+     and then 137, 257, 257, 137 ... frames apart, a fan of five fireballs 17 frames into the cast
+     (2 px a frame: straight ahead, up at 27, 45, 63 degrees, straight up). In the captures
+     Rastan's sword never hurt it (its ten hit points, `($3A,A4)`, never changed; when he swings
+     near it, it flickers, intangible, and may move): the port lets the sword hurt it while it is
+     solid, then it is gone 133 frames and comes back 192 px the other side of him, casting.
+     Ten blows, 20000 points (assumed), the round clear. Its death is the walkers' burst.
+   - **Boss-room restarts** (the boss warps, round 2's checkpoint at `$2D`) used to leave the
+     camera at the shafts' reach (y 0, the room's top): `checkpoint_start` now forgets the shafts
+     there, as `door_enter` does.
    - **Data banks overflow silently too:** moving the sprite palettes into bank `$08` once pushed
      the data after it into Rastan's graphics (`player.bin`, bank `$09`): he drew wrong and the
      game stalled when he was hit. `main.asm` now fails the build when bank `$08` or `$12` (the
@@ -621,7 +649,7 @@ The order is roughly by the value it adds to the demo for the effort.
      188, 412; y 312), straight and at 1/2 px a frame to the sides. Ten blows kill it (a blow in the
      air counts 3), for 15000; then the round is clear. It has kinds of its own (`EK_KNIGHT`,
      `EK_KNIGHT2`, `EK_ORB`) and draws in sprite palette 8 with the colours the arcade loads for it
-     (`FIXED_PALS` in `object_specs.py`: `build/objects/sprpal8.bin`), which `kn_spawn` loads (round
+     (`FIXED_PALS` in `object_specs.py`: `build/objects/knight_pal8.bin`), which `kn_spawn` loads (round
      1's props get theirs back from `enemies_load`). Its float and the orbs' rule for the
      brazier are from three captures; the arcade's exact decisions are not traced.
    - **Vines:** round 2's two (markers `$4F` at (5632, 208) and (8416, 240)) use round 1's code,

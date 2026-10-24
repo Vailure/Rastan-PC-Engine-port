@@ -830,6 +830,7 @@ XBANK		=	$01
 		include	"snake.asm"
 		include	"boss.asm"
 		include	"knight.asm"
+		include	"wizard.asm"
 		include	"column.asm"
 		include	"weights.asm"
 xbank_end:
@@ -891,7 +892,9 @@ obj_palettes_r2: incbin	"objpal_r2.bin"		; (round 2's sprite colours)
 obj_palettes_r2_b64: incbin	"objpal_r2_b64.bin"
 obj_palettes_r3: incbin	"objpal_r3.bin"		; (round 3's)
 obj_palettes_r3_b64: incbin	"objpal_r3_b64.bin"
-knight_pal:	incbin	"sprpal8.bin"		; Round 2's boss: sprite palette 8 (knight.asm).
+knight_pal:	incbin	"knight_pal8.bin"	; Round 2's boss: sprite palette 8 (knight.asm).
+wizard_pal:	incbin	"wizard_pal8.bin"	; Round 3's boss: sprite palettes 8 and 13
+wizard_pal13:	incbin	"wizard_pal13.bin"	; (wizard.asm).
 data12_end:
 	.if	bank(data12_end) != $12
 	.fail	bank $12 is full

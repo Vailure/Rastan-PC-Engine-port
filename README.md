@@ -72,7 +72,8 @@ python3 tools/trace_player.py build/testdbg.pce 600 60 300 04   # walk right, pr
 
 **`rastan.pce`:** rounds 1, 2 and 3 in one ROM. The arcade's title screen, its "PUSH RUN BUTTON" row
 two choices, START GAME and DEBUG MENU; round 1, the arcade's round-clear screen and jingle after
-its boss, then round 2 with the score and lives kept, then round 3 (no boss yet). GAME OVER
+its boss, then round 2 with the score and lives kept, then round 3; after round 3's boss, the
+title. GAME OVER
 when the last life goes, and back to the title. There is no debug menu in play.
 
 Round 2 (in progress): the forest, the castle from x 8192, two shafts upwards and the door at
@@ -83,10 +84,14 @@ standing swing passes over them; crouch and swing (DOWN + II). Its weapon items,
 dragonflies. The boss, a caped knight with falling orbs. Still to come: its demons, piranhas,
 golden women and tree-dropping throwers, the castle's traps and its music.
 
-Round 3 (started): the cave, the castle from x 8192 (`$3E`), three shafts upwards (`$41`-`$43`)
+Round 3 (in progress): the cave, the castle from x 8192 (`$3E`), three shafts upwards (`$41`-`$43`)
 and the door at their top into the boss room (`$44`), with their collision, colours and the
-arcade's seven restart checkpoints; lizardmen and chimeras. Still to come: its own enemies and
-map objects, its items, its boss and its music.
+arcade's seven restart checkpoints. Its walkers: lizardmen and chimeras, then horned men, snakes,
+harpies (which throw blades) and skeletons, and the castle's soldiers; its four weapon items with
+their bats. The boss, a wizard: it keeps its distance, casts a fan of five fireballs every
+137-257 frames, and blinks away when hit (approximate: what makes the arcade's vulnerable was not
+found). Still to come: its demons, frogs, golden women, the map's own enemies and traps, and its
+music.
 
 The tests run on test builds the Makefile also makes: `testdbg.pce` (straight into the game, with the
 debug menu in play for their checkpoint warps), `god.pce`, `noenemy.pce`, `camtest.pce`, `bgcheck.pce`.
@@ -603,7 +608,8 @@ music gets the channel back, and that the voice shows in the audio.
 - [x] The sprite colour bank: gold and blue castle soldiers, green after a death's restart at checkpoint 4 or 5
 - [x] Shaft 2's three spiked weights (marker `$45`, `src/weights.asm`)
 - [x] Rounds 1-3 in one ROM (a page each), the round chosen at run time; the round clear goes on to the next
-- [ ] Round 3: stage, collision, colours, checkpoints and its walkers done; its enemies, items and boss to do
+- [ ] Round 3: stage, collision, colours, checkpoints, walkers, items and boss (approximate) done; its map
+      enemies, traps and music to do
 - [x] Title choices (START GAME / DEBUG MENU) and the debug menu as a new-game screen: round, checkpoint, ...
 - [ ] Round 2: stage, collision, colours, checkpoints, snakes, vines, items and the
       boss done; its other enemies and map objects and music to do

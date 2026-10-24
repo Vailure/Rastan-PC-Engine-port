@@ -199,7 +199,17 @@ checkpoint_start:
 		lda	cp_line + 1, x
 		sta	<stream_min + 1
 		jsr	stream_ahead
-		stz	<stream_min
+		lda	<stream_min		; In the boss room (past the door): no
+		cmp	rd_boss_line		; shaft above any more (as door_enter),
+		bne	!+			; else the camera stays up at the
+		lda	<stream_min + 1		; shaft's reach.
+		cmp	rd_boss_line + 1
+		bne	!+
+		lda	#$FF
+		sta	<row_top
+		lda	#$7F
+		sta	<row_top + 1
+!:		stz	<stream_min
 		stz	<stream_min + 1
 		jsr	player_init_pos
 		plx

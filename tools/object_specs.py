@@ -27,6 +27,7 @@ FILES = {
     'snake': 'snake.snp',
     'knight': 'boss2.snp',       # sim/scripts/boss2.txt: round 2's boss (slot 17), passive Rastan, its orbs
     'knight_leap': 'boss2_leap.snp',  # sim/scripts/boss2_leap.txt: its float leap
+    'wiz': 'boss3.snp',          # sim/scripts/boss3.txt: round 3's boss (slot 17), passive Rastan, its fire
     'r3_32': 'r3bot_32.snp',     # the bot (tools/make_bot.py) from round 3's checkpoint $32,
     'r3_34': 'r3bot_34.snp',     # $34
     'r3_39': 'r3bot_39.snp',     # and $39 (every frame from 380)
@@ -163,6 +164,21 @@ GROUPS = {
         ('harpy_death', 'r3_39', 5, 527, 556),
         ('blade', 'r3_32', 18, 1251, 1266),
     ],
+    # Round 3's boss, the wizard (arcade slot 17, type $14, 14-17 pieces: in two parts like the
+    # others): standing where it appears (anim 36), walking (41-44, 9 frames each), casting
+    # (37-40, 4 frames each); its death is the walkers' burst (not captured: the port's).
+    # Its fire (slots 18-22, anims 237-239).
+    'wizard': [
+        ('wz_stand', 'wiz', 17, 459, 515, {'index': (0, 13)}),
+        ('wz2_stand', 'wiz', 17, 459, 515, {'index': (13, 99)}),
+        ('wz_walk', 'wiz', 17, 545, 580, {'index': (0, 13)}),
+        ('wz2_walk', 'wiz', 17, 545, 580, {'index': (13, 99)}),
+        ('wz_cast', 'wiz', 17, 825, 840, {'index': (0, 13)}),
+        ('wz2_cast', 'wiz', 17, 825, 840, {'index': (13, 99)}),
+        ('wz_death', 'r3_34', 8, 447, 476, {'index': (0, 13)}),
+        ('wz2_death', 'r3_34', 8, 447, 476, {'index': (13, 99)}),
+        ('wfire', 'wiz', 22, 843, 858),
+    ],
     # The hurry-up swarm's small bats (arcade slots 20-28): flapping (cells $268-$26A,
     # all bats on one global clock) and the cell a sword hit leaves ($276). src/swarm.asm
     # draws them itself (CELL_SYMBOLS); these captures only bring in the cells.
@@ -189,8 +205,12 @@ ROUND_PAL_SNAPS = {2: (('round2.snp', 420), ('round2_castle.snp', 420)),
 # Groups drawn with a PCE sprite palette of their own, whose colours the engine loads itself:
 # group -> {arcade colour: (PCE palette, capture, frame, arcade palette)}. Round 2's knight
 # (colour 15) in sprite palette 8 (round 1's props', unused in round 2), with the colours the
-# arcade loads for it in the boss room (bank 64's palette 79; build/objects/sprpal8.bin).
-FIXED_PALS = {'knight': {15: (8, 'knight', 700, 79)}}
+# arcade loads for it in the boss room (bank 64's palette 79; build/objects/knight_pal8.bin).
+FIXED_PALS = {'knight': {15: (8, 'knight', 700, 79)},
+              # Round 3's wizard (colour 15) and its fire (colour 0), drawn in colour bank 64 in its
+              # room: sprite palettes 8 and 13 (round 1's props' and floor spears'), loaded by the
+              # engine when it comes (build/objects/wizard_pal8.bin, wizard_pal13.bin).
+              'wizard': {15: (8, 'wiz', 700, 79), 0: (13, 'wiz', 900, 64)}}
 BANK64_SNAP = ('castle', 2600)
 B64_GROUPS = ('castle', 'jets', 'vine', 'swarm', 'items', 'boss', 'knight')
 
@@ -198,7 +218,7 @@ B64_GROUPS = ('castle', 'jets', 'vine', 'swarm', 'items', 'boss', 'knight')
 # in rounds that never meet can share a PCE sprite palette slot: each round loads its own
 # colours (objpal.bin for round 1, objpal_r<n>.bin).
 GROUP_ROUNDS = {'boss': {1}, 'gargoyle': {1}, 'woman': {1}, 'jets': {1}, 'rocks': {1, 3},
-                'vine': {1, 2}, 'snake': {2, 3}, 'knight': {2}, 'r3walk': {3}}
+                'vine': {1, 2}, 'snake': {2, 3}, 'knight': {2}, 'r3walk': {3}, 'wizard': {3}}
 NUM_ROUNDS = 3
 
 # Single cells the engine draws by itself: symbol -> (group, arcade cell). objects.inc
@@ -219,7 +239,7 @@ PATHS = {
 
 # Pieces per pose (src/enemies.asm slot buffers): walkers 11 (the default), items and
 # bats 4, specials 13; projectiles 2 (single-piece here).
-GROUP_MAX = {'items': 4, 'rocks': 13, 'gargoyle': 13, 'jets': 13, 'boss': 13, 'vine': 13, 'knight': 13}
+GROUP_MAX = {'items': 4, 'rocks': 13, 'gargoyle': 13, 'jets': 13, 'boss': 13, 'vine': 13, 'knight': 13, 'wizard': 13}
 
 # Poses the engine refers to by number: (group, animation, step) -> symbol.
 POSE_SYMBOLS = {

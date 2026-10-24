@@ -26,6 +26,9 @@ x_\1:		lda	#XBANK
 		XCALL	kn_think
 		XCALL	kn2_think
 		XCALL	orb_think
+		XCALL	wz_spawn
+		XCALL	wz_think
+		XCALL	wf_think
 		XCALL	column_reset
 		XCALL	column_cells
 		XCALL	column_update

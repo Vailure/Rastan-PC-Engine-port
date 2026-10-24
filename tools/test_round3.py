@@ -7,7 +7,11 @@ Round 3 (map segments $2E-$44, src/debug.asm's checkpoints 17-23, its boss room'
   (build/stage3/preview.png; bgcheck build: the tile map alone);
 - its walkers: lizardmen and chimeras, then (from $32) horned men, snakes, harpies (which throw
   blades) and skeletons;
-- its first weapon item, an axe at (1088, 292), with its bat.
+- its first weapon item, an axe at (1088, 292), with its bat;
+- its boss, the wizard (sim/scripts/boss3.txt): it appears at x 256 of the room, y 384, stands
+  57 frames and drops to the floor (448); 309 frames after landing, then 137 later, it casts a fan
+  of five fireballs; the sword hurts it, after which it is gone 133 frames; ten blows kill it,
+  for 20000 (not measured), and the round is clear.
 """
 import os
 import subprocess
@@ -111,6 +115,44 @@ pos = i and ((r[i]['e_xl'][ITEM] | r[i]['e_xh'][ITEM] << 8), (r[i]['e_yl'][ITEM]
 check('the first item, an axe, comes at (1088, 292) when Rastan reaches 924, with its bat',
       i and pos == (1088, 292) and r[i]['e_alt'][ITEM] == 2 and r[i]['e_kind'][BAT] == 4
       and 924 <= s16(r[i]['p_x']) < 932, f"{pos}, at x {i and s16(r[i]['p_x'])}")
+
+# The wizard: Rastan passive in its room (the boss warp, 24).
+EK_WIZ, EK_WFIRE, SPEC, ROOM = 26, 28, 6, 11264
+b = resume(rom, 24)
+r = peek(rom, b + 700, warp(24), {'e_state': 17, 'e_kind': 17, 'e_xl': 17, 'e_xh': 17, 'e_yl': 17, 'e_yh': 17})
+come = next((i for i in range(b, len(r)) if r[i]['e_state'][SPEC] and r[i]['e_kind'][SPEC] == EK_WIZ), None)
+pos = lambda f, k: ((f['e_xl'][k] | f['e_xh'][k] << 8) - ROOM, f['e_yl'][k] | f['e_yh'][k] << 8)
+check('the wizard appears at x 256 of the room, y 384', come and pos(r[come], SPEC) == (256, 384),
+      f'at {come and pos(r[come], SPEC)}')
+land = next((i for i in range(come or b, len(r)) if pos(r[i], SPEC)[1] == 448), None) if come else None
+check('it drops to the floor (448) after standing 57 frames', land and 56 <= land - come <= 100,
+      f'landed {land and land - come} frames after it came')
+fans = [i for i in range(1, len(r)) if sum(1 for k in range(9, 17) if r[i]['e_state'][k] and r[i]['e_kind'][k] == EK_WFIRE
+                                          and not r[i - 1]['e_state'][k]) == 5]
+check('309 frames after landing, then 137 later, a fan of five fireballs',
+      land and [f - land for f in fans][:2] == [309 + 17, 309 + 137 + 17], f'fans at {[f - land for f in fans] if land else fans}')
+
+# Ten blows kill it (god build): Rastan goes at it, swinging every 14 frames.
+b = resume(god, 24)
+keys, t, dead, V = warp(24), b + 100, None, {'wz_hits': 1, 'e_alt': 17, 'e_state': 17, 'p_x': 2, 'e_xl': 17, 'e_xh': 17,
+                                            'score': 3, 'boss_clear': 1}
+hits = []
+while t < b + 6000 and dead is None:
+    r = peek(god, t, keys, V)
+    f = r[-1]
+    hits.append(f['wz_hits'][0])
+    if f['e_state'][SPEC] == 4:
+        dead = t
+        break
+    px, wx = s16(f['p_x']), f['e_xl'][SPEC] | f['e_xh'][SPEC] << 8
+    if abs(wx - px) >= 40 and f['e_alt'][SPEC] != 4:
+        keys += [t, t + 59, '04' if wx > px else '08']
+    keys += sum([[x, x + 3, '80'] for x in range(t, t + 60, 14)], [])
+    t += 60
+bcd = lambda v: sum(((x >> 4) * 10 + (x & 15)) * 100 ** n for n, x in enumerate(v))
+r = peek(god, (dead or t) + 300, keys, V)
+check('ten blows kill it, for 20000; then the round is clear', dead and bcd(r[dead + 2]['score']) - bcd(r[dead - 62]['score']) == 200
+      and any(x['boss_clear'][0] == 1 for x in r[dead:]), f'dead {dead and dead - b}, hits {hits[-1:]}')
 
 print(f'{len(fails)} failure(s)')
 sys.exit(1 if fails else 0)

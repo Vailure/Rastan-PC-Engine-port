@@ -168,7 +168,7 @@ def main():
             v = bytearray()
             for r, g_, b in (tuple(int(round(int(c) * 7 / 255)) for c in src[ap * 16 + i]) for i in range(16)):
                 v += ((g_ << 6) | (r << 3) | b).to_bytes(2, 'little')
-            open(f'{out}/sprpal{ps}.bin', 'wb').write(v)
+            open(f'{out}/{g}_pal{ps}.bin', 'wb').write(v)
             used_pals[FIXED + ps] = src[ap * 16:ap * 16 + 16]    # (for the preview)
     # Slots: an arcade palette shares one with others whose colours agree, or which no
     # round uses together with it (each round loads its own colours into the slots).
