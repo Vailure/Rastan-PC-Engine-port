@@ -15,6 +15,7 @@ FILES = {
     'item': 'item.snp',          # sim/scripts/item.txt: the axe in the cave and its bat
     'fire': 'item_fire.snp',     # sim/scripts/item_fire.txt: the fire sword (segment 4)
     'star': 'item_star.snp',     # sim/scripts/item_star.txt: the morning star (segment $0C)
+    'item_r2': 'item_r2.snp',    # sim/scripts/item_r2.txt: round 2's first item and its dragonfly
     'chimera': 'chimera.snp',    # sim/scripts/chimera.txt: chimeras from checkpoint segment 4
     'gargoyle': 'gargoyle.snp',  # sim/scripts/gargoyle.txt: the gargoyle from checkpoint segment 8
     'gargkill': 'gargkill.snp',  # sim/scripts/gargkill.txt: the gargoyle struck down
@@ -47,6 +48,7 @@ GROUPS = {
         ('item_fire', 'fire', 17, 1296, 1311),
         ('item_star', 'star', 17, 873, 888),
         ('bat', 'item', 16, 1100, 1131),
+        ('dfly', 'item_r2', 16, 964, 971),        # round 2's guard (wings beating)
     ],
     # Chimeras (walk left, stop to breathe fireballs) and their fireballs.
     'chimera': [

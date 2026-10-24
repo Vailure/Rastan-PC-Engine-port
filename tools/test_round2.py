@@ -97,6 +97,18 @@ dead = [i for i in range(1, len(r)) for k in range(17)
         if r[i]['e_kind'][k] == EK_SNAKE and r[i]['e_state'][k] == ES_DYING and r[i - 1]['e_state'][k] != ES_DYING]
 check('a standing swing passes over snakes', not dead, f'deaths at {dead}')
 
+# Round 2's first weapon item: the axe at (1848, 200), with its guard (the dragonfly), when Rastan
+# reaches 1684 (god build, from checkpoint 1, walking and hopping right).
+g = sys.argv[2] if len(sys.argv) > 2 else rom
+from routes import warp, resume
+b1 = resume(g, 1)
+keys = warp(1) + [b1, b1 + 600, '04'] + sum([[f, f + 3, '40'] for f in range(b1 + 20, b1 + 600, 45)], [])
+r = peek(g, b1 + 600, keys, {'e_state': 17, 'e_kind': 17, 'e_xl': 17, 'e_xh': 17, 'e_yl': 17, 'e_yh': 17, 'p_x': 2})
+i = next((i for i in range(1, len(r)) if r[i]['e_state'][4] and not r[i - 1]['e_state'][4]), None)
+check('the first item (an axe) comes at (1848, 200) when Rastan reaches 1684, with its guard',
+      i and (x_of(r[i], 4), r[i]['e_yl'][4] | r[i]['e_yh'][4] << 8) == (1848, 200) and r[i]['e_kind'][5] == 4
+      and 1684 <= p_x(r[i]) < 1692, f'{i and (x_of(r[i], 4), p_x(r[i]), r[i]["e_kind"][5])}')
+
 # ---------------------------------------------------------------------------
 # The boss (sim/scripts/boss2*.txt): warp to the boss room (checkpoint 8), Rastan passive on
 # the ledge he starts on.

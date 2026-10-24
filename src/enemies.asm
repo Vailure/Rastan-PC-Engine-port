@@ -717,6 +717,7 @@ rand:		lda	<rng
 ; 1's (src/boss.asm), round 2's caped knight and its orbs (src/knight.asm).
 	.if	STAGE_ROUND = 1
 BOSS_ANIM	=	anim_boss_walk
+BAT_ANIM	=	anim_bat		; (an item's guard)
 BOSS2_ANIM	=	anim_boss2_walk
 FRAG_ANIM	=	anim_frag_form
 BOSS_BANK	=	GRP_BOSS_BANK
@@ -726,6 +727,7 @@ BOSS_BOT	=	30
 BOSS_HALF	=	16
 	.else
 BOSS_ANIM	=	anim_kn_stand
+BAT_ANIM	=	anim_dfly		; (round 2's: a dragonfly)
 BOSS2_ANIM	=	anim_kn2_stand
 FRAG_ANIM	=	anim_orb
 BOSS_BANK	=	GRP_KNIGHT_BANK
@@ -736,11 +738,11 @@ BOSS_HALF	=	12
 	.endif
 
 ; Per-kind data: lizardman, blue thrower, club.
-kind_walk_l:	db	<anim_liz_walk, <anim_blue_walk, <anim_club, 0, <anim_bat, <anim_chim_walk, <anim_fireball
+kind_walk_l:	db	<anim_liz_walk, <anim_blue_walk, <anim_club, 0, <BAT_ANIM, <anim_chim_walk, <anim_fireball
 		db	<anim_boulder, <anim_garg_body, <anim_garg_wings, <anim_woman_walk, <anim_sword_walk
 		db	<anim_mace_walk, <anim_jet_column, <BOSS_ANIM, <BOSS2_ANIM, <FRAG_ANIM
 		db	<anim_vine_swing, <anim_snake_crawl
-kind_walk_h:	db	>anim_liz_walk, >anim_blue_walk, >anim_club, 0, >anim_bat, >anim_chim_walk, >anim_fireball
+kind_walk_h:	db	>anim_liz_walk, >anim_blue_walk, >anim_club, 0, >BAT_ANIM, >anim_chim_walk, >anim_fireball
 		db	>anim_boulder, >anim_garg_body, >anim_garg_wings, >anim_woman_walk, >anim_sword_walk
 		db	>anim_mace_walk, >anim_jet_column, >BOSS_ANIM, >BOSS2_ANIM, >FRAG_ANIM
 		db	>anim_vine_swing, >anim_snake_crawl

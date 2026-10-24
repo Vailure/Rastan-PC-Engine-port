@@ -15,7 +15,11 @@
 ;
 ; ***************************************************************************
 
+	.if	STAGE_ROUND = 1
 NUM_ITEMS	=	5
+	.else
+NUM_ITEMS	=	4
+	.endif
 ITEM_AHEAD	=	164		; Spawns when p_x >= item x - 164 ...
 ITEM_WINDOW	=	196		; ... and p_x < item x + 32.
 BAT_DROP	=	20		; The bat starts this far below the item.
@@ -32,6 +36,7 @@ BP_CLING	=	3
 ; Items: world x, y, weapon, animation.
 ; (The fifth, a morning star, hangs in the castle's first shaft: arcade census
 ; (8384, 334) in the shaft's square, sim/scripts/hall.txt frame 3432.)
+	.if	STAGE_ROUND = 1
 item_x_l:	db	<1004, <2893, <3854, <6829, <8384
 item_x_h:	db	>1004, >2893, >3854, >6829, >8384
 item_y_l:	db	<340, <164, <364, <276, <-178
@@ -39,15 +44,25 @@ item_y_h:	db	>340, >164, >364, >276, >-178
 item_weapon:	db	WPN_AXE, WPN_FIRE, WPN_AXE, WPN_STAR, WPN_STAR
 item_anim_l:	db	<anim_item_axe, <anim_item_fire, <anim_item_axe, <anim_item_star, <anim_item_star
 item_anim_h:	db	>anim_item_axe, >anim_item_fire, >anim_item_axe, >anim_item_star, >anim_item_star
+	.else
+; Round 2 (the census of its checkpoint runs, started in round 2: the item in
+; arcade slot 17, its guard a dragonfly, type $12, in slot 16; sim/scripts/
+; item_r2.txt): the axe, the fire sword, the axe, the morning star. (The
+; castle's, if any, not seen.) The port's bat behaviour, drawn as the dragonfly.
+item_x_l:	db	<1848, <3820, <5536, <6216
+item_x_h:	db	>1848, >3820, >5536, >6216
+item_y_l:	db	<200, <228, <52, <405
+item_y_h:	db	>200, >228, >52, >405
+item_weapon:	db	WPN_AXE, WPN_FIRE, WPN_AXE, WPN_STAR
+item_anim_l:	db	<anim_item_axe, <anim_item_fire, <anim_item_axe, <anim_item_star
+item_anim_h:	db	>anim_item_axe, >anim_item_fire, >anim_item_axe, >anim_item_star
+	.endif
 item_bit:	db	1, 2, 4, 8, 16
 
 ; ---------------------------------------------------------------------------
 ; item_spawn - the next item (and its bat) when Rastan comes near it.
 
 item_spawn:
-	.if	STAGE_ROUND - 1		; (round 1's own: none in other rounds yet)
-		rts
-	.endif
 		lda	e_state + ITEM_SLOT	; One item at a time.
 		bne	.r
 		cly
@@ -126,8 +141,8 @@ item_spawn:
 		inc	a
 !:		sta	e_alt, x
 		jsr	map_kind
-		lda	#<anim_bat
-		ldy	#>anim_bat
+		lda	#<BAT_ANIM
+		ldy	#>BAT_ANIM
 		jsr	enemy_set_anim
 		lda	#ES_WALK
 		sta	e_state, x

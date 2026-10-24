@@ -595,12 +595,18 @@ The order is roughly by the value it adds to the demo for the effort.
      brazier are from three captures; the arcade's exact decisions are not traced.
    - **Vines:** round 2's two (markers `$4F` at (5632, 208) and (8416, 240)) use round 1's code,
      placed from the marker as round 1's chasm vine is; their phases are not measured.
+   - **Items:** round 2's four (the axe at (1848, 200), the fire sword at (3820, 228), the axe at
+     (5536, 52), the morning star at (6216, 405); from the census of its checkpoint runs) use round
+     1's item code, their guard drawn as round 2's dragonfly (arcade slot 16, type `$12`;
+     `sim/scripts/item_r2.txt`) with round 1's bat behaviour (the dragonfly sways about the item,
+     then follows Rastan). The arcade finds an item's place with a map marker (`$045ADE`,
+     `$045D10`); the castle's, if any, are not ported.
    - **Still to port** (the census of round 2 started properly, `patch 5ff9f fe` + `patch 50751 <cp>`;
      kinds as first cell / palette): dragonflies (`$410`/14) and small flyers (`$260`/14), horned club
      demons (`$140`/5), leaping piranhas (`$540`/15) over the water, the golden women (`$420`/7, map
      markers `$61`-`$63` at x 6464-6592, pacing between turning points), blue throwers that drop from
-     the trees (markers `$59`-`$60`, y 336, x 1824-2880), the round's items (`$9F0`/12 and the orb
-     chains `$540`/14, `$290`/10), the castle's soldiers in round 2's colours (`$330`/5 axe, `$260`/4
+     the trees (markers `$59`-`$60`, y 336, x 1824-2880), the one-frame objects at the markers (`$9F0`/12
+     at `$61`-`$63`, `$540`/14, `$290`/10), the castle's soldiers in round 2's colours (`$330`/5 axe, `$260`/4
      sword, `$340`/1 mace) and its fire (`$220`/0; markers `$4C`, `$52`-`$55` at 9312-10144), weights
      (`$45`, 8896), hanging column (`$47`, 10752) and other markers (`$48`, `$49`, `$64`, `$65`, `$6A`,
      `$6B`) and the music. The
