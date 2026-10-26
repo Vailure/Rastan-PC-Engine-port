@@ -8,7 +8,7 @@ REC = 32 + 0x10000 + 0x1000 + 0x800 + 0x4000
 
 
 class Snap:
-    __slots__ = ("frame", "p1", "sys", "scry", "scrx", "vctrl", "sprctrl", "vram", "pal", "spr", "wram")
+    __slots__ = ("frame", "p1", "sys", "scry", "scrx", "vctrl", "sprctrl", "vram", "pal", "spr", "wram", "owner")
 
     def words(self, buf):
         return np.frombuffer(buf, dtype=">u2")
@@ -19,6 +19,8 @@ class Snap:
 
 
 def read_snaps(path):
+    import os
+    own = gzip.open(path + '.own', 'rb') if os.path.exists(path + '.own') else None
     with gzip.open(path, "rb") as f:
         while True:
             b = f.read(REC)
@@ -35,6 +37,7 @@ def read_snaps(path):
             s.pal = np.frombuffer(b[o:o + 0x1000], ">u2"); o += 0x1000
             s.spr = np.frombuffer(b[o:o + 0x800], ">u2"); o += 0x800
             s.wram = b[o:o + 0x4000]
+            s.owner = own.read(256) if own else None    # sprite entry -> object slot ($FF other, $FE unused)
             yield s
 
 

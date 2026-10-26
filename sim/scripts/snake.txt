@@ -1,0 +1,109 @@
+# Round 2's snakes: the arcade started in round 2 ($5FF9F = $FE; health held, hazards NOP'd), Rastan
+# untouchable ($10D30E). He walks right from 700, then crouches and swings every 20 frames from 780:
+# the snake in slot 5 crawls in (511-743), strikes (744-789: 181, 184, 185 for 3, 6, 9 frames, its
+# box $5F/$60 armed in 185's first 3) and dies at 790 (200 points); slot 3's dies at 835.
+patch 53e0c 4e
+patch 53e0d 71
+patch 53e0e 4e
+patch 53e0f 71
+patch 53e10 4e
+patch 53e11 71
+patch 54ebe 4e
+patch 54ebf 71
+patch 54ec0 4e
+patch 54ec1 71
+patch 54ec2 4e
+patch 54ec3 71
+patch 553e6 4e
+patch 553e7 71
+patch 553e8 4e
+patch 553e9 71
+patch 553ea 4e
+patch 553eb 71
+patch 5ff9f fe
+poke 300 30000 10c13a w 3000
+poke 400 30000 10d30e b 1
+in 100 ff 3f
+in 106 ff 1f
+in 200 ff 17
+in 206 ff 1f
+end 1300
+in 700 f7 1f
+in 780 fd 1f
+in 784 ed 1f
+in 790 fd 1f
+in 800 fd 1f
+in 804 ed 1f
+in 810 fd 1f
+in 820 fd 1f
+in 824 ed 1f
+in 830 fd 1f
+in 840 fd 1f
+in 844 ed 1f
+in 850 fd 1f
+in 860 fd 1f
+in 864 ed 1f
+in 870 fd 1f
+in 880 fd 1f
+in 884 ed 1f
+in 890 fd 1f
+in 900 fd 1f
+in 904 ed 1f
+in 910 fd 1f
+in 920 fd 1f
+in 924 ed 1f
+in 930 fd 1f
+in 940 fd 1f
+in 944 ed 1f
+in 950 fd 1f
+in 960 fd 1f
+in 964 ed 1f
+in 970 fd 1f
+in 980 fd 1f
+in 984 ed 1f
+in 990 fd 1f
+in 1000 fd 1f
+in 1004 ed 1f
+in 1010 fd 1f
+in 1020 fd 1f
+in 1024 ed 1f
+in 1030 fd 1f
+in 1040 fd 1f
+in 1044 ed 1f
+in 1050 fd 1f
+in 1060 fd 1f
+in 1064 ed 1f
+in 1070 fd 1f
+in 1080 fd 1f
+in 1084 ed 1f
+in 1090 fd 1f
+in 1100 fd 1f
+in 1104 ed 1f
+in 1110 fd 1f
+in 1120 fd 1f
+in 1124 ed 1f
+in 1130 fd 1f
+in 1140 fd 1f
+in 1144 ed 1f
+in 1150 fd 1f
+in 1160 fd 1f
+in 1164 ed 1f
+in 1170 fd 1f
+in 1180 fd 1f
+in 1184 ed 1f
+in 1190 fd 1f
+in 1200 fd 1f
+in 1204 ed 1f
+in 1210 fd 1f
+in 1220 fd 1f
+in 1224 ed 1f
+in 1230 fd 1f
+in 1240 fd 1f
+in 1244 ed 1f
+in 1250 fd 1f
+in 1260 fd 1f
+in 1264 ed 1f
+in 1270 fd 1f
+in 1280 fd 1f
+in 1284 ed 1f
+in 1290 fd 1f

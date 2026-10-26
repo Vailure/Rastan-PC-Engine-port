@@ -15,11 +15,23 @@
 		include	"player.inc"
 
 PLAYER_BANK	=	^player_data
-COLL_BANK	=	^collision_data
 
-SPR_BUF_A	=	$5000		; Two pattern buffers, 24 cells each.
-SPR_BUF_B	=	$5600
+SPR_BUF_A	=	$5000		; Two pattern buffers, 24 cells each:
+SPR_BUF_B	=	$5600		; the pose's (up to 20), then the weapon's (up to 4).
 MAX_CELLS	=	24
+WEAPON_CELL	=	20		; First weapon cell in a buffer.
+WEAPON_BANK	=	^weapon_cells	; Weapon cells (64), 128 bytes each, from $6000.
+WTAB_BANK	=	^weapon_vtab	; Weapon piece lists (weapon_tab.inc, pce_player.py).
+
+; Weapons (arcade $10D2FA): the sword, or one taken from an item for 3000
+; frames (arcade timer $10D326). The weapon is drawn behind the body from
+; the arcade's own weapon frames (see pce_player.py); the morning star
+; reaches 32 px further forward, 16 px further up and down.
+WPN_SWORD	=	1
+WPN_AXE		=	2
+WPN_STAR	=	3
+WPN_FIRE	=	4
+WEAPON_FRAMES	=	3000
 
 ; States.
 ST_STAND	=	0
@@ -30,10 +42,20 @@ ST_ATTACK	=	4
 ST_CATK		=	5
 ST_CLIMB	=	6
 ST_HURT		=	7
+ST_DEAD		=	8
+ST_SWING	=	9		; Hanging from a swinging vine (vines.asm moves him).
+ST_UATK		=	10		; UP+attack standing: a swing over his head.
 
-PLAYER_HP	=	12		; Arcade: 12288 health, 3072 per lizardman hit.
-HIT_DAMAGE	=	3
-INVULN_FRAMES	=	90
+PLAYER_HP	=	48		; Health bar units: arcade 12288 / 256.
+HIT_DAMAGE	=	12		; A lizardman hit: arcade 3072.
+WATER_DRAIN	=	7		; Water (code 6): a unit every 8 frames (arcade 32/frame).
+; After a hit (the arcade's $0550A8 handlers): hurt 23 frames knocked back, or
+; 11 not (a touch that drains), then 33 untouchable ($10D30E); in an attack
+; neither: 16 untouchable. A drain also blocks the next one for 40 ($10D366).
+INVULN_FRAMES	=	23 + 33
+INVULN_DRAIN	=	11 + 33
+INVULN_ATTACK	=	16
+DRAIN_LATCH	=	40		; ($10D368 counts 2 a frame to 80)
 
 START_X		=	48		; Arcade x 32 + 16 (stage 1 start).
 START_Y		=	295		; Arcade y 112 + 183.
@@ -53,7 +75,7 @@ p_anim:		ds	2		; Current animation (pose, frames) list.
 p_animi:	ds	1		; Index into it (bytes).
 p_animt:	ds	1		; Frames left on this pose (0 = hold).
 p_animend:	ds	1		; Set when a one-shot animation finished.
-p_jatk:		ds	1		; Air attack: 0 none, 1 swing/up thrust, 2 down thrust.
+p_jatk:		ds	1		; Air attack: 0 none, 1 swing, 2 down thrust, 3 up-swing.
 p_pose:		ds	1
 p_pose_up:	ds	1		; Pose currently uploaded ($FF none).
 p_buf:		ds	1		; 0: buffer A shows, 1: B.
@@ -68,7 +90,15 @@ sb_x0:		ds	2		; Sword hitbox (world), valid when sword_box sets carry.
 sb_x1:		ds	2
 sb_y0:		ds	2
 sb_y1:		ds	2		; Freeze the animation (climbing, not moving).
-p_prev_cells:	ds	1
+p_weapon:	ds	1		; WPN_*.
+p_wtime:	ds	2		; Frames left with a taken weapon.
+p_var:		ds	1		; Weapon drawing variant: weapon - 1, or 3 + flame step.
+p_var_up:	ds	1		; Variant shown with p_pose_up.
+p_wcount:	ds	1		; Weapon pieces this frame.
+p_door:		ds	1		; Nonzero: walked into a door ($7E) this frame.
+p_vine:		ds	1		; Vine slot + 1 while ST_SWING.
+p_vine_h:	ds	1		; Its swing's half-step (signed): the side it is on.
+p_vine_last:	ds	1		; The vine let go of (slot + 1), until he lands.
 cx:		ds	2		; Collision probe position.
 cy:		ds	2
 cp:		ds	2
@@ -79,6 +109,13 @@ dx:		ds	1		; Signed per-frame deltas.
 dy:		ds	1
 pad:		ds	1
 padtrg:		ds	1
+
+		.bss
+p_bufpose:	ds	2		; Per buffer: pose whose body cells it holds ($FF none),
+p_bufwpose:	ds	2		; pose and variant whose weapon cells it holds.
+p_bufvar:	ds	2
+p_wbuf:		ds	16		; Weapon pieces: dx, dy, cell, SATB flags.
+p_latch:	ds	1		; Frames before a touch can drain again.
 
 		.code
 
@@ -97,9 +134,9 @@ player_init:	lda	#<START_X
 		stz	<p_jatk
 		stz	<p_nograb
 		stz	<p_buf
-		stz	<p_prev_cells
-		lda	#$FF
-		sta	<p_pose_up
+		jsr	player_invalidate
+		lda	#WPN_SWORD
+		sta	<p_weapon
 		jsr	enter_stand
 
 		; Sprite palette 0 (VCE colors 256-271).
@@ -120,12 +157,33 @@ player_update:	lda	#COLL_BANK		; Collision data at $A000.
 		lda	<p_invuln
 		beq	!+
 		dec	<p_invuln
+!:		lda	p_latch
+		beq	!+
+		dec	p_latch
+!:		lda	<p_weapon		; A taken weapon runs out.
+		cmp	#WPN_SWORD
+		beq	!+
+		lda	<p_wtime
+		bne	.wdec
+		dec	<p_wtime + 1
+.wdec:		dec	a
+		sta	<p_wtime
+		ora	<p_wtime + 1
+		bne	!+
+		lda	#WPN_SWORD
+		sta	<p_weapon
 !:
 		lda	joynow
 		sta	<pad
 		lda	joytrg
 		sta	<padtrg
-
+		lda	<p_state
+		cmp	#ST_DEAD
+		beq	!+
+		jsr	hazards
+		bcc	!+
+		rts				; Just died.
+!:
 		lda	<p_state
 		asl	a
 		tax
@@ -139,13 +197,18 @@ player_update:	lda	#COLL_BANK		; Collision data at $A000.
 		dw	st_catk
 		dw	st_climb
 		dw	st_hurt
+		dw	st_dead
+		dw	st_swing
+		dw	st_uatk
 
 ; --- Standing / walking.
 st_ground:	bbr0	<padtrg, .no_jump	; JOY_B1: jump.
 		jmp	start_jump
 .no_jump:	bbr1	<padtrg, .no_atk	; JOY_B2: attack.
-		bbr6	<pad, .stand_atk	; JOY_D held: crouch attack.
+		bbr6	<pad, .up_atk		; JOY_D held: crouch attack.
 		jmp	enter_catk
+.up_atk:	bbr4	<pad, .stand_atk	; JOY_U held: over his head.
+		jmp	enter_uatk
 .stand_atk:	jmp	enter_attack
 .no_atk:	bbr6	<pad, .no_crouch
 		jmp	enter_crouch
@@ -201,21 +264,28 @@ st_crouch:	bbr1	<padtrg, !+
 		jmp	enter_stand
 !:		bbr5	<pad, !+		; Turn while crouched.
 		stz	<p_face
-!:		bbr7	<pad, !+
+!:		bbr7	<pad, ground_check
 		lda	#1
 		sta	<p_face
+; ground_check - fall if the floor went away (the cave block crumbling).
+ground_check:	jsr	floor_below
+		bcs	!+
+		jmp	start_fall
 !:		rts
 
 ; --- Standing attack: no movement until the swing ends.
 st_attack:	lda	<p_animend
-		beq	!+
+		beq	ground_check
 		jmp	enter_stand
-!:		rts
 
 st_catk:	lda	<p_animend
-		beq	!+
+		beq	ground_check
 		jmp	enter_crouch
-!:		rts
+
+; --- UP+attack standing: the sword goes over his head.
+st_uatk:	lda	<p_animend
+		beq	ground_check
+		jmp	enter_stand
 
 ; --- In the air.
 st_air:		bbr1	<padtrg, .no_atk	; Air attack (once per jump):
@@ -228,13 +298,17 @@ st_air:		bbr1	<padtrg, .no_atk	; Air attack (once per jump):
 		ldx	#>anim_dthrust
 		jsr	set_anim
 		bra	.no_atk
-.not_down:	inc	<p_jatk			; UP: up thrust, else swing.
-		bbr4	<pad, .swing
-		lda	#<anim_uthrust
-		ldx	#>anim_uthrust
+.not_down:	lda	#SFX_SWING
+		jsr	sound_sfx
+		bbr4	<pad, .swing		; UP: the swing over his head, as standing
+		lda	#3			; (on the jump's legs), else a swing.
+		sta	<p_jatk
+		lda	#<anim_juattack
+		ldx	#>anim_juattack
 		jsr	set_anim
 		bra	.no_atk
-.swing:		lda	#<anim_jatk
+.swing:		inc	<p_jatk
+		lda	#<anim_jatk
 		ldx	#>anim_jatk
 		jsr	set_anim
 .no_atk:	lda	<p_jatk			; Back to the jump pose when done.
@@ -307,11 +381,12 @@ st_air:		bbr1	<padtrg, .no_atk	; Air attack (once per jump):
 		jsr	move_down		; Lands (and changes state) on a floor.
 		bra	.done
 .up:		jsr	move_up
-.done:		; Fell below the map: restart the stage.
+.done:		; Fell below the map (y >= 512): restart the stage.
 		lda	<p_y + 1
+		bmi	!+			; (above row 0: the castle's upper squares)
 		cmp	#2
 		bcc	!+
-		jmp	stage_start
+		jmp	player_died
 !:		rts
 
 ; --- Hit: knocked back 1px/frame for the hurt animation, then stand (or die).
@@ -327,125 +402,344 @@ st_hurt:	lda	<p_kdir
 		beq	.done
 		lda	<p_hp
 		bne	!+
-		jmp	stage_start		; Out of health: restart the stage.
+		jmp	enter_dead		; Out of health.
 !:		jmp	enter_stand
 .done:		rts
 
-; player_hit - an enemy hits Rastan. A = knockback direction (1 right, $FF left).
-; Ignored while invulnerable or already hurt.
-player_hit:	ldx	<p_invuln
+; --- Dying: the arcade's death animation, then lose a life.
+st_dead:	lda	<p_animend
+		beq	!+
+		jmp	player_died
+!:		rts
+
+enter_dead:	lda	#VOICE_DIE		; His death cry (an ADPCM voice).
+		jsr	voice_play
+		lda	#ST_DEAD
+		sta	<p_state
+		stz	<p_jatk
+		stz	<p_invuln
+		lda	#<anim_death
+		ldx	#>anim_death
+		jmp	set_anim
+
+; hazards - collision codes that hurt: 7 and 8 kill (arcade state 8), 6 is
+; water that drains health (arcade: 32 of 12288 a frame). Probes the feet
+; (p_y + 25) and the body (p_y + 8) at p_x. Carry set if Rastan just died.
+hazards:	lda	<dbg_god		; Debug menu: invincible.
+		beq	!+
+		clc
+		rts
+!:		lda	#25
+		jsr	hazard_probe
+		bcs	.die
+		lda	#8
+		jsr	hazard_probe
+		bcs	.die
+		cmp	#6
+		bne	.ok
+		lda	<p_frame		; In the water: drain.
+		and	#WATER_DRAIN
+		bne	.ok
+		lda	<p_hp
+		beq	.ok
+		dec	a
+		sta	<p_hp
+		bne	.ok
+.die:		jsr	enter_dead
+		sec
+		rts
+.ok:		clc
+		rts
+
+; hazard_probe - code at (p_x, p_y + A) in A; carry set if it kills (7, 8).
+hazard_probe:	clc
+		adc	<p_y
+		sta	<cy
+		lda	<p_y + 1
+		adc	#0
+		sta	<cy + 1
+		lda	<p_x
+		sta	<cx
+		lda	<p_x + 1
+		sta	<cx + 1
+		jsr	coll_at
+		and	#$0F
+		cmp	#7
+		beq	.kill
+		cmp	#8
+		beq	.kill
+		clc
+		rts
+.kill:		sec
+		rts
+
+; player_hit - an enemy hits Rastan: A = knockback direction (1 right, $FF
+; left), Y = health units. Ignored while untouchable or already hurt. In an
+; attack he keeps on with it (16 frames untouchable); else he is knocked back.
+player_hit:
+	.if	GOD_MODE			; Test builds: enemies can't hurt him.
+		rts
+	.endif
+		ldx	<dbg_god		; Debug menu: invincible.
+		bne	.no
+		ldx	<p_invuln
 		bne	.no
 		ldx	<p_state
 		cpx	#ST_HURT
 		beq	.no
+		cpx	#ST_DEAD
+		beq	.no
 		sta	<p_kdir
-		lda	<p_hp
-		sec
-		sbc	#HIT_DAMAGE
-		bcs	!+
-		cla
-!:		sta	<p_hp
+		jsr	player_attacking
+		bcc	!+
+		lda	#DRAIN_LATCH
+		sta	p_latch
+		tya
+		jmp	hit_in_attack
+!:		tya
+		jsr	hp_sub
 		lda	#INVULN_FRAMES
 		sta	<p_invuln
+		lda	#<anim_hurt
+		ldx	#>anim_hurt
+		bra	enter_hurt
+.no:		rts
+
+; enter_hurt - A/X = the hurt animation.
+enter_hurt:	pha
 		lda	#ST_HURT
 		sta	<p_state
 		stz	<p_jatk
-		lda	#<anim_hurt
-		ldx	#>anim_hurt
+		pla
 		jmp	set_anim
+
+; player_touch - X's body touches Rastan's: A = its touch type (the arcade's
+; ($29,A4)): 1, 2 drain 4, 8 units (hurt 11 frames, not knocked back; not
+; again for 80 frames), 3 on knock him back for 4 per step (12 for 3).
+player_touch:
+	.if	GOD_MODE
+		rts
+	.endif
+		cmp	#3
+		bcc	.drain
+		asl	a			; 4 units a step.
+		asl	a
+		tay
+		lda	<p_x			; Knocked away from it.
+		cmp	e_xl, x
+		lda	<p_x + 1
+		sbc	e_xh, x
+		lda	#1
+		bcs	!+
+		lda	#$FF
+!:		jmp	player_hit
+.drain:		ldy	<dbg_god
+		bne	.no
+		ldy	<p_invuln
+		bne	.no
+		ldy	p_latch
+		bne	.no
+		ldy	<p_state
+		cpy	#ST_HURT
+		beq	.no
+		cpy	#ST_DEAD
+		beq	.no
+		asl	a
+		asl	a
+		tay
+		lda	#DRAIN_LATCH
+		sta	p_latch
+		jsr	player_attacking
+		tya
+		bcs	hit_in_attack
+		jsr	hp_sub
+		lda	#INVULN_DRAIN
+		sta	<p_invuln
+		stz	<p_kdir			; (not knocked back)
+		lda	#<anim_hurt_short
+		ldx	#>anim_hurt_short
+		bra	enter_hurt
 .no:		rts
 
-; sword_box - carry set and sb_* set if Rastan's sword is out this frame.
+; hit_in_attack - A = units: hit while attacking, he keeps on (dies at 0).
+hit_in_attack:	jsr	hp_sub
+		lda	#INVULN_ATTACK
+		sta	<p_invuln
+		lda	<p_hp
+		bne	!+
+		jmp	enter_dead
+!:		rts
+
+; hp_sub - p_hp -= A (not below 0), with the arcade's hurt sound ($0C).
+hp_sub:		sta	<ctmp
+		phx
+		lda	#SFX_HURT
+		jsr	sound_sfx
+		plx
+		lda	<p_hp
+		sec
+		sbc	<ctmp
+		bcs	!+
+		cla
+!:		sta	<p_hp
+		rts
+
+; weapon_power - A = what a hit of Rastan's takes off (the arcade's $10D310,
+; $0549DE; $044804 adds 1 for 2, 3 for 8): 3 in a down thrust, with the axe or
+; the fire sword, or in any attack in the air; else 1.
+weapon_power:	lda	<p_jatk
+		bne	.three			; (in the air: any attack)
+		lda	<p_weapon
+		cmp	#WPN_AXE
+		beq	.three
+		cmp	#WPN_FIRE
+		beq	.three
+		lda	#1
+		rts
+.three:		lda	#3
+		rts
+
+; player_attacking - carry set while Rastan attacks (the arcade's $10D108).
+player_attacking:
+		lda	<p_state
+		cmp	#ST_ATTACK
+		beq	.yes
+		cmp	#ST_CATK
+		beq	.yes
+		cmp	#ST_UATK
+		beq	.yes
+		cmp	#ST_AIR
+		bne	.no
+		lda	<p_jatk
+		beq	.no
+.yes:		sec
+		rts
+.no:		clc
+		rts
+
+; sword_box - carry set and sb_* set if Rastan's weapon hits this frame: the
+; arcade's rules ($054982: $10D2F8 = 1) and boxes (write_boxes in pce_player.py,
+; per pose and weapon). It hits
+;  - in a swing (standing, crouched, in the air) from its 3rd frame through
+;    the 11th (atk3, atk4, atk5: the blade out, not drawn back), and in the
+;    swing over his head from its 2nd frame through the 12th;
+;  - all through a down thrust, and all through any attack with the fire sword;
+;  - held up, as he rises in a jump (not while hurt: $10D2F0).
 sword_box:	lda	<p_state
 		cmp	#ST_ATTACK
-		beq	.stand
+		beq	.swing
 		cmp	#ST_CATK
-		beq	.crouch
+		beq	.swing
+		cmp	#ST_UATK
+		beq	.uatk
 		cmp	#ST_AIR
 		bne	.none
 		lda	<p_jatk
-		beq	.none
+		beq	.rise
 		cmp	#2
-		beq	.down
-		lda	<p_pose
-		cmp	#POSE_UTHR
-		beq	.up
-		cmp	#POSE_JATK4		; Jump swing: sword out in jatk4/jatk5.
+		beq	.on			; Down thrust: all through.
+		cmp	#3
+		beq	.uatk			; The up-swing: as standing.
+		jsr	.fire
+		bcs	.on
+		lda	<p_animi		; Jump swing: jatk3, jatk4, then 8 of
+		cmp	#4			; jatk5's 10 frames.
 		bcc	.none
-		cmp	#POSE_JATK5 + 1
-		bcs	.none
-		ldy	#0
-		bra	.front
-.stand:		lda	<p_pose			; Standing: atk4/atk5.
-		cmp	#POSE_ATK4
-		bcc	.none
-		cmp	#POSE_ATK5 + 1
-		bcs	.none
-		ldy	#0
-		bra	.front
-.crouch:	lda	<p_pose
-		cmp	#POSE_CATK4
-		bcc	.none
-		cmp	#POSE_CATK5 + 1
-		bcs	.none
-		ldy	#1
-		bra	.front
+		cmp	#8
+		bcc	.on
+		bne	.none
+		lda	<p_animt
+		cmp	#3
+		bcs	.on
 .none:		clc
 		rts
-.down:		lda	<p_pose			; Down thrust: below him once pointed down.
-		cmp	#POSE_DTHR2
+.rise:		lda	<p_jfall		; Rising: the sword held up.
+		bne	.none
+		bra	.on
+.swing:		jsr	.fire
+		bcs	.on
+		lda	<p_animi		; atk3, atk4, atk5 (entries 2-4).
+		cmp	#4
 		bcc	.none
-		ldy	#2
-		bra	.vert
-.up:		ldy	#3
-.vert:		lda	<p_x			; x: p_x - 10 .. p_x + 10
-		sec
-		sbc	#10
-		sta	<sb_x0
-		lda	<p_x + 1
-		sbc	#0
-		sta	<sb_x0 + 1
-		lda	<p_x
+		cmp	#10
+		bcs	.none
+		bra	.on
+.uatk:		jsr	.fire
+		bcs	.on
+		lda	<p_animi		; uatk1 from its 2nd frame, uatk2, uatk3
+		beq	.u1			; for 4 of its 8 frames.
+		cmp	#2
+		beq	.on
+		cmp	#4
+		bne	.none
+		lda	<p_animt
+		cmp	#5
+		bcs	.on
+		bra	.none
+.u1:		lda	<p_animt
+		cmp	#4
+		bcs	.none
+.on:		ldy	<p_pose			; The pose's weapon box.
+		lda	pose_wslot, y
+		beq	.none
+		dec	a
+		ldy	<p_weapon
 		clc
-		adc	#10
-		sta	<sb_x1
-		lda	<p_x + 1
-		adc	#0
-		sta	<sb_x1 + 1
-		bra	.yrange
-.front:		; Facing right: p_x .. p_x + 56; left: p_x - 56 .. p_x.
+		adc	wbox_base - 1, y
+		tay
 		lda	<p_face
 		bne	.left
-		lda	<p_x
+		lda	wbox_x0, y		; Facing right: p_x + x0 .. p_x + x1.
+		jsr	box_add_px
 		sta	<sb_x0
-		clc
-		adc	#56
+		stx	<sb_x0 + 1
+		lda	wbox_x1, y
+		jsr	box_add_px
 		sta	<sb_x1
-		lda	<p_x + 1
-		sta	<sb_x0 + 1
-		adc	#0
-		sta	<sb_x1 + 1
-		bra	.yrange
-.left:		lda	<p_x
-		sta	<sb_x1
-		sec
-		sbc	#56
+		stx	<sb_x1 + 1
+		bra	.y
+.left:		lda	wbox_x1, y		; Left: p_x - x1 .. p_x - x0.
+		eor	#$FF
+		inc	a
+		jsr	box_add_px
 		sta	<sb_x0
-		lda	<p_x + 1
-		sta	<sb_x1 + 1
-		sbc	#0
-		sta	<sb_x0 + 1
-.yrange:	lda	.y0, y			; y = p_y + y0 .. p_y + y1 (signed)
-		jsr	.add_py
+		stx	<sb_x0 + 1
+		lda	wbox_x0, y
+		eor	#$FF
+		inc	a
+		jsr	box_add_px
+		sta	<sb_x1
+		stx	<sb_x1 + 1
+.y:		lda	wbox_y0, y		; y = p_y + y0 .. p_y + y1 (signed)
+		jsr	box_add_py
 		sta	<sb_y0
 		stx	<sb_y0 + 1
-		lda	.y1, y
-		jsr	.add_py
+		lda	wbox_y1, y
+		jsr	box_add_py
 		sta	<sb_y1
 		stx	<sb_y1 + 1
 		sec
 		rts
-.add_py:	pha				; A (signed) + p_y -> A/X
+.fire:		lda	<p_weapon		; Carry set: the fire sword.
+		cmp	#WPN_FIRE
+		beq	!+
+		clc
+!:		rts
+box_add_px:	phy				; A (signed) + p_x -> A/X
+		pha
+		clc
+		adc	<p_x
+		tax
+		pla
+		and	#$80
+		beq	!+
+		lda	#$FF
+!:		adc	<p_x + 1
+		sax
+		ply
+		rts
+box_add_py:	phy				; A (signed) + p_y -> A/X
+		pha
 		clc
 		adc	<p_y
 		tax
@@ -455,10 +749,78 @@ sword_box:	lda	<p_state
 		lda	#$FF
 !:		adc	<p_y + 1
 		sax
+		ply
 		rts
-		;	stand, crouch, down thrust, up thrust
-.y0:		db	-28, 0, 8, -64
-.y1:		db	8, 24, 44, -20
+wbox_base:	db	0, WBOX_SLOTS, 2 * WBOX_SLOTS, 3 * WBOX_SLOTS
+
+; body_box - sb_* = Rastan's body box (the arcade's, $10D248: per pose, x
+; mirrored facing left, y from y0 to 26 below the anchor).
+body_box:	ldy	<p_pose
+		lda	<p_face
+		bne	.left
+		lda	pbody_x0, y
+		jsr	box_add_px
+		sta	<sb_x0
+		stx	<sb_x0 + 1
+		lda	pbody_x1, y
+		jsr	box_add_px
+		sta	<sb_x1
+		stx	<sb_x1 + 1
+		bra	.y
+.left:		lda	pbody_x1, y
+		eor	#$FF
+		inc	a
+		jsr	box_add_px
+		sta	<sb_x0
+		stx	<sb_x0 + 1
+		lda	pbody_x0, y
+		eor	#$FF
+		inc	a
+		jsr	box_add_px
+		sta	<sb_x1
+		stx	<sb_x1 + 1
+.y:		lda	pbody_y0, y
+		jsr	box_add_py
+		sta	<sb_y0
+		stx	<sb_y0 + 1
+		lda	#PBODY_Y1
+		jsr	box_add_py
+		sta	<sb_y1
+		stx	<sb_y1 + 1
+		rts
+
+; --- On a vine: LEFT/RIGHT turn; I lets go, on the side he faces only.
+st_swing:	bbr5	<pad, !+
+		stz	<p_face
+!:		bbr7	<pad, !+
+		lda	#1
+		sta	<p_face
+!:		bbr0	<padtrg, .done
+		ldx	<p_face
+		lda	<p_vine_h
+		beq	.done
+		cpx	#0
+		bne	.left
+		tax				; Facing right: on the right (h > 0)?
+		bmi	.done
+		bra	.go
+.left:		tax
+		bpl	.done
+.go:		lda	<p_vine
+		sta	<p_vine_last
+		stz	<p_vine
+		lda	#VINE_NOGRAB
+		sta	<p_nograb
+		jmp	start_jump
+.done:		rts
+
+; enter_swing - caught a vine (vines.asm has set p_vine).
+enter_swing:	lda	#ST_SWING
+		sta	<p_state
+		stz	<p_jatk
+		lda	#<anim_swing
+		ldx	#>anim_swing
+		jmp	set_anim
 
 ; --- On a rope: UP climbs, DOWN slides, I jumps off.
 st_climb:	lda	#1
@@ -514,7 +876,7 @@ rope_probe:	sta	<ctmp
 		lda	<p_x + 1
 		sta	<cx + 1
 		jsr	coll_at
-		and	#$7F
+		and	#$0F
 		cmp	#2
 		beq	!+
 		clc
@@ -550,7 +912,7 @@ rope_grab:	lda	<p_nograb
 		phx
 		jsr	coll_at
 		plx
-		and	#$7F
+		and	#$0F
 		cmp	#2
 		beq	.grab
 		dex
@@ -588,20 +950,36 @@ enter_crouch:	lda	#ST_CROUCH
 		ldx	#>anim_crouch
 		jmp	set_anim
 
-enter_attack:	lda	#ST_ATTACK
+enter_attack:	pha
+		lda	#SFX_SWING
+		jsr	sound_sfx
+		pla
+		lda	#ST_ATTACK
 		sta	<p_state
 		lda	#<anim_attack
 		ldx	#>anim_attack
 		jmp	set_anim
 
-enter_catk:	lda	#ST_CATK
+enter_uatk:	lda	#SFX_SWING
+		jsr	sound_sfx
+		lda	#ST_UATK
+		sta	<p_state
+		lda	#<anim_uattack
+		ldx	#>anim_uattack
+		jmp	set_anim
+
+enter_catk:	lda	#SFX_SWING
+		jsr	sound_sfx
+		lda	#ST_CATK
 		sta	<p_state
 		lda	#<anim_catk
 		ldx	#>anim_catk
 		jmp	set_anim
 
 ; start_jump: UP held = high jump; a direction held = forward jump.
-start_jump:	stz	<p_jdir
+start_jump:	lda	#VOICE_JUMP		; The arcade's grunt (an ADPCM voice
+		jsr	voice_play		; there, not an FM effect).
+		stz	<p_jdir
 		bbr5	<pad, !+
 		stz	<p_face
 		lda	#1
@@ -657,10 +1035,39 @@ enter_air:	lda	#ST_AIR
 		ldx	#>anim_jump
 		jmp	set_anim
 
+; player_invalidate - forget what the pattern buffers hold.
+player_invalidate:
+		lda	#$FF
+		sta	<p_pose_up
+		sta	p_bufpose
+		sta	p_bufpose + 1
+		sta	p_bufwpose
+		sta	p_bufwpose + 1
+		rts
+
+; player_set_weapon - A = weapon; a taken one lasts WEAPON_FRAMES.
+player_set_weapon:
+		pha
+		lda	#SFX_ITEM
+		jsr	sound_sfx
+		pla
+		sta	<p_weapon
+		lda	#<WEAPON_FRAMES
+		sta	<p_wtime
+		lda	#>WEAPON_FRAMES
+		sta	<p_wtime + 1
+		rts
+
 player_init_pos:
+		stz	<p_door
+		stz	<p_vine
+		stz	<p_vine_last
+		lda	#WPN_SWORD		; A life starts with the sword.
+		sta	<p_weapon
 		lda	#PLAYER_HP
 		sta	<p_hp
 		stz	<p_invuln
+		stz	p_latch
 		stz	<p_nograb
 		stz	<p_jatk
 		stz	<p_face
@@ -747,14 +1154,33 @@ move_down_nl:	jsr	floor_below
 		bne	move_down_nl
 .done:		rts
 
-; move_up - dy (negative) pixels up. Rastan jumps through platforms.
-move_up:	lda	<p_y
+; move_up - dy (negative) pixels up. Rastan jumps through platforms, but a
+; solid cell (code 1) over his head (p_y - 25) stops the rise: the jump turns
+; into its fall (the arcade: he can't jump up through the castle's ledges).
+move_up:	lda	<p_y			; cy = p_y - 25, cx = p_x
+		sec
+		sbc	#25
+		sta	<cy
+		lda	<p_y + 1
+		sbc	#0
+		sta	<cy + 1
+		lda	<p_x
+		sta	<cx
+		lda	<p_x + 1
+		sta	<cx + 1
+		jsr	coll_at
+		and	#$0F
+		cmp	#1
+		beq	.bump
+		lda	<p_y
 		bne	!+
 		dec	<p_y + 1
 !:		dec	<p_y
 		inc	<dy
 		bne	move_up
 		rts
+.bump:		rts				; Head on a ceiling: no higher this frame (the
+						; jump goes on: the arcade glides along it).
 
 ; ---------------------------------------------------------------------------
 ; Collision probes. Carry set = blocked / floor found.
@@ -818,19 +1244,22 @@ wall_column:	ldx	#3
 		phx
 		jsr	coll_at
 		plx
-		and	#$7F
+		and	#$0F
 		cmp	#1
 		beq	.blocked
+		cmp	#$0E			; A door: a wall that takes him through.
+		beq	.door
 		dex
 		bpl	.loop
 		clc
 		rts
+.door:		sta	<p_door
 .blocked:	sec
 		rts
-.heights:	db	20, 4, -12, -28
+.heights:	db	20, 4, -12, -20		; (not the top of the head: he glides under ceilings)
 
 ; is_floor - carry set if collision code A is something to stand on.
-is_floor:	and	#$7F
+is_floor:	and	#$0F
 		cmp	#8
 		bcs	.no
 		tax
@@ -841,51 +1270,90 @@ is_floor:	and	#$7F
 		rts
 .tab:		db	0, 1, 0, 1, 1, 0, 0, 1
 
-; coll_at - collision code at world (cx, cy); 0 outside the map, 1 past
-; the end of the stage. Data (MPR5 $A000): 16 bytes per block column, then
-; 16-byte 4x4 patterns at COLL_PATTERNS.
-coll_at:	lda	<cy + 1
-		cmp	#2			; Also rejects negative ($FF).
-		bcs	.empty
-		sta	<ctx + 1
-		lda	<cy			; cty = cy >> 3
-		lsr	<ctx + 1
+; coll_at - collision code at world (cx, cy). Outside the world's squares:
+; 0 above the top or below the bottom row of squares and above row 0
+; (open sky), 1 elsewhere (walls). 1 inside a solid prop, and on a passage
+; ($80) that a shaft has sealed: at or below row_top + SEAL_DEPTH.
+; Data (MPR5 $A000, tools/pce_coll.py): square ids at (x >> 9, (y >> 9) + 3),
+; 256 bytes per square (block columns of 16), 16-byte 4x4 patterns.
+SEAL_DEPTH	=	480
+coll_at:	phx				; (X and Y kept)
+		phy
+		jsr	coll_world
+		ply
+		plx
+		rts
+coll_world:	lda	<prop_solid		; A solid prop (the cave block) first.
+		beq	.mo
+		jsr	prop_coll
+		bcc	.mo
+		lda	#1
+		rts
+.mo:		lda	mo_nplat		; Then the map objects' platforms
+		beq	.map			; (src/mobj.asm): floors to jump
+		jsr	mobj_coll		; up through.
+		bcc	.map
+		lda	#3
+		rts
+.map:		lda	<cy + 1			; Square row (y >> 9) + 3: 0..3.
+		cmp	#$80
 		ror	a
-		lsr	<ctx + 1
-		ror	a
-		lsr	<ctx + 1
-		ror	a
-		sta	<cty
-		lda	<cx + 1			; ctx = cx >> 3
-		bmi	.empty
-		sta	<ctx + 1
-		lda	<cx
-		lsr	<ctx + 1
-		ror	a
-		lsr	<ctx + 1
-		ror	a
-		lsr	<ctx + 1
-		ror	a
-		sta	<ctx
-		and	#$FC			; cp = (ctx & ~3) << 2 = block column * 16
-		sta	<cp
-		lda	<ctx + 1
-		sta	<cp + 1
-		asl	<cp
-		rol	<cp + 1
-		asl	<cp
-		rol	<cp + 1
-		lda	<cp + 1
-		cmp	#>(COLL_PATTERNS)	; Past the last block column?
+		clc
+		adc	#3
+		cmp	#4
+		bcs	.empty			; Below row 0, or far above.
+		tax
+		lda	<cx + 1			; Square column x >> 9: 0..23.
+		bmi	.solid
+		lsr	a
+		cmp	#24
 		bcs	.solid
+		clc
+		adc	.rows, x
+		tay
+		lda	$A000, y		; Square id.
+		cmp	#$FF
+		bne	.square
+		cpx	#3			; None: sky above row 0, else wall.
+		bcc	.empty
+.solid:		lda	#1
+		rts
+.empty:		cla
+		rts
+.rows:		db	0, 24, 48, 72
+
+.square:	inc	a			; cp = $A100 + id * 256 + block column * 16 + block row
+		ora	#$A0
+		sta	<cp + 1
+		lda	<cx			; block column = (cx >> 5) & 15
+		sta	<ctx
+		lda	<cx + 1
+		lsr	a
+		ror	<ctx
+		lsr	a
+		ror	<ctx
+		lsr	a
+		ror	<ctx			; ctx = cx >> 3 (low 8 bits)
+		lda	<cy
+		sta	<cty
+		lda	<cy + 1
+		lsr	a
+		ror	<cty
+		lsr	a
+		ror	<cty
+		lsr	a
+		ror	<cty			; cty = cy >> 3 (low 8 bits)
+		lda	<ctx
+		asl	a			; (ctx >> 2) & 15 = block column, * 16
+		asl	a
+		and	#$F0
+		sta	<cp
 		lda	<cty
 		lsr	a
 		lsr	a
+		and	#$0F
 		ora	<cp
 		sta	<cp
-		lda	<cp + 1
-		ora	#$A0
-		sta	<cp + 1
 		lda	[cp]			; Pattern number.
 		sta	<cp
 		stz	<cp + 1
@@ -913,10 +1381,27 @@ coll_at:	lda	<cy + 1
 		adc	#>($A000 + COLL_PATTERNS)
 		sta	<cp + 1
 		lda	[cp]
+		bmi	.passage
 		rts
-.empty:		cla
+.passage:	sta	<ctmp			; Sealed: cy >= row_top + SEAL_DEPTH?
+		lda	<row_top
+		clc
+		adc	#<SEAL_DEPTH
+		sta	<cp
+		lda	<row_top + 1
+		adc	#>SEAL_DEPTH
+		bvs	.open			; (no rows streamed yet)
+		sta	<cp + 1
+		lda	<cy
+		cmp	<cp
+		lda	<cy + 1
+		sbc	<cp + 1
+		bvc	!+
+		eor	#$80
+!:		bmi	.open
+		lda	#1
 		rts
-.solid:		lda	#1
+.open:		lda	<ctmp
 		rts
 
 ; ---------------------------------------------------------------------------
@@ -973,99 +1458,278 @@ anim_tick:	lda	<p_hold
 .done:		rts
 
 ; ---------------------------------------------------------------------------
-; Camera: scroll forward when Rastan passes screen x 136; keep his feet
-; between screen y 80 and 176.
+; Camera: follows Rastan's x 136 px from the screen's left (in a horizontal
+; square only forwards; in a shaft both ways) and keeps his feet between
+; screen y 80 and 176; then camera_clamp holds it in the box of the region
+; of the next line to stream (stage_regions.inc).
 
-camera_update:	lda	<p_x			; tmp = p_x - 136
+camera_update:	lda	<p_x			; cv = p_x - 136
 		sec
 		sbc	#136
-		sta	<ctx
+		sta	<cv
 		lda	<p_x + 1
 		sbc	#0
-		sta	<ctx + 1
-		bmi	.vert
-		cmp	<scroll_x + 1		; if tmp > scroll_x: scroll_x = tmp
-		bcc	.vert
+		sta	<cv + 1
+		ldx	<cam_region
+		lda	region_free, x
 		bne	.setx
-		lda	<ctx
-		cmp	<scroll_x
-		bcc	.vert
-		beq	.vert
-.setx:		lda	<ctx			; Clamp to MAX_SCROLL_X.
+		lda	<scroll_x		; Forwards only: cv = max(cv, scroll_x).
+		sta	<cl
+		lda	<scroll_x + 1
+		sta	<cl + 1
+		jsr	smax
+.setx:		lda	<cv
 		sta	<scroll_x
-		lda	<ctx + 1
-		sta	<scroll_x + 1
-		cmp	#>MAX_SCROLL_X
-		bcc	.vert
-		bne	.clampx
-		lda	<scroll_x
-		cmp	#<MAX_SCROLL_X
-		bcc	.vert
-.clampx:	lda	#<MAX_SCROLL_X
-		sta	<scroll_x
-		lda	#>MAX_SCROLL_X
+		lda	<cv + 1
 		sta	<scroll_x + 1
 
-.vert:		; feet = p_y + 24; low = feet - 176, high = feet - 80.
+		; feet = p_y + 24: scroll_y in [feet - 176, feet - 80].
+		lda	<scroll_y
+		sta	<cv
+		lda	<scroll_y + 1
+		sta	<cv + 1
 		lda	<p_y
 		clc
 		adc	#<(24 - 176)
-		sta	<ctx
+		sta	<cl
 		lda	<p_y + 1
 		adc	#>(24 - 176)
-		sta	<ctx + 1		; scroll_y must be >= ctx
-		bmi	.lowok
-		cmp	<scroll_y + 1
-		bcc	.lowok
-		bne	.sety_low
-		lda	<ctx
-		cmp	<scroll_y
-		bcc	.lowok
-		beq	.lowok
-.sety_low:	lda	<ctx
-		sta	<scroll_y
-		lda	<ctx + 1
-		sta	<scroll_y + 1
-.lowok:		lda	<p_y			; scroll_y must be <= feet - 80
+		sta	<cl + 1
+		jsr	smax
+		jsr	cam_rest		; (the lava hall: lower, carry set)
+		bcs	.sety
+		lda	<p_y
 		clc
 		adc	#<(24 - 80)
-		sta	<ctx
+		sta	<cl
 		lda	<p_y + 1
 		adc	#>(24 - 80)
-		sta	<ctx + 1
-		bpl	!+
-		stz	<ctx			; Clamp at 0.
-		stz	<ctx + 1
-!:		lda	<scroll_y + 1
-		cmp	<ctx + 1
-		bcc	.clampy
-		bne	.sety_high
-		lda	<scroll_y
-		cmp	<ctx
-		bcc	.clampy
-		beq	.clampy
-.sety_high:	lda	<ctx
+		sta	<cl + 1
+		jsr	smin
+.sety:		lda	<cv
 		sta	<scroll_y
-		lda	<ctx + 1
+		lda	<cv + 1
 		sta	<scroll_y + 1
-.clampy:	lda	<scroll_y + 1		; Clamp to MAX_SCROLL_Y.
-		beq	.done
+		; (fall through)
+
+; camera_clamp - scroll_x, scroll_y into the box of cam_region. The BAT holds
+; 512 px each way, so the camera also stays inside the last 512 px streamed:
+; scroll_x >= col_last - STAGE_COL_REACH and scroll_y <= row_top + STAGE_ROW_REACH.
+
+
+camera_clamp:	ldx	<cam_region
+		lda	<scroll_x
+		sta	<cv
+		lda	<scroll_x + 1
+		sta	<cv + 1
+		lda	region_x0_l, x
+		sta	<cl
+		lda	region_x0_h, x
+		sta	<cl + 1
+		jsr	smax
+		lda	<p_x + 1		; In the castle (p_x >= CASTLE_X, $2000),
+		cmp	#>CASTLE_X		; not back past its wall: the arcade
+		bcc	!+			; loads the room whole at the gate and
+		stz	<cl			; its camera stays in it.
+		lda	#>CASTLE_X
+		sta	<cl + 1
+		jsr	smax
+!:		lda	<col_last		; Not back past the last column streamed
+		clc				; minus the BAT's 512 px (less a margin).
+		adc	#<-STAGE_COL_REACH
+		sta	<cl
+		lda	<col_last + 1
+		adc	#>-STAGE_COL_REACH
+		bvs	!+			; (no columns yet: $8000 - reach underflows)
+		sta	<cl + 1
+		jsr	smax
+!:
+		lda	region_x1_l, x
+		sta	<cl
+		lda	region_x1_h, x
+		sta	<cl + 1
+		jsr	smin
+		lda	<p_x + 1		; Outside the castle, the camera stops
+		cmp	#>CASTLE_X		; at its wall (the arcade's does at the
+		bcs	!+			; gate): it never shows the castle's
+		lda	#<(CASTLE_X - 256)	; rooms, whose palettes are not loaded.
+		sta	<cl
+		lda	#>(CASTLE_X - 256)
+		sta	<cl + 1
+		jsr	smin
+!:		lda	<cv
+		sta	<scroll_x
+		lda	<cv + 1
+		sta	<scroll_x + 1
 		lda	<scroll_y
-		cmp	#<MAX_SCROLL_Y
-		bcc	.done
-		lda	#<MAX_SCROLL_Y
+		sta	<cv
+		lda	<scroll_y + 1
+		sta	<cv + 1
+		lda	<row_top
+		clc
+		adc	#<STAGE_ROW_REACH
+		sta	<cl
+		lda	<row_top + 1
+		adc	#>STAGE_ROW_REACH
+		sta	<cl + 1
+		bvs	!+			; (no rows yet: $7FFF + reach overflows)
+		jsr	smin
+!:		lda	region_y1_l, x
+		sta	<cl
+		lda	region_y1_h, x
+		sta	<cl + 1
+		jsr	smin
+		lda	region_y0_l, x
+		sta	<cl
+		lda	region_y0_h, x
+		sta	<cl + 1
+		jsr	smax
+		lda	<cv
 		sta	<scroll_y
-.done:		rts
+		lda	<cv + 1
+		sta	<scroll_y + 1
+		rts
+
+; cam_rest - in the lava hall (Rastan in rd_rest_x0 .. x1, src/rounds.asm) the arcade holds the
+; camera low, its fire filling the bottom of the screen: cv (scroll_y) sinks a
+; pixel a frame toward CAM_REST_Y, but no lower than keeps his head 8 px below
+; the top (cv <= p_y - 36). Carry set if it applied.
+cam_rest:	lda	<p_x
+		cmp	rd_rest_x0
+		lda	<p_x + 1
+		sbc	rd_rest_x0 + 1
+		bcc	.no
+		lda	<p_x
+		cmp	rd_rest_x1
+		lda	<p_x + 1
+		sbc	rd_rest_x1 + 1
+		bcs	.no
+		lda	rd_rest_y		; Sink: cv = min(cv + 1, CAM_REST_Y) ...
+		sta	<cl
+		lda	rd_rest_y + 1
+		sta	<cl + 1
+		inc	<cv
+		bne	!+
+		inc	<cv + 1
+!:		jsr	smin
+		lda	<p_y			; ... and cv <= p_y - 36.
+		sec
+		sbc	#36
+		sta	<cl
+		lda	<p_y + 1
+		sbc	#0
+		sta	<cl + 1
+		jsr	smin
+		sec
+		rts
+.no:		clc
+		rts
+
+; smax - cv = max(cv, cl); smin - cv = min(cv, cl) (signed 16-bit). Keep X.
+smax:		lda	<cv
+		cmp	<cl
+		lda	<cv + 1
+		sbc	<cl + 1
+		bvc	!+
+		eor	#$80
+!:		bpl	scopy_done
+scopy:		lda	<cl
+		sta	<cv
+		lda	<cl + 1
+		sta	<cv + 1
+scopy_done:	rts
+smin:		lda	<cl
+		cmp	<cv
+		lda	<cl + 1
+		sbc	<cv + 1
+		bvc	!+
+		eor	#$80
+!:		bmi	scopy
+		rts
+
 
 ; ---------------------------------------------------------------------------
 ; player_draw - upload a new pose into the idle buffer, then write the SATB.
 ; Runs after the frame's logic; the SATB DMA at the next VBLANK picks it up,
 ; together with the scroll registers written then.
 
-player_draw:	php				; VDC writes: IRQ held off (see stream_column).
+player_draw:	php				; VDC writes: IRQ held off (see stream_line).
 		sei
 		jsr	anim_tick
-		; Map the pose record (pose table at the start of player_data).
+		; Weapon variant: weapon - 1; the fire sword's flame steps every 2 frames.
+		lda	<p_weapon
+		dec	a
+		cmp	#WPN_FIRE - 1
+		bcc	!+
+		lda	<p_frame
+		lsr	a
+		and	#3
+		clc
+		adc	#WPN_FIRE - 1
+!:		sta	<p_var
+		; This pose's weapon pieces into p_wbuf.
+		lda	#WTAB_BANK
+		tam3
+		lda	<p_var
+		asl	a
+		tay
+		lda	weapon_vtab, y
+		sta	<ctx
+		lda	weapon_vtab + 1, y
+		sta	<ctx + 1
+		lda	<p_pose
+		asl	a
+		tay
+		lda	[ctx], y
+		sta	<cp
+		iny
+		lda	[ctx], y
+		sta	<cp + 1
+		lda	[cp]
+		sta	<p_wcount
+		asl	a
+		asl	a
+		tax
+		beq	.wdone
+		ldy	#1
+!:		lda	[cp], y
+		sta	p_wbuf - 1, y
+		iny
+		dex
+		bne	!-
+.wdone:
+		; Changed: show it from the hidden buffer, uploading what that buffer lacks.
+		stz	<cty			; Body cells to upload: no.
+		lda	<p_pose
+		cmp	<p_pose_up
+		bne	.new
+		lda	<p_var
+		cmp	<p_var_up
+		beq	.map
+.new:		lda	<p_pose
+		sta	<p_pose_up
+		lda	<p_var
+		sta	<p_var_up
+		lda	<p_buf
+		eor	#1
+		sta	<p_buf
+		tax
+		lda	<p_pose
+		cmp	p_bufpose, x
+		beq	!+
+		sta	p_bufpose, x
+		inc	<cty			; Body cells: yes (below, once mapped).
+!:		cmp	p_bufwpose, x
+		bne	.wup
+		lda	<p_var
+		cmp	p_bufvar, x
+		beq	.map
+.wup:		lda	<p_pose
+		sta	p_bufwpose, x
+		lda	<p_var
+		sta	p_bufvar, x
+		jsr	upload_weapon
+.map:		; Map the pose record (pose table at the start of player_data).
 		lda	#PLAYER_BANK
 		tam3
 		lda	<p_pose
@@ -1088,14 +1752,9 @@ player_draw:	php				; VDC writes: IRQ held off (see stream_column).
 		lda	[cp]
 		sta	<p_ncells
 
-		lda	<p_pose
-		cmp	<p_pose_up
+		lda	<cty
 		beq	.satb
-		sta	<p_pose_up
-		lda	<p_buf			; Upload into the hidden buffer.
-		eor	#1
-		sta	<p_buf
-		st0	#VDC_MAWR
+		st0	#VDC_MAWR		; Body cells into the (new) shown buffer.
 		stz	VDC_DL
 		lda	#>SPR_BUF_A
 		ldx	<p_buf
@@ -1132,18 +1791,13 @@ player_draw:	php				; VDC writes: IRQ held off (see stream_column).
 !:		dex
 		bne	.cell
 
-.satb:		; Flicker while invulnerable: draw no cells every other 4 frames.
-		lda	<p_invuln
-		beq	!+
-		lda	<p_frame
-		and	#4
-		beq	!+
-		stz	<p_ncells
-!:		; SATB entries 0..ncells-1, then clear what the last pose used.
+.satb:		; (No flicker while untouchable: the arcade draws him every frame,
+		; lizard.snp 668-723; the HUD's icon flashes.)
+		; SATB entries 0..ncells-1, the weapon's, then clear what the last frame used.
 		st0	#VDC_MAWR
-		lda	#<SATB_ADDR
+		lda	#<(SATB_ADDR + HUD_ENTRIES * 4)	; After the HUD's entries.
 		sta	VDC_DL
-		lda	#>SATB_ADDR
+		lda	#>(SATB_ADDR + HUD_ENTRIES * 4)
 		sta	VDC_DH
 		st0	#VDC_VWR
 		; base pattern = buffer >> 5
@@ -1156,7 +1810,7 @@ player_draw:	php				; VDC writes: IRQ held off (see stream_column).
 		ldy	#1			; offset of (dx, dy) pairs
 .ent:		cpx	<p_ncells
 		bcc	!+
-		jmp	.clear
+		jmp	.weapon
 !:		; y = p_y + dy - scroll_y + 64
 		iny
 		lda	[cp], y			; dy
@@ -1240,19 +1894,133 @@ player_draw:	php				; VDC writes: IRQ held off (see stream_column).
 		inc	a
 		tay
 		jmp	.ent
-.clear:		cpx	<p_prev_cells		; Zero leftover entries.
-		bcs	.end
-		st1	#0
-		st2	#0
-		st1	#0
-		st2	#0
-		st1	#0
-		st2	#0
-		st1	#0
-		st2	#0
+.weapon:	; Weapon pieces (behind the body): p_wbuf, cells WEAPON_CELL...
+		cly
+.went:		cpy	<p_wcount
+		bne	!+
+		jmp	.clear
+!:		phy
+		tya
+		asl	a
+		asl	a
+		tay				; Y = piece * 4
+		lda	p_wbuf + 1, y		; y = p_y + dy - scroll_y + 64
+		sta	<cty
+		clc
+		adc	<p_y
+		sta	<ctx
+		lda	<cty
+		and	#$80
+		beq	!+
+		lda	#$FF
+!:		adc	<p_y + 1
+		sta	<ctx + 1
+		lda	<ctx
+		sec
+		sbc	<scroll_y
+		sta	<ctx
+		lda	<ctx + 1
+		sbc	<scroll_y + 1
+		sta	<ctx + 1
+		lda	<ctx
+		clc
+		adc	#64
+		sta	VDC_DL
+		lda	<ctx + 1
+		adc	#0
+		and	#$03
+		sta	VDC_DH
+		lda	p_wbuf, y		; x = p_x + dx (left: -dx - 16) - scroll_x + 32
+		phy
+		ldy	<p_face
+		beq	!+
+		eor	#$FF
+		sec
+		sbc	#15
+!:		ply
+		sta	<cty
+		clc
+		adc	<p_x
+		sta	<ctx
+		lda	<cty
+		and	#$80
+		beq	!+
+		lda	#$FF
+!:		adc	<p_x + 1
+		sta	<ctx + 1
+		lda	<ctx
+		sec
+		sbc	<scroll_x
+		sta	<ctx
+		lda	<ctx + 1
+		sbc	<scroll_x + 1
+		sta	<ctx + 1
+		lda	<ctx
+		clc
+		adc	#32
+		sta	VDC_DL
+		lda	<ctx + 1
+		adc	#0
+		and	#$03
+		sta	VDC_DH
+		pla				; pattern = base + (WEAPON_CELL + piece) * 2
+		pha
+		clc
+		adc	#WEAPON_CELL
+		asl	a
+		clc
+		adc	<ctmp
+		sta	VDC_DL
+		lda	#(SPR_BUF_A >> 13)
+		adc	#0
+		sta	VDC_DH
+		lda	#$80			; palette 0, in front of BG; flips (+ X when facing left)
+		sta	VDC_DL
+		lda	p_wbuf + 3, y
+		ldy	<p_face
+		beq	!+
+		eor	#$08
+!:		sta	VDC_DH
+		ply
+		iny
 		inx
-		bra	.clear
-.end:		lda	<p_ncells
-		sta	<p_prev_cells
+		jmp	.went
+.clear:		txa				; The props' and objects' entries
+		clc				; follow his (enemies_draw clears what
+		adc	#HUD_ENTRIES		; the last frame used beyond them all).
+		sta	<satb_n
 		plp
 		rts
+
+; upload_weapon - p_wbuf's cells into buffer p_buf from cell WEAPON_CELL on.
+upload_weapon:	lda	<p_wcount
+		beq	.r
+		lda	#WEAPON_BANK
+		tam3
+		st0	#VDC_MAWR
+		stz	VDC_DL
+		lda	#>(SPR_BUF_A + WEAPON_CELL * 64)
+		ldx	<p_buf
+		beq	!+
+		lda	#>(SPR_BUF_B + WEAPON_CELL * 64)
+!:		sta	VDC_DH
+		st0	#VDC_VWR
+		ldx	<p_wcount
+		ldy	#2			; cell byte of piece 0
+.cell:		lda	p_wbuf, y		; source = $6000 + cell * 128
+		lsr	a
+		pha
+		cla
+		ror	a
+		sta	ram_tia + 1
+		pla
+		ora	#$60
+		sta	ram_tia + 2
+		jsr	ram_tia
+		iny
+		iny
+		iny
+		iny
+		dex
+		bne	.cell
+.r:		rts

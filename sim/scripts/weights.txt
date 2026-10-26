@@ -1,0 +1,95 @@
+# Shaft 2's spiked weights (arcade marker $45, type $18; src/weights.asm). Bot run from
+# checkpoint segment $13 (health held): across the jets' room (pool jumps at 1078-1274),
+# up three ropes of shaft 2 (1330, 1820, 2224) and right along the corridor at its top
+# (from 2654), stopping under the middle weight (x 10016 in the port's coordinates).
+# From 2600 the object slots 3-29 are switched off (the soldiers and lizards that crowd the
+# corridor), so that only the weights act. The weights appear at 2510 (the camera's top at
+# y -752), wait 8 / 40 / 72 frames, then cycle every 147: down 1 a frame to 31, 2 frames,
+# up to 0, 1 frame, 80 frames. At 2868 the middle one, at length 23, reaches his head:
+# state 8 (death), as the fire's.
+patch 5073a 13
+in 100 ff 3f
+in 106 ff 1f
+in 200 ff 17
+in 206 ff 1f
+poke 300 3000 10c13a w 3000
+end 3000
+poke 2600 3200 10c388 b 0
+poke 2600 3200 10c3c8 b 0
+poke 2600 3200 10c408 b 0
+poke 2600 3200 10c448 b 0
+poke 2600 3200 10c488 b 0
+poke 2600 3200 10c4c8 b 0
+poke 2600 3200 10c508 b 0
+poke 2600 3200 10c548 b 0
+poke 2600 3200 10c588 b 0
+poke 2600 3200 10c5c8 b 0
+poke 2600 3200 10c608 b 0
+poke 2600 3200 10c648 b 0
+poke 2600 3200 10c688 b 0
+poke 2600 3200 10c6c8 b 0
+poke 2600 3200 10c708 b 0
+poke 2600 3200 10c748 b 0
+poke 2600 3200 10c788 b 0
+poke 2600 3200 10c7c8 b 0
+poke 2600 3200 10c808 b 0
+poke 2600 3200 10c848 b 0
+poke 2600 3200 10c888 b 0
+poke 2600 3200 10c8c8 b 0
+poke 2600 3200 10c908 b 0
+poke 2600 3200 10c948 b 0
+poke 2600 3200 10c988 b 0
+poke 2600 3200 10c9c8 b 0
+poke 2600 3200 10ca08 b 0
+in 300 f6 1f
+in 352 d6 1f
+in 356 f6 1f
+in 412 d6 1f
+in 416 f6 1f
+in 472 d6 1f
+in 476 f6 1f
+in 532 d6 1f
+in 536 f6 1f
+in 592 d6 1f
+in 596 f6 1f
+in 652 d6 1f
+in 656 f6 1f
+in 712 d6 1f
+in 716 f6 1f
+in 772 d6 1f
+in 776 f6 1f
+in 832 d6 1f
+in 836 f6 1f
+in 892 d6 1f
+in 896 f6 1f
+in 903 f7 1f
+in 936 d7 1f
+in 940 f7 1f
+in 986 d7 1f
+in 990 f7 1f
+in 1036 d7 1f
+in 1040 f7 1f
+in 1078 d7 1f
+in 1082 f7 1f
+in 1160 d7 1f
+in 1164 f7 1f
+in 1173 ff 1f
+in 1238 d7 1f
+in 1242 ff 1f
+in 1274 d7 1f
+in 1278 f7 1f
+in 1330 de 1f
+in 1334 fe 1f
+in 1700 db 1f
+in 1704 fb 1f
+in 1820 f7 1f
+in 1828 de 1f
+in 1832 fe 1f
+in 2050 db 1f
+in 2054 fb 1f
+in 2220 f7 1f
+in 2224 de 1f
+in 2228 fe 1f
+in 2650 d7 1f
+in 2654 f7 1f
+in 2794 ff 1f

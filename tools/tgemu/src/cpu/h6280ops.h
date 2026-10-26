@@ -112,7 +112,7 @@ extern int io_page_r(int address);
 #define cpu_readmem21_fast(addr)        (read_ptr[(addr) >> 13] == 0) ? io_page_r((addr) & 0x1FFF) : read_ptr[(addr) >> 13][(addr) & 0x1FFF]
 extern unsigned char sf2_marker[];
 extern void sf2_write(int offset);
-#define cpu_writemem21_fast(addr,value) if(write_ptr[(addr) >> 13] == 0) io_page_w((addr) & 0x1FFF, value); else if(write_ptr[(addr) >> 13] == sf2_marker) sf2_write((addr) & 0x1FFF); else (write_ptr[(addr) >> 13][(addr) & 0x1FFF] = value)
+#define cpu_writemem21_fast(addr,value) if(write_ptr[(addr) >> 13] == 0) io_page_w((addr) & 0x1FFF, value); else if(write_ptr[(addr) >> 13] == sf2_marker) sf2_write((addr) & 0xFFFF); else (write_ptr[(addr) >> 13][(addr) & 0x1FFF] = value)
 
 #define RDMEMZ(addr)        ram[addr & 0x1FFF];
 #define WRMEMZ(addr,data)   ram[addr & 0x1FFF] = data;

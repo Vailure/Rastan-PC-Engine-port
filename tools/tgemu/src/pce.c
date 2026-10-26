@@ -274,9 +274,12 @@ static uint8 *rom_bank_ptr(int value)
     return &rom[value << 13];
 }
 
-void sf2_write(int offset)
+/* A write to ROM: the SF2 mapper answers physical $001FF0-$001FF3 only, that is
+   offsets $1FF0-$1FF3 of an MPR holding bank $00 (MAME: 0x001ff0-0x001ff3). */
+void sf2_write(int address)
 {
-    if(rom_size > 0x100000 && (offset & 0x1FFC) == 0x1FF0) {
+    int offset = address & 0x1FFF;
+    if(rom_size > 0x100000 && (offset & 0x1FFC) == 0x1FF0 && mpr[address >> 13] == 0) {
         int i;
         sf2_page = offset & 3;
         for(i = 0; i < 8; i++)

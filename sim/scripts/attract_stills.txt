@@ -1,0 +1,3 @@
+# The arcade's title screen at power-on (frame 160), and its attract demo's GAME OVER
+# (frame 2730): no inputs, recorded only around those frames (Makefile).
+end 2740

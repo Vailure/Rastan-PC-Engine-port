@@ -1,0 +1,30 @@
+# Round 3 from its first segment ($2E) (the start switch $5FF9F = $FD): its palette at frame 420 for the stage
+# conversion; Rastan stands still. The game starts in the round and segment that the ROM word
+# $5FF9E selects ($045282, $04529C): round (~$5FF9F & 7) + 1, at its first segment, + $16 (the
+# boss room) when bit 3 of $5FF9F is clear, + $10 (the castle) when bit 5 is. (The NOPs: hazards
+# off, as in round2.txt; the poke holds health.)
+patch 53e0c 4e
+patch 53e0d 71
+patch 53e0e 4e
+patch 53e0f 71
+patch 53e10 4e
+patch 53e11 71
+patch 54ebe 4e
+patch 54ebf 71
+patch 54ec0 4e
+patch 54ec1 71
+patch 54ec2 4e
+patch 54ec3 71
+patch 553e6 4e
+patch 553e7 71
+patch 553e8 4e
+patch 553e9 71
+patch 553ea 4e
+patch 553eb 71
+patch 5ff9f fd
+in 100 ff 3f
+in 106 ff 1f
+in 200 ff 17
+in 206 ff 1f
+poke 300 30000 10c13a w 3000
+end 1200

@@ -141,7 +141,10 @@ int h6280_execute(int cycles)
 			h6280.timer_value -= deltacycle;
 			if(h6280.timer_value<=0 && h6280.timer_ack==1)
 			{
-				h6280.timer_ack=h6280.timer_status=0;
+				/* The counter reloads itself and keeps running: a timer
+				   interrupt repeats until the program stops the timer. */
+				h6280.timer_ack=0;
+				h6280.timer_value+=h6280.timer_load;
 				h6280_set_irq_line(2,ASSERT_LINE);
 			}
 		}
@@ -311,8 +314,7 @@ void H6280_irq_status_w (int offset, int data)
 			CHECK_IRQ_LINES;
 			break;
 
-		case 1: /* Timer irq ack - timer is reloaded here */
-			h6280.timer_value = h6280.timer_load;
+		case 1: /* Timer irq ack (the counter reloaded itself when it fired) */
 			h6280.timer_ack=1; /* Timer can't refire until ack'd */
 			break;
 	}

@@ -1,0 +1,44 @@
+# The castle's (and every segment's) hurry-up swarm: Rastan waits at the round start.
+# After 40 x 64 frames in one pair of segments the arcade sends nine small bats
+# (arcade slots 20-28, type $0B, cells $268-$26A, $276 when killed); from 2930 he
+# swings at them. Health held full.
+in 100 ff 3f
+in 106 ff 1f
+in 200 ff 17
+in 206 ff 1f
+poke 300 3200 10c13a w 3000
+in 2930 df 1f
+in 2934 ff 1f
+in 2946 df 1f
+in 2950 ff 1f
+in 2962 df 1f
+in 2966 ff 1f
+in 2978 df 1f
+in 2982 ff 1f
+in 2994 df 1f
+in 2998 ff 1f
+in 3010 df 1f
+in 3014 ff 1f
+in 3026 df 1f
+in 3030 ff 1f
+in 3042 df 1f
+in 3046 ff 1f
+in 3058 df 1f
+in 3062 ff 1f
+in 3074 df 1f
+in 3078 ff 1f
+in 3090 df 1f
+in 3094 ff 1f
+in 3106 df 1f
+in 3110 ff 1f
+in 3122 df 1f
+in 3126 ff 1f
+in 3138 df 1f
+in 3142 ff 1f
+in 3154 df 1f
+in 3158 ff 1f
+in 3170 df 1f
+in 3174 ff 1f
+in 3186 df 1f
+in 3190 ff 1f
+end 3200
