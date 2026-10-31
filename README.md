@@ -420,7 +420,10 @@ floor pokes where the bot can't cross a hazard; `R2RUN_POKES`, `R3RUN_POKES` in 
 - **Wall flames** (round 3's castle, `src/beasts.asm`; handler `$22`, markers `$73-$75` at x 9122): three dragon-head
   nozzles shoot jets of fire 80 px to the right, a 108-frame cycle each, out of step; the jet knocks Rastan back.
 - The camera writes `scroll_x` only once clamped (`camera_clamp_w`), so nothing reads an unclamped value mid-frame.
-- Not yet ported: round 3's weight (x 9006) and round 2's castle objects.
+- **Round 3's weight** (`src/weights.asm`, marker `$45` at x 9006, plate y 128): round 1's spiked-weight code with
+  a per-round set (count, x, anchor offset, palette); it appears as the camera reaches x 8650, with round 1's clocks;
+  a touch kills. Its colours (the arcade's `$4C`) in sprite palette 8, loaded then.
+- Not yet ported: round 2's castle objects.
 - Round 3's first wide lava pit (x 4576-4735) is crossed on the vine that hangs over it, at (4646, 272) as the bot's
   run has it (census x - 23552 there: calibrated by Rastan's feet on the map's floors over the whole run).
 - **No torn frames:** the SATB is DMA'd at the start of VBLANK, before the object cell uploads, so `enemies_draw`

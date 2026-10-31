@@ -302,6 +302,7 @@ enemies_update:	inc	spawn_tick		; (the spawn scans take turns: the frame's
 		jsr	vines_tick
 		jsr	vines_spawn
 		jsr	x_mobj_update		; Their map objects (src/mobj.asm),
+		jsr	x_weights_update	; (round 3's weight: src/weights.asm)
 		lda	spawn_tick
 		lsr	a
 		bcs	!+
@@ -1712,6 +1713,11 @@ enemies_draw:	php				; VDC writes: IRQ held off (see stream_line).
 .wnext:		dec	<en_wk
 		bne	.walker
 		jsr	traps_draw		; The castle's floor spears.
+		lda	<cur_round		; (round 3's weight: src/weights.asm)
+		cmp	#3
+		bne	!+
+		jsr	x_weights_draw
+!:
 		; Clear entries the last frame used beyond this frame's.
 		lda	<en_satb
 		clc

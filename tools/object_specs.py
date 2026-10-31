@@ -241,7 +241,10 @@ FIXED_PALS = {'knight': {15: (8, 'knight', 700, 79)},
               'wizard': {15: (8, 'wiz', 700, 79), 0: (13, 'wiz', 900, 64)},
               # Round 3's falling water (arcade colour 15, palette $3F): sprite palette 8 too,
               # loaded with the round (round 3's thirteen slots are full; its wizard reloads 8).
-              'water3': {15: (8, 'r3run', 2050, 0x3f)}}
+              'water3': {15: (8, 'r3run', 2050, 0x3f)},
+              # Round 3's weight (src/weights.asm: its bar, frame and chain, arcade $4C):
+              # sprite palette 8 as it appears in the castle.
+              'weight3': {12: (8, 'r3run', 9341, 0x4c)}}
 BANK64_SNAP = ('castle', 2600)
 B64_GROUPS = ('castle', 'jets', 'vine', 'swarm', 'items', 'boss', 'knight')
 

@@ -45,6 +45,11 @@ WT_WAIT		=	80
 
 		.bss
 wt_act:		ds	1		; They have appeared: their clocks run.
+wt_cnt:		ds	1		; How many (3 in round 1, 1 in round 3).
+wt_xl:		ds	NUM_WT		; Their x (from the round's table).
+wt_xh:		ds	NUM_WT
+wt_dy:		ds	2		; The round's anchor - WT_Y (round 3: 128).
+wt_pal:		ds	1		; Palette (round 1: 14; round 3: 8, loaded).
 wt_ph:		ds	NUM_WT		; Phase (3: just appeared).
 wt_t:		ds	NUM_WT		; Frames to wait.
 wt_len:		ds	NUM_WT		; L, 0-31.
@@ -71,10 +76,18 @@ weights_reset:	stz	wt_act
 ; weights_update - once a frame in the castle (enemies_update): the touch
 ; (with this frame's lengths: the arcade's are a frame late), then the clocks.
 weights_update:
-		R1_ONLY				; (round 1's own: none in other rounds yet)
+		lda	<cur_round		; (rounds 1 and 3)
+		cmp	#2
+		bne	!+
+		rts
+!:
 		lda	wt_act
 		bne	.run
-		lda	<scroll_x + 1		; The camera in shaft 2 (x 9728 - 10239)
+		lda	<cur_round
+		cmp	#3
+		bne	!+
+		jmp	wt3_on
+!:		lda	<scroll_x + 1		; The camera in shaft 2 (x 9728 - 10239)
 		and	#$FE			; and up to y -744.
 		cmp	#>9728
 		bne	.r
@@ -85,18 +98,24 @@ weights_update:
 		bvc	!+
 		eor	#$80
 !:		bpl	.r
-		lda	#1
-		sta	wt_act
-		ldx	#NUM_WT - 1
-!:		lda	#3
-		sta	wt_ph, x
-		stz	wt_t, x
-		stz	wt_len, x
+		lda	#3			; (round 1's three)
+		sta	wt_cnt
+		ldx	#2
+!:		lda	wt_x_l, x
+		sta	wt_xl, x
+		lda	wt_x_h, x
+		sta	wt_xh, x
 		dex
 		bpl	!-
+		stz	wt_dy
+		stz	wt_dy + 1
+		lda	#WT_PAL
+		sta	wt_pal
+		jmp	wt_go
 .r:		rts
 .run:		jsr	wt_touch
-		ldx	#NUM_WT - 1
+		ldx	wt_cnt
+		dex
 .one:		lda	wt_t, x
 		beq	!+
 		dec	wt_t, x
@@ -137,26 +156,91 @@ weights_update:
 		bpl	.one
 		rts
 
+; wt_go - they appear: their clocks start.
+wt_go:		lda	#1
+		sta	wt_act
+		ldx	wt_cnt
+		dex
+!:		lda	#3
+		sta	wt_ph, x
+		stz	wt_t, x
+		stz	wt_len, x
+		dex
+		bpl	!-
+		rts
+
+; wt3_on - round 3: its one weight (marker $45 at x 9006, plate 128: build/
+; r3run.snp, where it appears as the camera reaches x 8650), same clocks, its
+; cells and colours (sprite palette 8: the arcade's $4C) loaded then.
+WT3_X		=	9006
+WT3_ON_X	=	8650
+wt3_on:		lda	<scroll_x
+		cmp	#<WT3_ON_X
+		lda	<scroll_x + 1
+		sbc	#>WT3_ON_X
+		bcs	!+
+		rts
+!:		lda	#1
+		sta	wt_cnt
+		lda	#<WT3_X
+		sta	wt_xl
+		lda	#>WT3_X
+		sta	wt_xh
+		lda	#<(128 - WT_Y)
+		sta	wt_dy
+		lda	#>(128 - WT_Y)
+		sta	wt_dy + 1
+		lda	#8
+		sta	wt_pal
+		php
+		sei
+		lda	#^weights_data
+		tam3
+		st0	#VDC_MAWR
+		st1	#<WT_VRAM
+		st2	#>WT_VRAM
+		st0	#VDC_VWR
+		tia	weights_data, VDC_DL, 5 * 128
+		lda	#^weight3_pal
+		tam3
+		lda	#<(256 + 8 * 16)
+		sta	VCE_CTA + 0
+		lda	#>(256 + 8 * 16)
+		sta	VCE_CTA + 1
+		tia	weight3_pal, VCE_CTW, 32
+		plp
+		jmp	wt_go
+
 ; wt_touch - a weight over Rastan kills him.
-wt_touch:	lda	<p_state
+wt_touch:	bra	!+
+.rr:		rts
+!:		lda	<p_state
 		cmp	#ST_DEAD
-		beq	.r
+		beq	.rr
 		lda	<dbg_god
-		bne	.r
+		bne	.rr
 		lda	<p_y			; In the corridor: his feet (p_y + 24)
-		cmp	#<(WT_Y - 16 - 24 + 1)	; below the plates' top (the room above
-		lda	<p_y + 1		; is out of reach).
+		sec				; below the plates' top (the room above
+		sbc	wt_dy			; is out of reach). (y - wt_dy: round 1's)
+		sta	wt_sy
+		lda	<p_y + 1
+		sbc	wt_dy + 1
+		sta	wt_sy + 1
+		lda	wt_sy
+		cmp	#<(WT_Y - 16 - 24 + 1)
+		lda	wt_sy + 1
 		sbc	#>(WT_Y - 16 - 24 + 1)
 		bvc	!+
 		eor	#$80
-!:		bmi	.r
-		ldx	#NUM_WT - 1
+!:		bmi	.rr
+		ldx	wt_cnt
+		dex
 .one:		lda	<p_x			; p_x - (x - 28) in 0 .. 56?
 		sec
-		sbc	wt_x_l, x
+		sbc	wt_xl, x
 		sta	wt_sx
 		lda	<p_x + 1
-		sbc	wt_x_h, x
+		sbc	wt_xh, x
 		sta	wt_sx + 1
 		lda	wt_sx
 		clc
@@ -190,6 +274,13 @@ wt_touch:	lda	<p_state
 		tya
 		adc	#0
 		sta	wt_sy + 1
+		lda	wt_sy			; (+ the round's anchor)
+		clc
+		adc	wt_dy
+		sta	wt_sy
+		lda	wt_sy + 1
+		adc	wt_dy + 1
+		sta	wt_sy + 1
 		lda	<p_y			; p_y - limit < 0 (signed)?
 		cmp	wt_sy
 		lda	<p_y + 1
@@ -207,9 +298,13 @@ wt_touch:	lda	<p_state
 ; the plate's top; at most 4).
 weights_draw:	lda	wt_act
 		beq	.r
+		lda	<cur_round		; (round 1: once the castle's cells are in)
+		cmp	#1
+		bne	!+
 		lda	col_on
 		beq	.r
-		ldx	#NUM_WT - 1
+!:		ldx	wt_cnt
+		dex
 .one:		stx	wt_i
 		jsr	wt_draw1
 		ldx	wt_i
@@ -217,16 +312,19 @@ weights_draw:	lda	wt_act
 		bpl	.one
 .r:		rts
 
-wt_draw1:	lda	wt_x_l, x		; Plate: (x - 8, WT_Y - 16).
+wt_draw1:	lda	wt_xl, x		; Plate: (x - 8, WT_Y - 16).
 		sec
 		sbc	#8
 		sta	wt_wx
-		lda	wt_x_h, x
+		lda	wt_xh, x
 		sbc	#0
 		sta	wt_wx + 1
 		lda	#<(WT_Y - 16)
+		clc
+		adc	wt_dy
 		sta	wt_wy
 		lda	#>(WT_Y - 16)
+		adc	wt_dy + 1
 		sta	wt_wy + 1
 		lda	#<(WT_PAT + 8)
 		ldy	#0 | $80
@@ -241,8 +339,17 @@ wt_draw1:	lda	wt_x_l, x		; Plate: (x - 8, WT_Y - 16).
 		lda	#>(WT_Y + 2)
 		adc	#0
 		sta	wt_wy + 1
+		lda	wt_wy
+		clc
+		adc	wt_dy
+		sta	wt_wy
+		lda	wt_wy + 1
+		adc	wt_dy + 1
+		sta	wt_wy + 1
+		lda	wt_pal			; (palette, in front)
+		ora	#$80
+		tay
 		lda	#<(WT_PAT + 2)
-		ldy	#WT_PAL | $80
 		clx
 		jsr	wt_emit
 		jsr	wt_down16		; Bar: 16 below, 32 wide from x - 16.
@@ -252,8 +359,10 @@ wt_draw1:	lda	wt_x_l, x		; Plate: (x - 8, WT_Y - 16).
 		sta	wt_wx
 		bcs	!+
 		dec	wt_wx + 1
-!:		lda	#<(WT_PAT + 4)
-		ldy	#WT_PAL | $80
+!:		lda	wt_pal			; (palette, in front)
+		ora	#$80
+		tay
+		lda	#<(WT_PAT + 4)
 		ldx	#$01
 		jsr	wt_emit
 		lda	wt_wx			; (back to x - 8)
@@ -278,8 +387,10 @@ wt_draw1:	lda	wt_x_l, x		; Plate: (x - 8, WT_Y - 16).
 		beq	.r
 		dec	wt_n
 		jsr	wt_up16
+		lda	wt_pal			; (palette, in front)
+		ora	#$80
+		tay
 		lda	#<WT_PAT
-		ldy	#WT_PAL | $80
 		clx
 		jsr	wt_emit
 		bra	.link
