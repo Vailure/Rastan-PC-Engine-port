@@ -908,6 +908,7 @@ obj_palettes_r3_b64: incbin	"objpal_r3_b64.bin"
 knight_pal:	incbin	"knight_pal8.bin"	; Round 2's boss: sprite palette 8 (knight.asm).
 wizard_pal:	incbin	"wizard_pal8.bin"	; Round 3's boss: sprite palettes 8 and 13
 wizard_pal13:	incbin	"wizard_pal13.bin"	; (wizard.asm).
+water3_pal:	incbin	"water3_pal8.bin"	; Round 3's falling water: sprite palette 8 (enemies_load).
 fire_data:	incbin	"stage1/fire.bin"	; The lava hall's fire (build/stage1).
 data12_end:
 	.if	bank(data12_end) != $12

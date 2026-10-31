@@ -51,6 +51,8 @@ g2_tmp:		ds	1
 ; beasts_reset - a restart: they all come again.
 beasts_reset:	stz	pirs_done
 		stz	g2_done
+		stz	wat_wait
+		stz	wat_wait + 1
 		rts
 
 ; beast_near - Y = entry, ex/ex+1 = its x, A = ahead: carry set if Rastan is
@@ -397,3 +399,134 @@ g2_kill:	ldx	#0
 		cpx	#NUM_BIG
 		bne	.loop
 		rts
+
+; ---------------------------------------------------------------------------
+; Round 3's water falling from the cave's roof (arcade slots 6, 7: handler $19,
+; markers $57, $4B, at (1936, 152) and (2000, 152): build/r3run.snp, world x =
+; census x - 23552). Every 128 frames a column of water 80 px long pours out
+; 32 px below its spot and falls 4 px a frame to the floor (about 300 px
+; below), while Rastan is near. Here: the column whole, 56 frames from 32 px
+; below the spot (the arcade grows it out of the roof first, then lets it run
+; out into the floor; one of its poses, src/object_specs.py 'water3'). Touching
+; it drains 8 units (the arcade's touch code 2).
+
+WAT_AHEAD	=	150		; Pours while p_x is in x - 150 .. x + 45.
+WAT_PERIOD	=	128
+WAT_LIFE	=	56
+WAT_DY		=	20		; The pose's top is 52 below its anchor: the
+					; column's top 32 below the spot.
+WAT_TOP		=	52		; Its extent from the anchor: y + 52 .. + 132,
+WAT_BOT		=	132		; x - 16 .. + 16.
+WAT_HALF	=	16
+
+wat_x_l:	db	<1936, <2000
+wat_x_h:	db	>1936, >2000
+NUM_WATS	=	2
+WAT_Y		=	152
+
+		.bss
+wat_wait:	ds	NUM_WATS	; Frames to the next pour, each.
+		.code
+
+wat_spawn:	lda	<cur_round
+		cmp	#3
+		bne	.r
+		cly
+.loop:		lda	wat_wait, y
+		beq	!+
+		dec	a
+		sta	wat_wait, y
+		bra	.next
+!:		lda	wat_x_l, y
+		sta	<ex
+		lda	wat_x_h, y
+		sta	<ex + 1
+		lda	#WAT_AHEAD
+		jsr	beast_near
+		bcc	.next
+		jsr	beast_slot
+		bcc	.r
+		lda	#WAT_PERIOD
+		sta	wat_wait, y
+		lda	#<(WAT_Y - WAT_DY)
+		sta	<ey
+		lda	#>(WAT_Y - WAT_DY)
+		sta	<ey + 1
+		stz	<ep
+		stz	<ep + 1
+		lda	#EK_WATER
+		phy
+		jsr	beast_place
+		ply
+		lda	#WAT_LIFE
+		sta	e_timer, x
+.next:		iny
+		cpy	#NUM_WATS
+		bne	.loop
+.r:		rts
+
+; wat_think - X: down 4 px a frame; gone after WAT_LIFE frames; touching hurts.
+wat_think:	dec	e_timer, x
+		bne	!+
+		stz	e_state, x
+		rts
+!:		lda	#4
+		jsr	add_y
+		phx
+		jsr	body_box		; (src/player.asm: sb_*, world)
+		plx
+		; x: sb_x0 <= x + 16 and sb_x1 >= x - 16
+		lda	e_xl, x
+		clc
+		adc	#WAT_HALF
+		sta	<etmp
+		lda	e_xh, x
+		adc	#0
+		sta	<etmp + 1
+		lda	<etmp
+		cmp	<sb_x0
+		lda	<etmp + 1
+		sbc	<sb_x0 + 1
+		bmi	.r
+		lda	e_xl, x
+		sec
+		sbc	#WAT_HALF
+		sta	<etmp
+		lda	e_xh, x
+		sbc	#0
+		sta	<etmp + 1
+		lda	<sb_x1
+		cmp	<etmp
+		lda	<sb_x1 + 1
+		sbc	<etmp + 1
+		bmi	.r
+		; y: sb_y0 <= y + WAT_BOT and sb_y1 >= y + WAT_TOP
+		lda	e_yl, x
+		clc
+		adc	#WAT_BOT
+		sta	<etmp
+		lda	e_yh, x
+		adc	#0
+		sta	<etmp + 1
+		lda	<etmp
+		cmp	<sb_y0
+		lda	<etmp + 1
+		sbc	<sb_y0 + 1
+		bmi	.r
+		lda	e_yl, x
+		clc
+		adc	#WAT_TOP
+		sta	<etmp
+		lda	e_yh, x
+		adc	#0
+		sta	<etmp + 1
+		lda	<sb_y1
+		cmp	<etmp
+		lda	<sb_y1 + 1
+		sbc	<etmp + 1
+		bmi	.r
+		lda	#2			; (8 units)
+		phx
+		jsr	player_touch
+		plx
+.r:		rts

@@ -407,8 +407,12 @@ floor pokes where the bot can't cross a hazard; `R2RUN_POKES`, `R3RUN_POKES` in 
   touch drains (code 1), one hit on the wings, 500 points a half. Beasts take a special slot, else a walker's.
 - Placed walkers (`place_spawn`), the rounds' gargoyles, boulders (rolling either way), items and vines are per-round
   tables at the arcade's spots.
-- Not yet ported: the fire strips over round 3's lava, bubbles, round 3's jets, wall flames and weights, and round
-  2's castle objects.
+- **Falling water** (round 3, `src/beasts.asm`; arcade handler `$19`, markers `$4B`, `$57` at (1936, 152) and
+  (2000, 152)): every 128 frames while Rastan is near, an 80 px column pours 32 px below its spot and falls 4 px a
+  frame; touching it drains 8 units. One of its poses, drawn whole (the arcade grows it out of the roof and runs it
+  out into the floor), in sprite palette 8 loaded with the round (round 3's other slots are full).
+- Not yet ported: the fire strips over round 3's lava, bubbles, wall flames and weights, and round 2's castle
+  objects.
 - Round 3's first wide lava pit (x 4576-4735) is crossed on the vine that hangs over it, at (4646, 272) as the bot's
   run has it (census x - 23552 there: calibrated by Rastan's feet on the map's floors over the whole run).
 - **No torn frames:** the SATB is DMA'd at the start of VBLANK, before the object cell uploads, so `enemies_draw`

@@ -75,6 +75,7 @@ EK_WFIRE	=	28		; and its fire.
 EK_PIRANHA	=	29		; Round 2's piranhas (src/beasts.asm).
 EK_G2		=	30		; Rounds 2 and 3's green demon: body,
 EK_G2W		=	31		; and wings.
+EK_WATER	=	32		; Round 3's water falling from the roof (src/beasts.asm).
 SOLDIER_RANGE	=	60
 
 ITEM_SLOT	=	NUM_EN		; Big slots after the walkers'.
@@ -223,8 +224,21 @@ enemies_load:	lda	<cur_round		; Rounds 2 and 3: their map objects'
 		jsr	traps_load		; (round 1: the floor spears' palettes, 13
 		lda	<cur_round		; and 14, which other rounds' objects use;
 		cmp	#1			; and the props' 8, after round 2's boss)
-		bne	obj_invalidate
+		bne	!+
 		jsr	prop_pal
+		bra	obj_invalidate
+!:		cmp	#3			; Round 3: its falling water's 8 (its
+		bne	obj_invalidate		; wizard's later: src/wizard.asm).
+		lda	#^water3_pal
+		tam3
+		php
+		sei
+		lda	#<(256 + 8 * 16)
+		sta	VCE_CTA + 0
+		lda	#>(256 + 8 * 16)
+		sta	VCE_CTA + 1
+		tia	water3_pal, VCE_CTW, 32
+		plp
 		bra	obj_invalidate
 .pals_l:	db	<obj_palettes, <obj_palettes_b64, <obj_palettes_r2, <obj_palettes_r2_b64, <obj_palettes_r3, <obj_palettes_r3_b64
 .pals_h:	db	>obj_palettes, >obj_palettes_b64, >obj_palettes_r2, >obj_palettes_r2_b64, >obj_palettes_r3, >obj_palettes_r3_b64
@@ -295,6 +309,7 @@ enemies_update:	inc	spawn_tick		; (the spawn scans take turns: the frame's
 		bra	.bossrm
 !:		jsr	x_pir_spawn		; piranhas, the green demon.
 		jsr	x_g2_spawn
+		jsr	x_wat_spawn		; (round 3's falling water)
 .bossrm:	lda	<cur_round
 		cmp	#2
 		bne	!+
@@ -685,6 +700,9 @@ enemy_think:	lda	e_kind, x
 !:		cmp	#EK_PIRANHA
 		bne	!+
 		jmp	x_pir_think
+!:		cmp	#EK_WATER
+		bne	!+
+		jmp	x_wat_think
 !:		cmp	#EK_G2
 		beq	!+
 		cmp	#EK_G2W
@@ -954,14 +972,14 @@ kind_walk_l:	db	<anim_liz_walk, <anim_blue_walk, <anim_club, 0, <anim_bat, <anim
 		db	<anim_vine_swing, <anim_snake_crawl, <anim_kn_stand, <anim_kn2_stand, <anim_orb
 		db	<anim_horn_walk, <anim_skel_walk, <anim_harpy_walk, <anim_blade
 		db	<anim_wz_walk, <anim_wz2_walk, <anim_wfire
-		db	<anim_piranha, <anim_g2_body, <anim_g2_wings
+		db	<anim_piranha, <anim_g2_body, <anim_g2_wings, <anim_water_fall
 kind_walk_h:	db	>anim_liz_walk, >anim_blue_walk, >anim_club, 0, >anim_bat, >anim_chim_walk, >anim_fireball
 		db	>anim_boulder, >anim_garg_body, >anim_garg_wings, >anim_woman_walk, >anim_sword_walk
 		db	>anim_mace_walk, >anim_jet_column, >anim_boss_walk, >anim_boss2_walk, >anim_frag_form
 		db	>anim_vine_swing, >anim_snake_crawl, >anim_kn_stand, >anim_kn2_stand, >anim_orb
 		db	>anim_horn_walk, >anim_skel_walk, >anim_harpy_walk, >anim_blade
 		db	>anim_wz_walk, >anim_wz2_walk, >anim_wfire
-		db	>anim_piranha, >anim_g2_body, >anim_g2_wings
+		db	>anim_piranha, >anim_g2_body, >anim_g2_wings, >anim_water_fall
 kind_attack_l:	db	<anim_liz_attack, <anim_blue_throw, 0, 0, 0, 0, 0, 0, 0, 0, 0, <anim_sword_attack
 		db	<anim_mace_attack, 0, 0, 0, 0, 0, 0, 0, 0, 0, <anim_horn_attack, <anim_skel_attack, <anim_harpy_throw
 kind_attack_h:	db	>anim_liz_attack, >anim_blue_throw, 0, 0, 0, 0, 0, 0, 0, 0, 0, >anim_sword_attack
@@ -980,30 +998,30 @@ kind_attack2_h:	db	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, >anim_sword_low, >anim_mace_
 kind_death_l:	db	<anim_liz_death, <anim_blue_death, 0, 0, 0, <anim_chim_death, 0, 0, <anim_garg_death, <anim_wings_death, <anim_woman_death
 		db	<anim_sword_death, <anim_mace_death, 0, 0, 0, 0, 0, 0, <anim_snake_death, 0, 0, 0
 		db	<anim_horn_death, <anim_skel_death, <anim_harpy_death, 0
-		db	0, 0, 0, <anim_pir_death, <anim_g2_death, <anim_g2_wdeath
+		db	0, 0, 0, <anim_pir_death, <anim_g2_death, <anim_g2_wdeath, 0
 kind_death_h:	db	>anim_liz_death, >anim_blue_death, 0, 0, 0, >anim_chim_death, 0, 0, >anim_garg_death, >anim_wings_death, >anim_woman_death
 		db	>anim_sword_death, >anim_mace_death, 0, 0, 0, 0, 0, 0, >anim_snake_death, 0, 0, 0
 		db	>anim_horn_death, >anim_skel_death, >anim_harpy_death, 0
-		db	0, 0, 0, >anim_pir_death, >anim_g2_death, >anim_g2_wdeath
+		db	0, 0, 0, >anim_pir_death, >anim_g2_death, >anim_g2_wdeath, 0
 kind_range:	db	ATTACK_RANGE, 88, 0, 0, 0, 0, 0, 0, 0, 0, 0, SOLDIER_RANGE, SOLDIER_RANGE, 0, 0, 0, 0, 0, 0, 0, 0, 0
 		db	ATTACK_RANGE, ATTACK_RANGE, HARPY_RANGE, 0, 0, 0, 0, 0, 0, 0
 kind_keep:	db	0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 0	; No off-screen despawn.
-		db	0, 1, 1
+		db	0, 1, 1, 1
 ; Arcade: lizardman 300, blue thrower 200, bat 200, chimera 300.
 ; Castle soldiers: the arcade's ($2C,A4): 400 the sword's, 500 the mace's. Snake 200 (snake.txt).
 ; Round 3's (not measured): the horned man 300, the skeleton 400, the harpy 300.
 kind_score:	db	$03, $02, 0, 0, $02, $03, 0, 0, $05, $05, $03, $04, $05, 0, 0, 0, 0, 0, $02, 0, 0, 0
 		db	$03, $04, $03, 0, 0, 0, 0
-		db	$04, $05, $05		; (the piranha's and the green demon's halves: build/r2run.snp)
+		db	$04, $05, $05, 0		; (the piranha's and the green demon's halves: build/r2run.snp)
 ; Touching Rastan (the arcade's ($29,A4), player_touch): 1, 2 drain 4, 8 units;
 ; 3 knocks him back, 12 units; 0 nothing (the woman warrior: only her sword).
 ; (The item and its bat, the boss's second half and the vines: their own code.)
 kind_touch:	db	1, 1, 3, 0, 0, 2, 3, 3, 2, 2, 0, 2, 2, 2, 3, 0, 3, 0, 1, 3, 0, 3, 1, 1, 1, 3, 0, 0, 2
-		db	3, 1, 1			; (piranha: knocks back; the demon: drains)
+		db	3, 1, 1, 0		; (piranha: knocks back; the demon: drains; the water: its own test)
 ; Hit points (the arcade's ($3A,A4)): the gargoyle and the soldiers take two of
 ; the sword's hits (one of the stronger blows: weapon_power), the boss ten.
 kind_hp:	db	1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 1, 2, 2, 1, 10, 1, 1, 1, 1, 10, 1, 1, 1, 2, 1, 1, 10, 1, 1
-		db	1, 1, 1			; (piranha, the demon's halves: build/r2run.snp)
+		db	1, 1, 1, 1			; (piranha, the demon's halves: build/r2run.snp)
 kind_bank:	db	GRP_SECT1_BANK, GRP_SECT1_BANK, GRP_SECT1_BANK, GRP_ITEMS_BANK, GRP_ITEMS_BANK
 		db	GRP_CHIMERA_BANK, GRP_CHIMERA_BANK, GRP_ROCKS_BANK, GRP_GARGOYLE_BANK, GRP_GARGOYLE_BANK
 		db	GRP_WOMAN_BANK, GRP_CASTLE_BANK, GRP_CASTLE_BANK, GRP_JETS_BANK
@@ -1011,7 +1029,7 @@ kind_bank:	db	GRP_SECT1_BANK, GRP_SECT1_BANK, GRP_SECT1_BANK, GRP_ITEMS_BANK, GR
 		db	GRP_KNIGHT_BANK, GRP_KNIGHT_BANK, GRP_KNIGHT_BANK
 		db	GRP_HORN_BANK, GRP_R3WALK_BANK, GRP_R3WALK_BANK, GRP_R3WALK_BANK
 		db	GRP_WIZARD_BANK, GRP_WIZARD_BANK, GRP_WIZARD_BANK
-		db	GRP_PIRANHA_BANK, GRP_GARG2_BANK, GRP_GARG2_BANK
+		db	GRP_PIRANHA_BANK, GRP_GARG2_BANK, GRP_GARG2_BANK, GRP_WATER3_BANK
 kind_ptab_l:	db	<grp_sect1_ptab, <grp_sect1_ptab, <grp_sect1_ptab, <grp_items_ptab, <grp_items_ptab
 		db	<grp_chimera_ptab, <grp_chimera_ptab, <grp_rocks_ptab, <grp_gargoyle_ptab, <grp_gargoyle_ptab
 		db	<grp_woman_ptab, <grp_castle_ptab, <grp_castle_ptab, <grp_jets_ptab
@@ -1019,7 +1037,7 @@ kind_ptab_l:	db	<grp_sect1_ptab, <grp_sect1_ptab, <grp_sect1_ptab, <grp_items_pt
 		db	<grp_knight_ptab, <grp_knight_ptab, <grp_knight_ptab
 		db	<grp_horn_ptab, <grp_r3walk_ptab, <grp_r3walk_ptab, <grp_r3walk_ptab
 		db	<grp_wizard_ptab, <grp_wizard_ptab, <grp_wizard_ptab
-		db	<grp_piranha_ptab, <grp_garg2_ptab, <grp_garg2_ptab
+		db	<grp_piranha_ptab, <grp_garg2_ptab, <grp_garg2_ptab, <grp_water3_ptab
 kind_ptab_h:	db	>grp_sect1_ptab, >grp_sect1_ptab, >grp_sect1_ptab, >grp_items_ptab, >grp_items_ptab
 		db	>grp_chimera_ptab, >grp_chimera_ptab, >grp_rocks_ptab, >grp_gargoyle_ptab, >grp_gargoyle_ptab
 		db	>grp_woman_ptab, >grp_castle_ptab, >grp_castle_ptab, >grp_jets_ptab
@@ -1027,7 +1045,7 @@ kind_ptab_h:	db	>grp_sect1_ptab, >grp_sect1_ptab, >grp_sect1_ptab, >grp_items_pt
 		db	>grp_knight_ptab, >grp_knight_ptab, >grp_knight_ptab
 		db	>grp_horn_ptab, >grp_r3walk_ptab, >grp_r3walk_ptab, >grp_r3walk_ptab
 		db	>grp_wizard_ptab, >grp_wizard_ptab, >grp_wizard_ptab
-		db	>grp_piranha_ptab, >grp_garg2_ptab, >grp_garg2_ptab
+		db	>grp_piranha_ptab, >grp_garg2_ptab, >grp_garg2_ptab, >grp_water3_ptab
 ; Body box: x = anchor + cx +/- half, y = anchor - top .. anchor + bot: the
 ; arcade's ($0446BC: an index per object into the boxes at $044CE0), for all
 ; but the item, its bat and the vines (from their sprites' extent); the jets'
@@ -1035,13 +1053,13 @@ kind_ptab_h:	db	>grp_sect1_ptab, >grp_sect1_ptab, >grp_sect1_ptab, >grp_items_pt
 ; the span it sweeps. The snake's: $95, x -10 .. 10, y -5 .. 14 (its ($3E,A4), 11,
 ; picks it from the table at $044796).
 kind_top:	db	20, 20, 8, 2, 25, 5, 8, 8, 16, 8, 20, 20, 20, 0, BOSS_TOP, 0, 8, 0, 5, KNIGHT_TOP, 0, 8, 20, 20, 20, 8, 32, 0, 6
-		db	8, 16, 8		; (the piranha: its sprite's extent; the demon: the gargoyle's)
+		db	8, 16, 8, 0		; (the piranha: its sprite's extent; the demon: the gargoyle's)
 kind_bot:	db	16, 16, 8, 30, 7, 14, 8, 8, 24, 18, 16, 16, 16, 116, BOSS_BOT, 0, 8, 0, 14, KNIGHT_BOT, 0, 8, 16, 16, 16, 8, 16, 0, 6
-		db	8, 24, 18
+		db	8, 24, 18, 0
 kind_half:	db	12, 12, 3, 20, 16, 20, 3, 3, 12, 12, 12, 12, 12, 16, BOSS_HALF, 0, 3, 0, 10, KNIGHT_HALF, 0, 3, 12, 12, 12, 3, 16, 0, 6
-		db	10, 12, 12
+		db	10, 12, 12, 0
 kind_cx:	db	0, 0, 0, -8, -2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-		db	0, 0, 0
+		db	0, 0, 0, 0
 
 ; sword_strike - X = slot: carry set if Rastan's weapon kills it now. A hit
 ; adds his weapon's power (weapon_power) to its damage; at its kind's hit

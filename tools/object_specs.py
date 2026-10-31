@@ -193,6 +193,11 @@ GROUPS = {
     ],
     # Round 2's piranhas (arcade slots 15-17): one whole cycle, a leap to the left and one back
     # (anims 186-190, 210 frames), its death the walkers' burst.
+    # Round 3's water falling from the cave's roof (arcade slots 6, 7: handler $19,
+    # markers $57, $4B): three poses in turn, a frame each.
+    'water3': [
+        ('water_fall', 'r3run', 7, 2049, 2049),
+    ],
     'piranha': [
         ('piranha', 'r2run', 15, 5538, 5747),
         ('pir_death', 'lizard', 8, 1536, 1566),
@@ -228,7 +233,10 @@ FIXED_PALS = {'knight': {15: (8, 'knight', 700, 79)},
               # Round 3's wizard (colour 15) and its fire (colour 0), drawn in colour bank 64 in its
               # room: sprite palettes 8 and 13 (round 1's props' and floor spears'), loaded by the
               # engine when it comes (build/objects/wizard_pal8.bin, wizard_pal13.bin).
-              'wizard': {15: (8, 'wiz', 700, 79), 0: (13, 'wiz', 900, 64)}}
+              'wizard': {15: (8, 'wiz', 700, 79), 0: (13, 'wiz', 900, 64)},
+              # Round 3's falling water (arcade colour 15, palette $3F): sprite palette 8 too,
+              # loaded with the round (round 3's thirteen slots are full; its wizard reloads 8).
+              'water3': {15: (8, 'r3run', 2050, 0x3f)}}
 BANK64_SNAP = ('castle', 2600)
 B64_GROUPS = ('castle', 'jets', 'vine', 'swarm', 'items', 'boss', 'knight')
 
@@ -236,7 +244,7 @@ B64_GROUPS = ('castle', 'jets', 'vine', 'swarm', 'items', 'boss', 'knight')
 # in rounds that never meet can share a PCE sprite palette slot: each round loads its own
 # colours (objpal.bin for round 1, objpal_r<n>.bin).
 GROUP_ROUNDS = {'boss': {1}, 'woman': {1, 2}, 'jets': {1}, 'snake': {2, 3}, 'knight': {2}, 'r3walk': {3}, 'horn': {2, 3},
-                'wizard': {3}, 'garg2': {2, 3}, 'piranha': {2}}
+                'wizard': {3}, 'garg2': {2, 3}, 'piranha': {2}, 'water3': {3}}
 NUM_ROUNDS = 3
 
 # Single cells the engine draws by itself: symbol -> (group, arcade cell). objects.inc
