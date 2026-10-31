@@ -2044,7 +2044,7 @@ upload_one:	jsr	map_kind
 		iny
 		iny
 		iny				; (next piece's cell byte)
-		and	#$30			; bank = OBJ_CELL_BANK + cell >> 6
+		and	#$30			; bank: cell >> 6 (src/main.asm: ROUND_CELL_BANK)
 		lsr	a
 		lsr	a
 		sta	<etmp + 1
@@ -2054,9 +2054,12 @@ upload_one:	jsr	map_kind
 		rol	a
 		and	#3
 		ora	<etmp + 1
-		clc
+		cmp	#OBJ_SHARED_BANKS	; (the round's own cells: in its SF2 page)
+		bcs	!+
 		adc	#OBJ_CELL_BANK
-		tam3
+		bra	!++
+!:		adc	#ROUND_CELL_BANK - OBJ_SHARED_BANKS - 1	; (carry set)
+!:		tam3
 		lda	<etmp			; address = $6000 + (cell & 63) * 128
 		and	#63
 		lsr	a

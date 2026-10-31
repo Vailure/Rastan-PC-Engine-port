@@ -196,7 +196,7 @@ GROUPS = {
     # Round 3's water falling from the cave's roof (arcade slots 6, 7: handler $19,
     # markers $57, $4B): three poses in turn, a frame each.
     'water3': [
-        ('water_fall', 'r3run', 7, 2049, 2049),
+        ('water_fall', 'r3run', 7, 2049, 2051),
     ],
     'piranha': [
         ('piranha', 'r2run', 15, 5538, 5747),

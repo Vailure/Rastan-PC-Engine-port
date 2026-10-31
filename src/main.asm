@@ -47,6 +47,7 @@ QUAD_BANK0	=	$50		; BAT quads: 4.
 PAT_BANK0	=	$54		; BG patterns: 26.
 COLL_BANK	=	$6E		; The collision map.
 PAL_BANK	=	$6F		; Its two sets of BG palettes ($6000, $6200).
+ROUND_CELL_BANK	=	$70		; Its own object cells (tools/pce_objects.py: objcells_r<n>.bin).
 PAL_OUT		=	$6000
 PAL_CASTLE	=	$6200
 ; Alike in every round (pce_stage.py: world.py's), so round 1's.
@@ -948,7 +949,10 @@ r1_stage_data:	incbin	"stage1/stage.bin"	; Line table and records.
 		.bank	r1_page + PAL_BANK - $40
 		.page	3
 		incbin	"stage1/palette.bin"	; (PAL_OUT)
-		incbin	"stage1/palette_castle.bin"	; (PAL_CASTLE)
+		incbin	"stage1/palette_castle.bin"
+		.bank	r1_page + ROUND_CELL_BANK - $40
+		.page	3
+		incbin	"objects/objcells_r1.bin"	; (PAL_CASTLE)
 
 r2_page		=	$C0
 		.bank	r2_page
@@ -967,6 +971,9 @@ r2_stage_data:	incbin	"stage2/stage.bin"
 		.page	3
 		incbin	"stage2/palette.bin"
 		incbin	"stage2/palette_castle.bin"
+		.bank	r2_page + ROUND_CELL_BANK - $40
+		.page	3
+		incbin	"objects/objcells_r2.bin"
 
 r3_page		=	$100
 		.bank	r3_page
@@ -985,6 +992,9 @@ r3_stage_data:	incbin	"stage3/stage.bin"
 		.page	3
 		incbin	"stage3/palette.bin"
 		incbin	"stage3/palette_castle.bin"
+		.bank	r3_page + ROUND_CELL_BANK - $40
+		.page	3
+		incbin	"objects/objcells_r3.bin"
 
 	.if	(R1_STAGE_BANKS > QUAD_BANK0 - STAGE_BANK0) | (R2_STAGE_BANKS > QUAD_BANK0 - STAGE_BANK0) | (R3_STAGE_BANKS > QUAD_BANK0 - STAGE_BANK0)
 	.fail	a round's line records overrun their banks

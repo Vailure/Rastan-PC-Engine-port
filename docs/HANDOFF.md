@@ -200,6 +200,8 @@ Pages 0, 2 and 3 are empty.
 
 Check bank usage with `make … build/rastan.pce 2>&1 | grep ^BANK`. That build has the listing on, and `pceas` prints used and free space per bank.
 
+**Object cells:** a pose names its cell in 10 bits, so a round sees 1024 cells. `pce_objects.py` numbers the cells that groups of more than one round use first (`objcells.bin`, fixed banks from `OBJ_CELL_BANK`, `OBJ_SHARED_BANKS` of them). Each round's own cells follow from bank `OBJ_SHARED_BANKS` on, the same numbers in every round, in the round's SF2 page at CPU bank `ROUND_CELL_BANK` ($70, `objcells_r<n>.bin`); the upload in `enemies.asm` picks the bank. Now 562 shared, and 163/127/178 of each round's own: about 280 cells free a round.
+
 ### 4.3 VRAM map (words)
 
 | Address | Use |
