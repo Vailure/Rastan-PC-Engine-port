@@ -409,10 +409,8 @@ floor pokes where the bot can't cross a hazard; `R2RUN_POKES`, `R3RUN_POKES` in 
   tables at the arcade's spots.
 - Not yet ported: the fire strips over round 3's lava, bubbles, round 3's jets, wall flames and weights, and round
   2's castle objects.
-- Open: round 3's first wide lava pit (x 4576-4735, floor y 448) can't be crossed here. The arcade's vine hangs
-  at (4768, 272), out of reach from the ledge at 4575 under this port's grab rule (40 x 24 px around the hanging
-  point, a guess). The bot's arcade run crossed it only on floor pokes, so how a player crosses (a wider grab, the
-  rising spears' handler `$1A`, ...) is still to be measured.
+- Round 3's first wide lava pit (x 4576-4735) is crossed on the vine that hangs over it, at (4646, 272) as the bot's
+  run has it (census x - 23552 there: calibrated by Rastan's feet on the map's floors over the whole run).
 - **No torn frames:** the SATB is DMA'd at the start of VBLANK, before the object cell uploads, so `enemies_draw`
   plans which slots will get new cells at the next VBLANK (same order and budget) and draws each slot with the pose
   its buffer will hold. A frame never shows an old layout over new cells.

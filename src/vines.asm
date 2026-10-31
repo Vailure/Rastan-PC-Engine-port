@@ -27,10 +27,11 @@ VINE_NOGRAB	=	20		; and not again this many frames after a jump.
 ; Round 2's: markers $4F at (5632, 208) and (8416, 240), placed as round 1's
 ; chasm vine is from its marker at (2720, 80): + (30, -96). Round 3's: over the
 ; first wide lava pit, where the bot's run (build/r3run.snp, slot 2, handler
-; $20) has it, (4768, 272); and from its marker $4F at (9568, -288), in the
+; $20) has it, (4646, 272) (world x = census x - 23552 there: Rastan's feet
+; on the map's floors); and from its marker $4F at (9568, -288), in the
 ; castle's shaft (not measured).
-vine_x_l:	db	<2750, <8830, <8990, <9150, <5662, <8446, <4768, <9598
-vine_x_h:	db	>2750, >8830, >8990, >9150, >5662, >8446, >4768, >9598
+vine_x_l:	db	<2750, <8830, <8990, <9150, <5662, <8446, <4646, <9598
+vine_x_h:	db	>2750, >8830, >8990, >9150, >5662, >8446, >4646, >9598
 vine_y_l:	db	<-16, <-496, <-496, <-496, <112, <144, <272, <-384
 vine_y_h:	db	>-16, >-496, >-496, >-496, >112, >144, >272, >-384
 vine_bit:	db	1, 2, 4, 8, 16, 32, 64, 128
