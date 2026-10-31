@@ -1133,6 +1133,11 @@ mo_tab_r2:	MOBJ	MK_LOG, 1831, 328, LOG_REST	; (markers $59-$5D)
 		MOBJ	MK_BLOCK, 6479, 336, 56		; ($61-$63)
 		MOBJ	MK_BLOCK, 6543, 336, 56
 		MOBJ	MK_BLOCK, 6607, 336, 56
+		MOBJ	MK_FLAME, 9326, 144, 0		; (the castle's flames: estimates from its
+		MOBJ	MK_FLAME, 9390, 144, 0		; map's markers $4C, $52-$55, placed as
+		MOBJ	MK_FLAME, 9550, 144, 0		; round 3's are from theirs: + (14, -16))
+		MOBJ	MK_FLAME, 9614, 144, 0
+		MOBJ	MK_FLAME, 10158, 464, 0
 		db	$FF
 mo_tab_r3:	MOBJ	MK_WSPEAR, 3837, 304, 82	; ($65, $66)
 		MOBJ	MK_WSPEAR, 3968, 240, 82
@@ -1216,9 +1221,9 @@ dr_flame:	lda	#FLAME_CELL
 ; mo_flames - round 3, once a frame: a new phase every 4 frames, its cells to
 ; FLAME_VRAM (512 bytes; while a flame is in play).
 mo_flames:	inc	mo_ft
-		lda	<cur_round
-		cmp	#3
-		bne	.r
+		lda	<cur_round		; (rounds 2 and 3)
+		cmp	#1
+		beq	.r
 		lda	mo_ft
 		and	#3
 		bne	.r

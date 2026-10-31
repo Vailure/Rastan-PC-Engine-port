@@ -1713,9 +1713,9 @@ enemies_draw:	php				; VDC writes: IRQ held off (see stream_line).
 .wnext:		dec	<en_wk
 		bne	.walker
 		jsr	traps_draw		; The castle's floor spears.
-		lda	<cur_round		; (round 3's weight: src/weights.asm)
-		cmp	#3
-		bne	!+
+		lda	<cur_round		; (rounds 2 and 3's weight: src/weights.asm)
+		cmp	#1
+		beq	!+
 		jsr	x_weights_draw
 !:
 		; Clear entries the last frame used beyond this frame's.

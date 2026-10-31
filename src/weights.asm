@@ -76,16 +76,11 @@ weights_reset:	stz	wt_act
 ; weights_update - once a frame in the castle (enemies_update): the touch
 ; (with this frame's lengths: the arcade's are a frame late), then the clocks.
 weights_update:
-		lda	<cur_round		; (rounds 1 and 3)
-		cmp	#2
-		bne	!+
-		rts
-!:
 		lda	wt_act
 		bne	.run
-		lda	<cur_round
-		cmp	#3
-		bne	!+
+		lda	<cur_round		; (rounds 2 and 3: one weight each)
+		cmp	#1
+		beq	!+
 		jmp	wt3_on
 !:		lda	<scroll_x + 1		; The camera in shaft 2 (x 9728 - 10239)
 		and	#$FE			; and up to y -744.
@@ -172,23 +167,25 @@ wt_go:		lda	#1
 ; wt3_on - round 3: its one weight (marker $45 at x 9006, plate 128: build/
 ; r3run.snp, where it appears as the camera reaches x 8650), same clocks, its
 ; cells and colours (sprite palette 8: the arcade's $4C) loaded then.
-WT3_X		=	9006
-WT3_ON_X	=	8650
-wt3_on:		lda	<scroll_x
-		cmp	#<WT3_ON_X
+; Round 2's (an estimate from its map: marker $45 at (8896, 416); the plate
+; under the ceiling above it, y 320, and x as the marker's block's middle;
+; appearing 356 px ahead, as round 3's) the same way.
+wt3_on:		ldy	<cur_round
+		lda	<scroll_x
+		cmp	.on_l - 2, y
 		lda	<scroll_x + 1
-		sbc	#>WT3_ON_X
+		sbc	.on_h - 2, y
 		bcs	!+
 		rts
 !:		lda	#1
 		sta	wt_cnt
-		lda	#<WT3_X
+		lda	.x_l - 2, y
 		sta	wt_xl
-		lda	#>WT3_X
+		lda	.x_h - 2, y
 		sta	wt_xh
-		lda	#<(128 - WT_Y)
+		lda	.dy_l - 2, y
 		sta	wt_dy
-		lda	#>(128 - WT_Y)
+		lda	.dy_h - 2, y
 		sta	wt_dy + 1
 		lda	#8
 		sta	wt_pal
@@ -210,6 +207,12 @@ wt3_on:		lda	<scroll_x
 		tia	weight3_pal, VCE_CTW, 32
 		plp
 		jmp	wt_go
+.on_l:		db	<8556, <8650
+.on_h:		db	>8556, >8650
+.x_l:		db	<8912, <9006
+.x_h:		db	>8912, >9006
+.dy_l:		db	<(320 - WT_Y), <(128 - WT_Y)
+.dy_h:		db	>(320 - WT_Y), >(128 - WT_Y)
 
 ; wt_touch - a weight over Rastan kills him.
 wt_touch:	bra	!+
