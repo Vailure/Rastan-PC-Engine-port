@@ -38,11 +38,14 @@
 ;
 ; ***************************************************************************
 
-MO_MAX		=	6
+MO_MAX		=	10
 MO_MARGIN	=	96		; In play while x - scroll_x is in -96 .. 351.
 MOB_VRAM	=	$4B00
 MOB_PAT		=	MOB_VRAM >> 5
-MOB_ENTRIES	=	28		; SATB entries the map objects may take.
+MOB_ENTRIES	=	36		; SATB entries the map objects may take.
+FLAME_VRAM	=	$4980		; Round 3's flames: 4 cells below the stage's
+					; tiles (tools/pce_stage.py), the phase in turn.
+FLAME_CELL	=	(FLAME_VRAM - MOB_VRAM) / 64	; (-6: as a map object cell)
 
 MK_LOG		=	0
 MK_BLOCK	=	1
@@ -50,6 +53,7 @@ MK_MUD		=	2
 MK_WSPEAR	=	3
 MK_FSPEAR	=	4
 MK_RISER	=	5
+MK_FLAME	=	6
 
 LOG_REST	=	72
 BLK_REST	=	151
@@ -72,7 +76,8 @@ mo_ph:		ds	MO_MAX		; Phase.
 mo_t:		ds	MO_MAX		; Frames left in it.
 mo_v:		ds	MO_MAX		; Log: step 0-23; block: px above the anchor;
 					; spears, spikes: px out.
-mo_on:		ds	2		; Table entries in play (bits).
+mo_on:		ds	4		; Table entries in play (bits).
+mo_ft:		ds	1		; Frames (round 3's flames: the phase).
 mo_n:		ds	1		; (mobj_update: entries in the round's table)
 mo_off:		ds	1		; (its offset)
 mo_lo:		ds	1		; (the window's x >> 8)
@@ -102,13 +107,16 @@ mobj_reset:	ldx	#MO_MAX - 1
 		bpl	!-
 		stz	mo_on
 		stz	mo_on + 1
+		stz	mo_on + 2
+		stz	mo_on + 3
 		stz	mo_nplat
 		rts
 
 ; ---------------------------------------------------------------------------
 ; mobj_update - after player_update (rounds 2 and 3).
 
-mobj_update:	lda	<cur_round
+mobj_update:	jsr	mo_flames		; (round 3's flames' phase)
+		lda	<cur_round
 		asl	a
 		tax
 		lda	mo_tabs - 4, x
@@ -218,7 +226,7 @@ mobj_update:	lda	<cur_round
 		adc	#6
 		tay
 		jmp	.spawn
-.v0:		db	0, 32, 0, WSP_IN, 2, 2
+.v0:		db	0, 32, 0, WSP_IN, 2, 2, 0
 
 		; Each in play: its step, the ride, its touch.
 .think:		stz	mo_nplat
@@ -242,7 +250,7 @@ mobj_update:	lda	<cur_round
 		bpl	.loop
 		rts
 .call:		jmp	[etmp]
-.kinds:		dw	mo_log, mo_block, mo_none, mo_wspear, mo_spike, mo_spike
+.kinds:		dw	mo_log, mo_block, mo_none, mo_wspear, mo_spike, mo_spike, mo_flame
 
 ; mo_offset - Y = entry: Y = its offset in the table (6 bytes an entry).
 mo_offset:	tya
@@ -811,7 +819,7 @@ mobj_draw:	php
 		plp
 		rts
 .call:		jmp	[etmp]
-.kinds:		dw	dr_log, dr_block, dr_mud, dr_wspear, dr_fspear, dr_riser
+.kinds:		dw	dr_log, dr_block, dr_mud, dr_wspear, dr_fspear, dr_riser, dr_flame
 
 ; mo_piece - one SATB entry: A = dx, Y = dy (signed, from the anchor ex, ey),
 ; cell number and palette in mo_cell, mo_pal (round's set). Skipped off screen
@@ -879,14 +887,20 @@ mo_piece:	pha
 		lda	<cx + 1
 		and	#3
 		sta	VDC_DH
-		lda	mo_cell			; pattern = MOB_PAT + cell * 2
-		asl	a
+		phy
+		lda	mo_cell			; pattern = MOB_PAT + cell * 2 (cell signed:
+		asl	a			; the flames' are below MOB_VRAM)
+		ldy	#0
+		bcc	!+
+		dey
+!:		sty	<cy + 1
 		clc
 		adc	#<MOB_PAT
 		sta	VDC_DL
-		cla
+		lda	<cy + 1
 		adc	#>MOB_PAT
 		sta	VDC_DH
+		ply
 		lda	mo_pal
 		ora	#$80			; (in front of the BG)
 		sta	VDC_DL
@@ -1118,4 +1132,109 @@ mo_tab_r3:	MOBJ	MK_WSPEAR, 3837, 304, 82	; ($65, $66)
 		MOBJ	MK_FSPEAR, 8630, 256, 42	; (the castle: $46, $6C, $46)
 		MOBJ	MK_FSPEAR, 8694, 256, 1
 		MOBJ	MK_FSPEAR, 9047, 224, 42
+		MOBJ	MK_FLAME, 4270, 336, 0		; (flames: handler $1A, markers $67-$69,
+		MOBJ	MK_FLAME, 4367, 432, 0		; $4C, $52, $53-$55; build/r3run.snp)
+		MOBJ	MK_FLAME, 4430, 464, 0
+		MOBJ	MK_FLAME, 4590, 464, 0
+		MOBJ	MK_FLAME, 4654, 464, 0
+		MOBJ	MK_FLAME, 5423, 368, 0
+		MOBJ	MK_FLAME, 5486, 368, 0
+		MOBJ	MK_FLAME, 5582, 368, 0
+		MOBJ	MK_FLAME, 9486, 432, 0
+		MOBJ	MK_FLAME, 9550, 432, 0
 		db	$FF
+
+; ---------------------------------------------------------------------------
+; Round 3's lava flames (arcade handler $1A: build/r3run.snp): a 32 x 32 flame
+; over the lava, four phases a frame-count step of 4 apart, all in step (the
+; phase's four cells uploaded to FLAME_VRAM: mo_flames). Touching one drains 8
+; units (the arcade's touch code 2).
+
+mo_flame:	lda	mo_xl, x		; x - 16 .. x + 16, y - 15 .. y + 17
+		sec
+		sbc	#16
+		sta	<ex
+		lda	mo_xh, x
+		sbc	#0
+		sta	<ex + 1
+		lda	#32
+		sta	<ctmp
+		lda	#15
+		ldy	#32
+		jsr	mo_touch
+		bcc	.r
+		phx
+		lda	#2
+		jsr	player_touch
+		plx
+.r:		rts
+
+dr_flame:	lda	#FLAME_CELL
+		ldy	#1			; (sprite palette 1: the arcade's $30)
+		jsr	mo_set
+		lda	#-16
+		ldy	#-15
+		jsr	mo_piece
+		lda	#FLAME_CELL + 1
+		sta	mo_cell
+		lda	#-16
+		ldy	#1
+		jsr	mo_piece
+		lda	#FLAME_CELL + 2
+		sta	mo_cell
+		lda	#0
+		ldy	#-15
+		jsr	mo_piece
+		lda	#FLAME_CELL + 3
+		sta	mo_cell
+		cla
+		ldy	#1
+		jmp	mo_piece
+
+; mo_flames - round 3, once a frame: a new phase every 4 frames, its cells to
+; FLAME_VRAM (512 bytes; while a flame is in play).
+mo_flames:	inc	mo_ft
+		lda	<cur_round
+		cmp	#3
+		bne	.r
+		lda	mo_ft
+		and	#3
+		bne	.r
+		ldx	#MO_MAX - 1
+!:		lda	mo_ent, x
+		bmi	.n
+		lda	mo_kind, x
+		cmp	#MK_FLAME
+		beq	.up
+.n:		dex
+		bpl	!-
+.r:		rts
+.up:		php
+		sei
+		st0	#VDC_MAWR
+		lda	#<FLAME_VRAM
+		sta	VDC_DL
+		lda	#>FLAME_VRAM
+		sta	VDC_DH
+		st0	#VDC_VWR
+		lda	mo_ft
+		and	#12
+		beq	.p0
+		cmp	#4
+		beq	.p1
+		cmp	#8
+		beq	.p2
+		tia	flame_cells + 1536, VDC_DL, 512
+		plp
+		rts
+.p0:		tia	flame_cells, VDC_DL, 512
+		plp
+		rts
+.p1:		tia	flame_cells + 512, VDC_DL, 512
+		plp
+		rts
+.p2:		tia	flame_cells + 1024, VDC_DL, 512
+		plp
+		rts
+
+flame_cells:	incbin	"objects/flame3.bin"	; 4 phases x 4 cells (tools/pce_objects.py)

@@ -208,6 +208,7 @@ Check bank usage with `make … build/rastan.pce 2>&1 | grep ^BANK`. That build 
 |---|---|
 | `$0000` | BAT, 64×64 |
 | `$1000–$4A7F` | Streamed BG tiles: 936 slots (`NUM_SLOTS` in `pce_stage.py`), peak use 930. The converter fails if a line would need more. |
+| `$4980–$4A7F` | Round 3 only: its lava flames' four cells (one phase at a time; the stage converter gives round 3 920 tile slots) |
 | `$4A80–$4AFF` | The swarm's bat cells (`$268`, `$269`) |
 | `$4B00–$4BFF` | Round 1: the floor spears' cells. Rounds 2 and 3: the map objects' cells (`MOB_VRAM`, 13 and 20 cells; `$4B00-$4FFF` is free of streamed tiles there) |
 | `$4C00–$4FFF` | Props: outside, the cave block. In the castle, the fire's 32 tiles (`$4C00-$4DFF`) and the hanging column's 6 cells (`$4E00-$4F7F`). |

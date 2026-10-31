@@ -411,8 +411,10 @@ floor pokes where the bot can't cross a hazard; `R2RUN_POKES`, `R3RUN_POKES` in 
   (2000, 152)): every 128 frames while Rastan is near, an 80 px column pours 32 px below its spot and falls 4 px a
   frame; touching it drains 8 units. One of its poses, drawn whole (the arcade grows it out of the roof and runs it
   out into the floor), in sprite palette 8 loaded with the round (round 3's other slots are full).
-- Not yet ported: the fire strips over round 3's lava, bubbles, wall flames and weights, and round 2's castle
-  objects.
+- **Lava flames** (round 3, `src/mobj.asm` `MK_FLAME`; arcade handler `$1A`): ten 32x32 flames over the lava
+  pits, four phases 4 frames apart, all in step; touching one drains 8 units. One phase's four cells live in VRAM
+  at `$4980` (the stage converter leaves round 3's last 16 tile slots to them) and change every 4 frames.
+- Not yet ported: bubbles, wall flames and weights, and round 2's castle objects.
 - Round 3's first wide lava pit (x 4576-4735) is crossed on the vine that hangs over it, at (4646, 272) as the bot's
   run has it (census x - 23552 there: calibrated by Rastan's feet on the map's floors over the whole run).
 - **No torn frames:** the SATB is DMA'd at the start of VBLANK, before the object cell uploads, so `enemies_draw`

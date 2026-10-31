@@ -247,6 +247,11 @@ GROUP_ROUNDS = {'boss': {1}, 'woman': {1, 2}, 'jets': {1}, 'snake': {2, 3}, 'kni
                 'wizard': {3}, 'garg2': {2, 3}, 'piranha': {2}, 'water3': {3}}
 NUM_ROUNDS = 3
 
+# Round 3's lava flames (arcade handler $1A, palette $30: PCE slot 1): four phases of a
+# 32x32 flame, four cells each (left top, left bottom, right top, right bottom), a phase
+# every 4 frames, all in step; src/mobj.asm uploads the phase to FLAME_VRAM.
+FLAME_CELLS = ('r3run', [(4412, 0x224), (4400, 0x228), (4404, 0x22c), (4408, 0x230)])
+
 # Single cells the engine draws by itself: symbol -> (group, arcade cell). objects.inc
 # gets SYMBOL (the cell's number in objcells.bin) and SYMBOL_ATTR (its SATB attribute
 # byte as pce_objects writes it for poses: palette, cell bits 8-9, flips).

@@ -26,7 +26,7 @@ import numpy as np
 from PIL import Image
 from arcade_gfx import load_region, decode_packed
 from snap import read_snaps, palette_rgb
-from object_specs import MOBJ_CELLS, B64_GROUPS, BANK64_SNAP, ROUND_PAL_SNAPS, GROUP_ROUNDS, NUM_ROUNDS, FIXED_PALS, GROUP_BANK, CELL_SYMBOLS, FILES, GROUPS, POSE_SYMBOLS, GROUP_MAX, PATHS
+from object_specs import FLAME_CELLS, MOBJ_CELLS, B64_GROUPS, BANK64_SNAP, ROUND_PAL_SNAPS, GROUP_ROUNDS, NUM_ROUNDS, FIXED_PALS, GROUP_BANK, CELL_SYMBOLS, FILES, GROUPS, POSE_SYMBOLS, GROUP_MAX, PATHS
 import census_all
 
 ROMDIR = os.environ.get('RASTAN_ROMS', os.path.join(os.path.dirname(__file__), '..', 'roms', 'rastan'))
@@ -74,6 +74,8 @@ def main():
     for rnd, lst in MOBJ_CELLS.items():
         for sym, cap, fr, code in lst:
             want.setdefault(cap, set()).add(fr)
+    for fr, code in FLAME_CELLS[1]:
+        want.setdefault(FLAME_CELLS[0], set()).add(fr)
     frames = {}
     for cap, fs in want.items():
         for s in read_snaps(os.path.join(build, FILES[cap])):
@@ -303,6 +305,16 @@ def main():
         open(f'{out}/mobj_r{rnd}.bin', 'wb').write(b''.join(pce_cell(c) for c, _ in order))
         mobj_syms.append((f'MOBJ_R{rnd}_CELLS', len(order), None))
         print(f'round {rnd}: {len(order)} map object cells')
+    cap, lst = FLAME_CELLS                   # (round 3's lava flames: flame3.bin)
+    fb = bytearray()
+    for fr, code in lst:
+        s = frames[cap, fr] if (cap, fr) in frames else next(x for x in read_snaps(os.path.join(build, FILES[cap])) if x.frame == fr)
+        e = next((e for e in range(256) if int(s.spr[e * 4 + 2]) & 0x1fff == code), None)
+        assert e is not None, f'flame cell {code:#x} not drawn at {fr}'
+        assert ((s.sprctrl & 0xe0) >> 1) + (int(s.spr[e * 4]) & 15) == 0x30
+        for k in range(4):
+            fb += pce_cell(code + k)
+    open(f'{out}/flame3.bin', 'wb').write(fb)
 
     vce, vce64, changed = bytearray(), bytearray(), []
     for (key, alt, _), ps in sorted(pal9.items(), key=lambda kv: kv[1]):
