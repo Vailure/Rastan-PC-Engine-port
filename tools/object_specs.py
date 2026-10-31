@@ -198,6 +198,11 @@ GROUPS = {
     'water3': [
         ('water_fall', 'r3run', 7, 2049, 2051),
     ],
+    # Round 3's castle wall flames (arcade slots 1-3: handler $22, markers $73-$75): a
+    # nozzle's flicker in the wall, then a jet of fire to the right; one 108-frame cycle.
+    'wflame3': [
+        ('wf_cycle', 'r3run', 3, 9441, 9548),
+    ],
     'piranha': [
         ('piranha', 'r2run', 15, 5538, 5747),
         ('pir_death', 'lizard', 8, 1536, 1566),
@@ -244,13 +249,15 @@ B64_GROUPS = ('castle', 'jets', 'vine', 'swarm', 'items', 'boss', 'knight')
 # in rounds that never meet can share a PCE sprite palette slot: each round loads its own
 # colours (objpal.bin for round 1, objpal_r<n>.bin).
 GROUP_ROUNDS = {'boss': {1}, 'woman': {1, 2}, 'jets': {1}, 'snake': {2, 3}, 'knight': {2}, 'r3walk': {3}, 'horn': {2, 3},
-                'wizard': {3}, 'garg2': {2, 3}, 'piranha': {2}, 'water3': {3}}
+                'wizard': {3}, 'garg2': {2, 3}, 'piranha': {2}, 'water3': {3}, 'wflame3': {3}}
 NUM_ROUNDS = 3
 
 # Round 3's lava flames (arcade handler $1A, palette $30: PCE slot 1): four phases of a
 # 32x32 flame, four cells each (left top, left bottom, right top, right bottom), a phase
 # every 4 frames, all in step; src/mobj.asm uploads the phase to FLAME_VRAM.
 FLAME_CELLS = ('r3run', [(4412, 0x224), (4400, 0x228), (4404, 0x22c), (4408, 0x230)])
+# And the fireballs that leap from them (handler $0C, palette $30): one of their three cells.
+BALL_CELLS = ('r3run', [(4384, 0xd5d)])
 
 # Single cells the engine draws by itself: symbol -> (group, arcade cell). objects.inc
 # gets SYMBOL (the cell's number in objcells.bin) and SYMBOL_ATTR (its SATB attribute

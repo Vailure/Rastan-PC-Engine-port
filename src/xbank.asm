@@ -57,6 +57,8 @@ x_\1:		lda	#XBANK2
 		XCALL2	g2_think
 		XCALL2	wat_spawn
 		XCALL2	wat_think
+		XCALL2	wf3_spawn
+		XCALL2	wf3_think
 
 x_back:		lda	#DEBUG_BANK
 		tam2

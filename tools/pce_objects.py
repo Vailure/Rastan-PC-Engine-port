@@ -26,7 +26,7 @@ import numpy as np
 from PIL import Image
 from arcade_gfx import load_region, decode_packed
 from snap import read_snaps, palette_rgb
-from object_specs import FLAME_CELLS, MOBJ_CELLS, B64_GROUPS, BANK64_SNAP, ROUND_PAL_SNAPS, GROUP_ROUNDS, NUM_ROUNDS, FIXED_PALS, GROUP_BANK, CELL_SYMBOLS, FILES, GROUPS, POSE_SYMBOLS, GROUP_MAX, PATHS
+from object_specs import BALL_CELLS, FLAME_CELLS, MOBJ_CELLS, B64_GROUPS, BANK64_SNAP, ROUND_PAL_SNAPS, GROUP_ROUNDS, NUM_ROUNDS, FIXED_PALS, GROUP_BANK, CELL_SYMBOLS, FILES, GROUPS, POSE_SYMBOLS, GROUP_MAX, PATHS
 import census_all
 
 ROMDIR = os.environ.get('RASTAN_ROMS', os.path.join(os.path.dirname(__file__), '..', 'roms', 'rastan'))
@@ -74,7 +74,7 @@ def main():
     for rnd, lst in MOBJ_CELLS.items():
         for sym, cap, fr, code in lst:
             want.setdefault(cap, set()).add(fr)
-    for fr, code in FLAME_CELLS[1]:
+    for fr, code in FLAME_CELLS[1] + BALL_CELLS[1]:
         want.setdefault(FLAME_CELLS[0], set()).add(fr)
     frames = {}
     for cap, fs in want.items():
@@ -315,6 +315,13 @@ def main():
         for k in range(4):
             fb += pce_cell(code + k)
     open(f'{out}/flame3.bin', 'wb').write(fb)
+    bb = bytearray()                         # (and its fireballs: ball3.bin)
+    for fr, code in BALL_CELLS[1]:
+        s = frames[BALL_CELLS[0], fr]
+        e = next((e for e in range(256) if int(s.spr[e * 4 + 2]) & 0x1fff == code), None)
+        assert e is not None, f'fireball cell {code:#x} not drawn at {fr}'
+        bb += pce_cell(code)
+    open(f'{out}/ball3.bin', 'wb').write(bb)
 
     vce, vce64, changed = bytearray(), bytearray(), []
     for (key, alt, _), ps in sorted(pal9.items(), key=lambda kv: kv[1]):

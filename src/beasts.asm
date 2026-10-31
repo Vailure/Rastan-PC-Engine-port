@@ -53,6 +53,7 @@ beasts_reset:	stz	pirs_done
 		stz	g2_done
 		stz	wat_wait
 		stz	wat_wait + 1
+		stz	wf3_done
 		rts
 
 ; beast_near - Y = entry, ex/ex+1 = its x, A = ahead: carry set if Rastan is
@@ -529,4 +530,101 @@ wat_think:	dec	e_timer, x
 		phx
 		jsr	player_touch
 		plx
+.r:		rts
+
+; ---------------------------------------------------------------------------
+; Round 3's castle wall flames (arcade slots 1-3: handler $22, markers $73-$75,
+; at x 9122, y 276, 372, 436: build/r3run.snp). Each nozzle flickers in the
+; wall, then shoots a jet of fire 80 px to the right: a 108-frame cycle (the
+; captured animation, src/object_specs.py 'wflame3'), the three out of step.
+; The jet knocks Rastan back (the arcade's touch code 3) while it is out.
+
+WF3_CYCLE	=	108
+WF3_HOT0	=	4		; The jet out: frames 4 .. 44 of the cycle.
+WF3_HOT1	=	44
+WF3_AHEAD	=	200
+
+wf3_y_l:	db	<276, <372, <436
+wf3_y_h:	db	>276, >372, >436
+wf3_t0:		db	0, 17, 95		; Each one's start in the cycle.
+NUM_WF3		=	3
+
+		.bss
+wf3_done:	ds	1		; Nozzles in play (bits).
+		.code
+
+wf3_spawn:	lda	<cur_round
+		cmp	#3
+		bne	.r
+		cly
+.loop:		lda	#<9122
+		sta	<ex
+		lda	#>9122
+		sta	<ex + 1
+		lda	wf3_done
+		and	.bit, y
+		bne	.next
+		lda	#WF3_AHEAD
+		jsr	beast_near
+		bcc	.next
+		jsr	beast_slot
+		bcc	.r
+		lda	wf3_done
+		ora	.bit, y
+		sta	wf3_done
+		lda	wf3_y_l, y
+		sta	<ey
+		lda	wf3_y_h, y
+		sta	<ey + 1
+		stz	<ep
+		stz	<ep + 1
+		lda	#EK_WFLAME
+		phy
+		jsr	beast_place
+		ply
+		lda	.bit, y
+		sta	e_sub, x		; (its bit, to free it)
+		stz	e_timer, x
+		lda	wf3_t0, y		; Run its animation on to its start.
+		beq	.next
+		sta	e_alt, x
+!:		phy
+		jsr	enemy_anim
+		ply
+		inc	e_timer, x
+		dec	e_alt, x
+		bne	!-
+.next:		iny
+		cpy	#NUM_WF3
+		bne	.loop
+.r:		rts
+.bit:		db	1, 2, 4
+
+; wf3_think - X: the cycle; the jet's touch; gone (to come again) when far.
+wf3_think:	lda	e_xl, x			; 256 px or more away: free.
+		sec
+		sbc	<p_x
+		sta	<etmp
+		lda	e_xh, x
+		sbc	<p_x + 1
+		bpl	!+
+		eor	#$FF
+!:		beq	!+
+		lda	e_sub, x
+		eor	#$FF
+		and	wf3_done
+		sta	wf3_done
+		stz	e_state, x
+		rts
+!:		inc	e_timer, x
+		lda	e_timer, x
+		cmp	#WF3_CYCLE
+		bcc	!+
+		stz	e_timer, x
+		cla
+!:		cmp	#WF3_HOT0
+		bcc	.r
+		cmp	#WF3_HOT1
+		bcs	.r
+		jmp	touch_hurts
 .r:		rts

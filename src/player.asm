@@ -1478,10 +1478,10 @@ camera_update:	lda	<p_x			; cv = p_x - 136
 		lda	<scroll_x + 1
 		sta	<cl + 1
 		jsr	smax
-.setx:		lda	<cv
-		sta	<scroll_x
+.setx:		lda	<cv			; (scroll_x itself only once clamped:
+		sta	cam_wx			; nothing sees it unclamped)
 		lda	<cv + 1
-		sta	<scroll_x + 1
+		sta	cam_wx + 1
 
 		; feet = p_y + 24: scroll_y in [feet - 176, feet - 80].
 		lda	<scroll_y
@@ -1510,17 +1510,24 @@ camera_update:	lda	<p_x			; cv = p_x - 136
 		sta	<scroll_y
 		lda	<cv + 1
 		sta	<scroll_y + 1
-		; (fall through)
+		bra	camera_clamp_w
 
 ; camera_clamp - scroll_x, scroll_y into the box of cam_region. The BAT holds
 ; 512 px each way, so the camera also stays inside the last 512 px streamed:
 ; scroll_x >= col_last - STAGE_COL_REACH and scroll_y <= row_top + STAGE_ROW_REACH.
 
 
-camera_clamp:	ldx	<cam_region
-		lda	<scroll_x
-		sta	<cv
+		.bss
+cam_wx:		ds	2		; (camera_update: the scroll_x it wants)
+		.code
+camera_clamp:	lda	<scroll_x
+		sta	cam_wx
 		lda	<scroll_x + 1
+		sta	cam_wx + 1
+camera_clamp_w:	ldx	<cam_region
+		lda	cam_wx
+		sta	<cv
+		lda	cam_wx + 1
 		sta	<cv + 1
 		lda	region_x0_l, x
 		sta	<cl

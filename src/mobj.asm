@@ -46,6 +46,8 @@ MOB_ENTRIES	=	36		; SATB entries the map objects may take.
 FLAME_VRAM	=	$4980		; Round 3's flames: 4 cells below the stage's
 					; tiles (tools/pce_stage.py), the phase in turn.
 FLAME_CELL	=	(FLAME_VRAM - MOB_VRAM) / 64	; (-6: as a map object cell)
+BALL_VRAM	=	$4940		; Its fireballs' cell (uploaded with the round).
+BALL_CELL	=	(BALL_VRAM - MOB_VRAM) / 64
 
 MK_LOG		=	0
 MK_BLOCK	=	1
@@ -54,6 +56,7 @@ MK_WSPEAR	=	3
 MK_FSPEAR	=	4
 MK_RISER	=	5
 MK_FLAME	=	6
+MK_BALL		=	7
 
 LOG_REST	=	72
 BLK_REST	=	151
@@ -123,7 +126,11 @@ mobj_update:	jsr	mo_flames		; (round 3's flames' phase)
 		sta	<ep
 		lda	mo_tabs - 3, x
 		sta	<ep + 1
-		; Out of the margin: out of play.
+		lda	mo_ft			; (the passes over the table every other
+		lsr	a			; frame: the frame's time)
+		bcc	!+
+		jmp	.think
+!:		; Out of the margin: out of play.
 		ldx	#MO_MAX - 1
 .drop:		lda	mo_ent, x
 		bmi	.dnext
@@ -226,7 +233,7 @@ mobj_update:	jsr	mo_flames		; (round 3's flames' phase)
 		adc	#6
 		tay
 		jmp	.spawn
-.v0:		db	0, 32, 0, WSP_IN, 2, 2, 0
+.v0:		db	0, 32, 0, WSP_IN, 2, 2, 0, 0
 
 		; Each in play: its step, the ride, its touch.
 .think:		stz	mo_nplat
@@ -250,7 +257,7 @@ mobj_update:	jsr	mo_flames		; (round 3's flames' phase)
 		bpl	.loop
 		rts
 .call:		jmp	[etmp]
-.kinds:		dw	mo_log, mo_block, mo_none, mo_wspear, mo_spike, mo_spike, mo_flame
+.kinds:		dw	mo_log, mo_block, mo_none, mo_wspear, mo_spike, mo_spike, mo_flame, mo_ball
 
 ; mo_offset - Y = entry: Y = its offset in the table (6 bytes an entry).
 mo_offset:	tya
@@ -746,7 +753,15 @@ mobj_cells:	ldx	<cur_round
 		st2	#>MOB_VRAM
 		st0	#VDC_VWR
 		jsr	ram_tia
-		lda	#128			; (ram_tia back to its usual length)
+		lda	<cur_round		; Round 3: its fireballs' cells too.
+		cmp	#3
+		bne	!+
+		st0	#VDC_MAWR
+		st1	#<BALL_VRAM
+		st2	#>BALL_VRAM
+		st0	#VDC_VWR
+		tia	ball_cells, VDC_DL, 128
+!:		lda	#128			; (ram_tia back to its usual length)
 		sta	ram_tia + 5
 		stz	ram_tia + 6
 		plp
@@ -819,7 +834,7 @@ mobj_draw:	php
 		plp
 		rts
 .call:		jmp	[etmp]
-.kinds:		dw	dr_log, dr_block, dr_mud, dr_wspear, dr_fspear, dr_riser, dr_flame
+.kinds:		dw	dr_log, dr_block, dr_mud, dr_wspear, dr_fspear, dr_riser, dr_flame, dr_ball
 
 ; mo_piece - one SATB entry: A = dx, Y = dy (signed, from the anchor ex, ey),
 ; cell number and palette in mo_cell, mo_pal (round's set). Skipped off screen
@@ -1142,6 +1157,13 @@ mo_tab_r3:	MOBJ	MK_WSPEAR, 3837, 304, 82	; ($65, $66)
 		MOBJ	MK_FLAME, 5582, 368, 0
 		MOBJ	MK_FLAME, 9486, 432, 0
 		MOBJ	MK_FLAME, 9550, 432, 0
+		MOBJ	MK_BALL, 4270, 336, 0		; (fireballs: handler $0C, from the
+		MOBJ	MK_BALL, 4366, 432, 90		; flames; first waits: phases apart)
+		MOBJ	MK_BALL, 4430, 464, 180
+		MOBJ	MK_BALL, 5424, 368, 40
+		MOBJ	MK_BALL, 5488, 368, 130
+		MOBJ	MK_BALL, 9486, 432, 60
+		MOBJ	MK_BALL, 9552, 432, 160
 		db	$FF
 
 ; ---------------------------------------------------------------------------
@@ -1238,3 +1260,67 @@ mo_flames:	inc	mo_ft
 		rts
 
 flame_cells:	incbin	"objects/flame3.bin"	; 4 phases x 4 cells (tools/pce_objects.py)
+
+; Round 3's fireballs (arcade handler $0C: build/r3run.snp, over the flame at
+; 4366): each leaps out of the lava by the arcade's heights, a big leap then two
+; small ones, 255 frames a cycle; mo_t the frame in it (the table entry's first
+; wait: where it starts), mo_v the height. Touching one knocks Rastan back (12
+; units: the arcade's touch code 3).
+BALL_CYCLE	=	255
+
+mo_ball:	lda	mo_t, x
+		inc	a
+		cmp	#BALL_CYCLE
+		bcc	!+
+		cla
+!:		sta	mo_t, x
+		tay
+		lda	ball_h, y
+		sta	mo_v, x
+		cmp	#8
+		bcc	.r
+		lda	mo_xl, x		; x - 8 .. x + 8, (y - h) - 8 .. + 8
+		sec
+		sbc	#8
+		sta	<ex
+		lda	mo_xh, x
+		sbc	#0
+		sta	<ex + 1
+		lda	#16
+		sta	<ctmp
+		lda	mo_v, x
+		clc
+		adc	#8
+		ldy	#16
+		jsr	mo_touch
+		bcc	.r
+		phx
+		lda	<p_x			; Knocked away from it.
+		cmp	mo_xl, x
+		lda	<p_x + 1
+		sbc	mo_xh, x
+		lda	#1
+		bcs	!+
+		lda	#$FF
+!:		ldy	#HIT_DAMAGE
+		jsr	player_hit
+		plx
+.r:		rts
+
+dr_ball:	lda	mo_v, x
+		cmp	#5
+		bcc	.r
+		lda	#BALL_CELL
+		ldy	#1			; (sprite palette 1: the arcade's $30)
+		jsr	mo_set
+		lda	mo_v, x
+		eor	#$FF
+		sec
+		sbc	#7			; dy = -h - 8
+		tay
+		lda	#-8
+		jmp	mo_piece
+.r:		rts
+
+ball_h:		db	0, 3, 6, 9, 12, 15, 19, 23, 27, 31, 35, 38, 41, 44, 47, 50, 53, 56, 59, 62, 66, 72, 75, 78, 81, 84, 87, 90, 93, 96, 99, 102, 105, 108, 111, 114, 117, 120, 120, 123, 126, 128, 130, 132, 134, 136, 137, 139, 141, 143, 145, 146, 147, 148, 149, 150, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 160, 159, 158, 157, 156, 155, 154, 153, 152, 151, 150, 149, 148, 147, 146, 145, 143, 141, 139, 137, 135, 133, 131, 129, 127, 125, 122, 119, 116, 113, 110, 107, 104, 101, 98, 96, 96, 93, 90, 87, 84, 81, 78, 75, 72, 65, 62, 59, 56, 53, 50, 47, 44, 41, 38, 35, 31, 27, 24, 20, 15, 12, 9, 6, 3, 0, 0, 3, 6, 10, 14, 17, 20, 23, 26, 29, 32, 35, 38, 41, 44, 47, 50, 52, 54, 56, 58, 59, 60, 61, 62, 63, 64, 64, 64, 64, 64, 63, 62, 61, 60, 59, 58, 56, 54, 52, 50, 47, 44, 41, 38, 35, 32, 29, 26, 23, 20, 17, 14, 10, 6, 3, 0, 0, 3, 6, 10, 14, 17, 20, 23, 26, 29, 32, 35, 38, 41, 44, 47, 50, 52, 54, 56, 58, 59, 60, 61, 62, 63, 64, 64, 64, 64, 64, 63, 62, 61, 60, 59, 58, 56, 54, 52, 50, 47, 44, 41, 38, 35, 32, 29, 26, 23, 20, 17, 14, 10, 6, 3, 0
+ball_cells:	incbin	"objects/ball3.bin"	; (tools/pce_objects.py)

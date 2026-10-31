@@ -427,9 +427,9 @@ def main():
     # resident while a BAT cell shows it; a line's upload list holds the patterns
     # it brings that are not resident.
     lines = world.lines()
-    # (round 3 leaves its last 16, $4980-$4A7F, to its lava's flames: four sprite cells,
-    # src/mobj.asm FLAME_VRAM)
-    slots_all = list(range(FIRST_SLOT, FIRST_SLOT + NUM_SLOTS - (16 if world.ROUND == 3 else 0)))
+    # (round 3 leaves its last 20, $4940-$4A7F, to its lava's fireballs and flames: five
+    # sprite cells, src/mobj.asm BALL_VRAM, FLAME_VRAM; its stage needs the other 916)
+    slots_all = list(range(FIRST_SLOT, FIRST_SLOT + NUM_SLOTS - (20 if world.ROUND == 3 else 0)))
     free = slots_all[::-1]
     resident = {}        # pattern -> slot
     refs = {}            # pattern -> number of live BAT cells showing it
