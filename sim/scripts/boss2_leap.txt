@@ -1,0 +1,30 @@
+# Round 2's boss: as boss2.txt, but Rastan walks right onto the floor (400-700): the boss's float
+# leap at him from afar (anims 210-213 rising, 206-209 coming down, 998-1101).
+patch 53e0c 4e
+patch 53e0d 71
+patch 53e0e 4e
+patch 53e0f 71
+patch 53e10 4e
+patch 53e11 71
+patch 54ebe 4e
+patch 54ebf 71
+patch 54ec0 4e
+patch 54ec1 71
+patch 54ec2 4e
+patch 54ec3 71
+patch 553e6 4e
+patch 553e7 71
+patch 553e8 4e
+patch 553e9 71
+patch 553ea 4e
+patch 553eb 71
+patch 5ff9f f6
+poke 300 90000 10c13a w 3000
+poke 400 90000 10d30e b 1
+in 100 ff 3f
+in 106 ff 1f
+in 200 ff 17
+in 206 ff 1f
+in 400 f7 1f
+in 700 ff 1f
+end 1600

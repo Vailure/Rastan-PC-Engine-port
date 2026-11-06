@@ -1,0 +1,31 @@
+# Round 2's boss (the arcade started in its boss room, $5FF9F = $F6; health held, Rastan
+# untouchable): Rastan stays on the ledge he starts on. The boss (arcade slot 17, type $13) stands in
+# the door from 460, drops and jumps to him, then walks, swings (anims 214, 220-223; its sword, box
+# $93, armed in 223) and hops back, over and over; every 300 frames from 666 three orbs (slots 18-20)
+# fall from the brazier nearest him.
+patch 53e0c 4e
+patch 53e0d 71
+patch 53e0e 4e
+patch 53e0f 71
+patch 53e10 4e
+patch 53e11 71
+patch 54ebe 4e
+patch 54ebf 71
+patch 54ec0 4e
+patch 54ec1 71
+patch 54ec2 4e
+patch 54ec3 71
+patch 553e6 4e
+patch 553e7 71
+patch 553e8 4e
+patch 553e9 71
+patch 553ea 4e
+patch 553eb 71
+patch 5ff9f f6
+poke 300 90000 10c13a w 3000
+poke 400 90000 10d30e b 1
+in 100 ff 3f
+in 106 ff 1f
+in 200 ff 17
+in 206 ff 1f
+end 3000

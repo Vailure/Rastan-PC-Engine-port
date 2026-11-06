@@ -1,0 +1,17 @@
+# Checkpoint segment $10 (the castle's first room, health held): along the bottom corridor,
+# up the rope at x 8656 into the middle room, then left into the floor spears at x 8480
+# (they pierce him, frame 1480). Spears: sprite cells $234 (slot cover), $266 (head), $267 (shaft).
+patch 5073a 10
+in 100 ff 3f
+in 106 ff 1f
+in 200 ff 17
+in 206 ff 1f
+poke 300 30000 10c13a w 3000
+in 400 f7 1f
+in 1100 fb 1f
+in 1104 ff 1f
+in 1120 de 1f
+in 1125 fe 1f
+in 1350 db 1f
+in 1356 fb 1f
+end 1520

@@ -1,0 +1,129 @@
+# Round 2's boss: Rastan walks right swinging; its damage ($3C,A4) poked to 9 at 700, the next
+# hit (729) kills it: anims 157-160, 4 frames each, and 15000 points (its ($2C,A4): $0150 hundreds).
+patch 53e0c 4e
+patch 53e0d 71
+patch 53e0e 4e
+patch 53e0f 71
+patch 53e10 4e
+patch 53e11 71
+patch 54ebe 4e
+patch 54ebf 71
+patch 54ec0 4e
+patch 54ec1 71
+patch 54ec2 4e
+patch 54ec3 71
+patch 553e6 4e
+patch 553e7 71
+patch 553e8 4e
+patch 553e9 71
+patch 553ea 4e
+patch 553eb 71
+patch 5ff9f f6
+poke 300 90000 10c13a w 3000
+poke 400 90000 10d30e b 1
+in 100 ff 3f
+in 106 ff 1f
+in 200 ff 17
+in 206 ff 1f
+poke 700 720 10c744 b 9
+in 600 f7 1f
+in 610 e7 1f
+in 616 f7 1f
+in 626 e7 1f
+in 632 f7 1f
+in 642 e7 1f
+in 648 f7 1f
+in 658 e7 1f
+in 664 f7 1f
+in 674 e7 1f
+in 680 f7 1f
+in 690 e7 1f
+in 696 f7 1f
+in 706 e7 1f
+in 712 f7 1f
+in 722 e7 1f
+in 728 f7 1f
+in 738 e7 1f
+in 744 f7 1f
+in 754 e7 1f
+in 760 f7 1f
+in 770 e7 1f
+in 776 f7 1f
+in 786 e7 1f
+in 792 f7 1f
+in 802 e7 1f
+in 808 f7 1f
+in 818 e7 1f
+in 824 f7 1f
+in 834 e7 1f
+in 840 f7 1f
+in 850 e7 1f
+in 856 f7 1f
+in 866 e7 1f
+in 872 f7 1f
+in 882 e7 1f
+in 888 f7 1f
+in 898 e7 1f
+in 904 f7 1f
+in 914 e7 1f
+in 920 f7 1f
+in 930 e7 1f
+in 936 f7 1f
+in 946 e7 1f
+in 952 f7 1f
+in 962 e7 1f
+in 968 f7 1f
+in 978 e7 1f
+in 984 f7 1f
+in 994 e7 1f
+in 1000 f7 1f
+in 1010 e7 1f
+in 1016 f7 1f
+in 1026 e7 1f
+in 1032 f7 1f
+in 1042 e7 1f
+in 1048 f7 1f
+in 1058 e7 1f
+in 1064 f7 1f
+in 1074 e7 1f
+in 1080 f7 1f
+in 1090 e7 1f
+in 1096 f7 1f
+in 1106 e7 1f
+in 1112 f7 1f
+in 1122 e7 1f
+in 1128 f7 1f
+in 1138 e7 1f
+in 1144 f7 1f
+in 1154 e7 1f
+in 1160 f7 1f
+in 1170 e7 1f
+in 1176 f7 1f
+in 1186 e7 1f
+in 1192 f7 1f
+in 1202 e7 1f
+in 1208 f7 1f
+in 1218 e7 1f
+in 1224 f7 1f
+in 1234 e7 1f
+in 1240 f7 1f
+in 1250 e7 1f
+in 1256 f7 1f
+in 1266 e7 1f
+in 1272 f7 1f
+in 1282 e7 1f
+in 1288 f7 1f
+in 1298 e7 1f
+in 1304 f7 1f
+in 1314 e7 1f
+in 1320 f7 1f
+in 1330 e7 1f
+in 1336 f7 1f
+in 1346 e7 1f
+in 1352 f7 1f
+in 1362 e7 1f
+in 1368 f7 1f
+in 1378 e7 1f
+in 1384 f7 1f
+in 1394 e7 1f
+end 1400

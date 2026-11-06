@@ -1,0 +1,144 @@
+"""Build the HUD (lives, Rastan icon, health bar, ROUND n) from the arcade's sprite cells.
+
+usage: pce_hud.py actions.snp outdir
+
+The arcade draws its HUD with PC090OJ sprites along the bottom of the screen:
+  lives digit (code 42 + n), icon (970, or 971 when flashing, + 972),
+  6 health bar cells (code 981 - level, level 0..8 = 48 units for 12288 health),
+  "ROUND" (52, 53, 54) and the round digit 8px after cell 54.
+Colors come from the arcade palette in a gameplay snapshot.
+
+Outputs:
+  hud.bin     cells (128 bytes each, PCE sprite format), in this order:
+              bar levels 0..8, icon 970, icon 971, icon 972, digits 0..9,
+              "ROUND 1" text as 4 cells (64x16)
+  hud.inc     cell indexes
+  hudpal.bin  16 colors for the HUD's sprite palette
+"""
+import os
+import sys
+import numpy as np
+from PIL import Image
+from arcade_gfx import load_region, decode_packed
+from snap import read_snaps, palette_rgb
+
+ROMDIR = os.environ.get('RASTAN_ROMS', os.path.join(os.path.dirname(__file__), '..', 'roms', 'rastan'))
+PAL_FRAME = 600
+# Top line labels: (cell, arcade x, arcade y) - "1UP", "HIGH SCORE".
+TOP_LABELS = [(0x48, 40, 0), (0x46, 56, 0), (0x3A, 120, 0), (0x3B, 136, 0), (0x3C, 152, 0), (0x3D, 168, 0),
+              (0x3E, 184, 8)]
+
+
+def cell_bytes(c):
+    b = bytearray(128)
+    for p in range(4):
+        for y in range(16):
+            v = 0
+            for x in range(16):
+                if (c[y, x] >> p) & 1:
+                    v |= 0x8000 >> x
+            b[p * 32 + y * 2] = v & 0xff
+            b[p * 32 + y * 2 + 1] = v >> 8
+    return bytes(b)
+
+
+def main():
+    snapf, out = sys.argv[1], sys.argv[2]
+    os.makedirs(out, exist_ok=True)
+    spr = decode_packed(load_region(ROMDIR, 'pc090oj'), 16, 16).astype(int)
+    s = next(s for s in read_snaps(snapf) if s.frame == PAL_FRAME)
+    pal = palette_rgb(s.pal)
+    color = (0 | ((s.sprctrl & 0xe0) >> 1)) * 16      # HUD cells use color 0 + bank
+
+    def rgb_cell(code):
+        g = spr[code]
+        img = np.full((16, 16, 3), -1, int)
+        m = g != 0
+        img[m] = pal[color + g[m]]
+        return img
+
+    cells = [rgb_cell(981 - k) for k in range(9)]
+    cells += [rgb_cell(970), rgb_cell(971), rgb_cell(972)]
+    cells += [rgb_cell(42 + d) for d in range(10)]
+    text = np.full((16, 64, 3), -1, int)
+    for i, code in enumerate((52, 53, 54)):
+        text[:, i * 16:i * 16 + 16] = np.where(rgb_cell(code) >= 0, rgb_cell(code), text[:, i * 16:i * 16 + 16])
+    base = text.copy()
+    one = rgb_cell(43)                                  # "ROUND 1"
+    text[:, 40:56] = np.where(one >= 0, one, base[:, 40:56])
+    cells += [text[:, i * 16:i * 16 + 16] for i in range(4)]
+    rounds = []                                         # cells 2 and 3 for "ROUND 1" .. "ROUND 6"
+    for r in range(1, 7):
+        t = base.copy()
+        d = rgb_cell(42 + r)
+        t[:, 40:56] = np.where(d >= 0, d, base[:, 40:56])
+        rounds += [t[:, 32:48], t[:, 48:64]]
+
+    # Top line: "1UP" and "HIGH SCORE" (arcade sprites at y 0, glyph rows 8-14,
+    # and "RE" at y 8), drawn into two blocks of 16x16 cells whose top 8 rows hold
+    # the labels; the engine writes the score digits into the bottom 8 rows.
+    # Left block: arcade x 16..79 (4 cells); right block: arcade x 112..207 (6 cells).
+    top = np.full((32, 320, 3), -1, int)
+    for code, x, y in TOP_LABELS:
+        c = rgb_cell(code)
+        top[y:y + 16, x:x + 16] = np.where(c >= 0, c, top[y:y + 16, x:x + 16])
+    top = top[8:24]
+    top[8:] = -1                                     # the digit row is the engine's
+    for x0, n in ((16, 4), (112, 6)):
+        cells += [top[:, x0 + 16 * i:x0 + 16 * i + 16] for i in range(n)]
+    # Digit font: cells 42+d, glyph in rows 0-6, x 8-15.
+    font = [rgb_cell(42 + d)[0:8, 8:16] for d in range(10)]
+    cells += rounds
+
+    to9 = lambda c: tuple(int(round(v * 7 / 255)) for v in c)
+    counts = {}
+    for c in cells + font:
+        for px in c[c[..., 0] >= 0]:
+            k = to9(px)
+            counts[k] = counts.get(k, 0) + 1
+    pal9 = sorted(counts, key=lambda k: -counts[k])[:15]
+    if len(counts) > 15:
+        print(f'{len(counts)} HUD colors; mapping to the 15 most used')
+    near = lambda c: 1 + min(range(len(pal9)), key=lambda i: sum((a - b) ** 2 for a, b in zip(c, pal9[i])))
+
+    blob = bytearray()
+    prev = []
+    for c in cells:
+        idx = np.zeros((16, 16), np.uint8)
+        for y in range(16):
+            for x in range(16):
+                if c[y, x, 0] >= 0:
+                    idx[y, x] = near(to9(c[y, x]))
+        blob += cell_bytes(idx)
+        pv = np.array([[40, 40, 60]] + [[v * 255 // 7 for v in p] for p in pal9], np.uint8)[idx]
+        prev.append(pv)
+    open(f'{out}/hud.bin', 'wb').write(blob)
+    # Font: per glyph (0-9, then blank) 4 planes x 8 rows, a byte each (bit 7 = left).
+    with open(f'{out}/hudfont.inc', 'w') as f:
+        f.write('; Generated by tools/pce_hud.py: score digits, 4 planes x 8 rows per glyph (10 = blank)\nhud_font:\n')
+        for g in font + [np.full((8, 8, 3), -1, int)]:
+            idx = [[near(to9(g[y, x])) if g[y, x, 0] >= 0 else 0 for x in range(8)] for y in range(8)]
+            vals = []
+            for pl in range(4):
+                for y in range(8):
+                    vals.append(sum(0x80 >> x for x in range(8) if (idx[y][x] >> pl) & 1))
+            f.write('\t\tdb\t' + ', '.join(f'${v:02X}' for v in vals) + '\n')
+    vce = bytearray()
+    for r, g, b in [(0, 0, 0)] + pal9 + [(0, 0, 0)] * (15 - len(pal9)):
+        vce += ((g << 6) | (r << 3) | b).to_bytes(2, 'little')
+    open(f'{out}/hudpal.bin', 'wb').write(vce)
+    with open(f'{out}/hud.inc', 'w') as f:
+        f.write('; Generated by tools/pce_hud.py\n')
+        f.write('HUD_LEVEL0\t= 0\t\t; bar cell with level 0..8 filled\n')
+        f.write('HUD_ICON\t= 9\t\t; 970, 971 (flash), 972\n')
+        f.write('HUD_DIGIT0\t= 12\n')
+        f.write('HUD_TEXT\t= 22\t\t; "ROUND n", 4 cells\n')
+        f.write('HUD_TOP\t\t= 26\t\t; top line label cells: 4 left ("1UP"), 6 right ("HIGH SCORE")\n')
+        f.write('HUD_ROUNDS\t= 36\t\t; per round 1-6: "ROUND n" cells 2, 3\n')
+        f.write(f'HUD_CELLS\t= {len(cells)}\n')
+    Image.fromarray(np.concatenate(prev, 1)).resize((len(prev) * 48, 48), Image.NEAREST).save(f'{out}/hud.png')
+    print(f'HUD: {len(cells)} cells, {len(pal9)} colors')
+
+
+if __name__ == '__main__':
+    main()

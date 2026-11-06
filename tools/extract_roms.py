@@ -2,6 +2,6 @@
 import sys
 from arcade_gfx import load_region
 romdir, out = sys.argv[1], sys.argv[2]
-for name in ("maincpu", "pc080sn", "pc090oj"):
+for name in ("maincpu", "pc080sn", "pc090oj", "audiocpu", "adpcm"):
     open(f"{out}/{name}.bin", "wb").write(load_region(romdir, name))
     print("wrote", f"{out}/{name}.bin")

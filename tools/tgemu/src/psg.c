@@ -26,8 +26,13 @@ void psg_shutdown(void)
 /* PSG emulation                                                            */
 /*--------------------------------------------------------------------------*/
 
+#include <stdlib.h>
+#include <stdio.h>
+FILE *psg_log;
 void psg_w(uint16 address, uint8 data)
 {
+    if (!psg_log && getenv("TGRUN_PSGLOG")) psg_log = fopen(getenv("TGRUN_PSGLOG"), "w");
+    if (psg_log) fprintf(psg_log, "%d %04x %02x\n", psg.select, address, data);
     switch(address)
     {
         case 0x0800: /* Channel select */
@@ -55,9 +60,21 @@ void psg_w(uint16 address, uint8 data)
             PSGCH.balance = data;
             break;
 
-        case 0x0806: /* Channel waveform data */
-            PSGCH.waveform[PSGCH.waveform_index] = data;
-            PSGCH.waveform_index = ((PSGCH.waveform_index + 1) & 0x1F);
+        case 0x0806: /* Channel waveform data, or a direct D/A level */
+            if((PSGCH.control & 0xC0) == 0xC0)
+            {
+                /* In D/A mode this sets the output level there and then; the
+                   waveform data is left alone. They are kept for the update,
+                   which spreads them evenly over the samples it makes: what
+                   feeds a D/A is a timer, so they do arrive evenly. */
+                if(PSGCH.dda_count < PSG_DDA_MAX)
+                    PSGCH.dda[PSGCH.dda_count++] = (data & 0x1F);
+            }
+            else
+            {
+                PSGCH.waveform[PSGCH.waveform_index] = data;
+                PSGCH.waveform_index = ((PSGCH.waveform_index + 1) & 0x1F);
+            }
             break;
 
         case 0x0807: /* Noise enable and frequency */
@@ -76,10 +93,11 @@ void psg_w(uint16 address, uint8 data)
 
 void psg_update(int16 *bufl, int16 *bufr, int length)
 {
+    int total = length, index = 0, ch;
+
     /* Fill as many samples as needed */
     while(length > 0)
     {
-        int ch;                    /* Channel index */
         int sample[2] = {0, 0};    /* Left and right samples */
         int start;                 /* Skip channels 0, 1 if LFO is enabled */ 
         int stop;                  /* Skip channels 4, 5 if noise is enabled */
@@ -89,6 +107,24 @@ void psg_update(int16 *bufl, int16 *bufr, int length)
 
         for(ch = start; ch < stop; ch += 1)
         {
+            /* If channel is ON and DDA is ON, play the levels written to it */
+            if((psg.channel[ch].control & 0xC0) == 0xC0)
+            {
+                int lbal = (psg.globalbalance >> 4) & 0x0F;
+                int rbal = (psg.globalbalance >> 0) & 0x0F;
+                int lchb = (psg.channel[ch].balance >> 4) & 0x0F;
+                int rchb = (psg.channel[ch].balance >> 0) & 0x0F;
+                int chvl = (psg.channel[ch].control & 0x1F);
+                int n = psg.channel[ch].dda_count;
+                int data;
+
+                if(n == 0) continue;
+                data = psg.channel[ch].dda[(index * n) / total];
+                sample[0] = (sample[0] + ((lbal + lchb + chvl) * data));
+                sample[1] = (sample[1] + ((rbal + rchb + chvl) * data));
+                continue;
+            }
+
             /* If channel is ON and DDA is OFF, play waveform data */
             if((psg.channel[ch].control & 0xC0) == 0x80)
             {
@@ -145,6 +181,10 @@ void psg_update(int16 *bufl, int16 *bufr, int length)
         *bufr++ = sample[1];
 
         /* Do next sample pair */
+        ++index;
         --length;
     }
+
+    /* The D/A levels have been played: wait for the next frame's */
+    for(ch = 0; ch < 6; ch += 1) psg.channel[ch].dda_count = 0;
 }
