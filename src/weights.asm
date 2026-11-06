@@ -78,10 +78,13 @@ weights_reset:	stz	wt_act
 weights_update:
 		lda	wt_act
 		bne	.run
-		lda	<cur_round		; (rounds 2 and 3: one weight each)
-		cmp	#1
-		beq	!+
+		lda	<cur_round		; (round 3: one; round 2: none, its marker
+		cmp	#3			; $45 makes none in the arcade's run from
+		bne	!+			; its restart at segment $28)
 		jmp	wt3_on
+!:		cmp	#2
+		bne	!+
+		rts
 !:		lda	<scroll_x + 1		; The camera in shaft 2 (x 9728 - 10239)
 		and	#$FE			; and up to y -744.
 		cmp	#>9728

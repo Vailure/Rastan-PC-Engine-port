@@ -15,15 +15,16 @@
 GARG_AHEAD	=	176
 GARG_WINDOW	=	196
 
-; Round 1's two; round 2's three and round 3's two (the bot through the
-; rounds, build/r2run.snp and r3run.snp: arcade slots 9 and 10, appearing as
+; Round 1's two; round 2's four and round 3's two (the bot through the
+; rounds, build/r2run.snp and r3run.snp, and round 2's castle from its restart
+; at segment $29: arcade slots 9 and 10, appearing as
 ; Rastan comes 176 px left of their spot, the same path as round 1's at first).
-garg_x_l:	db	<4608, <6841, <2041, <4601, <7418, <536, <2841
-garg_x_h:	db	>4608, >6841, >2041, >4601, >7418, >536, >2841
-garg_y_l:	db	<295, <167, <231, <361, <231, <231, <204
-garg_y_h:	db	>295, >167, >231, >361, >231, >231, >204
-garg_bit:	db	1, 2, 1, 2, 4, 1, 2
-gr_first:	db	0, 2, 5, 7		; (round n's: [n - 1] .. [n] - 1)
+garg_x_l:	db	<4608, <6841, <2041, <4601, <7418, <9735, <536, <2841
+garg_x_h:	db	>4608, >6841, >2041, >4601, >7418, >9735, >536, >2841
+garg_y_l:	db	<295, <167, <231, <361, <231, <112, <231, <204
+garg_y_h:	db	>295, >167, >231, >361, >231, >112, >231, >204
+garg_bit:	db	1, 2, 1, 2, 4, 8, 1, 2
+gr_first:	db	0, 2, 6, 8		; (round n's: [n - 1] .. [n] - 1)
 
 ; garg_spawn - a gargoyle (two special slots) when Rastan nears its spot.
 garg_spawn:

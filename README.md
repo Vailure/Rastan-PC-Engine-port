@@ -423,10 +423,11 @@ floor pokes where the bot can't cross a hazard; `R2RUN_POKES`, `R3RUN_POKES` in 
 - **Round 3's weight** (`src/weights.asm`, marker `$45` at x 9006, plate y 128): round 1's spiked-weight code with
   a per-round set (count, x, anchor offset, palette); it appears as the camera reaches x 8650, with round 1's clocks;
   a touch kills. Its colours (the arcade's `$4C`) in sprite palette 8, loaded then.
-- **Round 2's castle (estimates from its map's markers; the arcade runs never got past x 8533):** five flames
-  where markers `$4C`, `$52-$55` stand (x 9326-9614 at y 144, and 10158 by the lava at y 464), placed as round 3's
-  are from theirs; a spiked weight at x 8912 (marker `$45`), its plate under the ceiling above the marker (y 320),
-  as round 1's and round 3's are. Not placed: markers `$64`/`$65`, `$6A`/`$6B`, `$47`-`$49` (their objects unknown).
+- **Round 2's castle:** the arcade run from the round's start stops at x 8533, so the castle was run from the
+  arcade's restarts at segments `$28` and `$29`. Those runs show no flames at markers `$4C`, `$52-$54` and no
+  weight at marker `$45`, so none are placed; they do show a fourth gargoyle at (9735, 112), now in round 2's
+  table. One flame stays by the lava at (10158, 464), from marker `$55` as round 3's flames are from theirs (an
+  estimate: no run reaches it).
 - Round 3's first wide lava pit (x 4576-4735) is crossed on the vine that hangs over it, at (4646, 272) as the bot's
   run has it (census x - 23552 there: calibrated by Rastan's feet on the map's floors over the whole run).
 - **No torn frames:** the SATB is DMA'd at the start of VBLANK, before the object cell uploads, so `enemies_draw`
