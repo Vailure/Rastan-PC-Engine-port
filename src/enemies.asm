@@ -42,6 +42,7 @@ ES_ATTACK	=	2
 ES_RETREAT	=	3
 ES_DYING	=	4
 ES_HIDDEN	=	5		; Thinks but is not drawn.
+ES_DROP		=	6		; Falls in (e_timer frames, 2 px each), then walks.
 
 EK_LIZARD	=	0		; Kinds (e_kind).
 EK_BLUE		=	1
@@ -522,8 +523,9 @@ place_spawn:	ldx	<cur_round
 		lda	.bits, y
 		ply
 		and	place_done, x
-		bne	.next
-		lda	pl_x_l, y		; p_x - (x - 170) in 0 .. 189?
+		beq	!+
+		jmp	.next
+!:		lda	pl_x_l, y		; p_x - (x - 170) in 0 .. 189?
 		sec
 		sbc	#<PLACE_AHEAD
 		sta	<etmp
@@ -566,7 +568,21 @@ place_spawn:	ldx	<cur_round
 		phy
 		jsr	start_walk
 		ply
-		tya				; (done)
+		lda	pl_drop, y		; Drops in from above?
+		beq	!+
+		sta	e_timer, x
+		asl	a			; (2 px a frame)
+		sta	<etmp
+		sec
+		lda	e_yl, x
+		sbc	<etmp
+		sta	e_yl, x
+		lda	e_yh, x
+		sbc	#0
+		sta	e_yh, x
+		lda	#ES_DROP
+		sta	e_state, x
+!:		tya				; (done)
 		lsr	a
 		lsr	a
 		lsr	a
@@ -586,6 +602,11 @@ place_spawn:	ldx	<cur_round
 !:		rts
 .bits:		db	1, 2, 4, 8, 16, 32, 64, 128
 
+; Frames of falling in (2 px each) before the walker lands at its spot: round 2's
+; soldier hops down 32 px (build/r2c29), round 3's falls 96 px down the shaft.
+pl_drop:	db	0, 0, 0
+		db	0, 0, 0, 0, 0, 0, 0, 0, 0, 16
+		db	0, 0, 0, 48
 pl_first:	db	0, 3, 13, 17		; (round n's: [n - 1] .. [n] - 1)
 pl_kind:	db	EK_LIZARD, EK_BLUE, EK_BLUE
 		db	EK_LIZARD, EK_LIZARD, EK_SNAKE, EK_HORN, EK_LIZARD, EK_BLUE, EK_CHIM, EK_SNAKE, EK_WOMAN, EK_MACE
@@ -654,7 +675,21 @@ ZK_R3		=	* - zn_kinds
 ; ---------------------------------------------------------------------------
 ; enemy_think - X = slot.
 
-enemy_think:	lda	e_kind, x
+enemy_think:	lda	e_state, x
+		cmp	#ES_DROP
+		bne	!+
+		clc
+		lda	e_yl, x
+		adc	#2
+		sta	e_yl, x
+		bcc	.dr
+		inc	e_yh, x
+.dr:		dec	e_timer, x
+		bne	.dret
+		lda	#ES_WALK
+		sta	e_state, x
+.dret:		rts
+!:		lda	e_kind, x
 		cmp	#EK_CLUB
 		bne	!+
 		jmp	club_think

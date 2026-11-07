@@ -431,7 +431,7 @@ floor pokes where the bot can't cross a hazard; `R2RUN_POKES`, `R3RUN_POKES` in 
   arcade's restarts at segments `$28` and `$29`. Those runs show no flames at markers `$4C`, `$52-$54` and no
   weight at marker `$45`, so none are placed; they do show a castle soldier dropping in near the shaft (from (9735, 112) to the floor
   at y 144), and the run from round 3's segment `$41` one in its shaft (from (9643, -176) to y -80): placed walkers
-  at their landing spots (a mace soldier in round 2, a sword soldier in round 3; the port does not show the drop). The run from the shaft's restart (segment `$2A`) shows marker `$55`'s flame and fireball by the lava at
+  at their landing spots (a mace soldier in round 2, a sword soldier in round 3; they fall in, `ES_DROP`, 2 px a frame for `pl_drop` frames: 16 in round 2, 48 in round 3). The run from the shaft's restart (segment `$2A`) shows marker `$55`'s flame and fireball by the lava at
   (10155, 496); both are placed there. The runs from segments `$2B` and `$2C` meet no other objects.
 - Round 3's first wide lava pit (x 4576-4735) is crossed on the vine that hangs over it, at (4646, 272) as the bot's
   run has it (census x - 23552 there: calibrated by Rastan's feet on the map's floors over the whole run).
