@@ -87,7 +87,7 @@ def psg_notes(path):
             c[0] = d
         elif a == 0x803:
             c[1] = d & 15
-        elif a == 0x804 and (d & 0x80):
+        elif a == 0x804 and (d & 0x80) and (d & 31):    # (a silent note is volume 0, channel left on)
             out.append((n, ch, (c[1] << 8) | c[0], d & 31))
     return out
 
@@ -164,8 +164,17 @@ for cp, track, name in ((4, 'SND_CASTLE', 'castle'), (6, 'SND_BOSS', 'boss room'
     keys = [40, 90, SEL] + sum([[100 + 6 * k, 100 + 6 * k, RIGHT] for k in range(cp)], []) + [150, 150, I]
     run(god, 900, keys, psg=psg)   # (each tune starts with the arcade's own lead-in)
     played = [(ch, p, v) for _, ch, p, v in psg_notes(psg)]
-    want = [(ch, p, v) for _, ch, p, v in stream(equ(track))[:4]]
-    ok = any(played[i:i + len(want)] == want for i in range(len(played)))
+    want = [(ch, p, v) for _, ch, p, v in stream(equ(track))[:3]]   # (channels 4 and 5 may be an effect's)
+    def lead_in(i):         # (the tune's first notes in order; an effect may sound between them)
+        j = i
+        for w_ in want:
+            while j < len(played) and played[j] != w_:
+                j += 1
+            if j == len(played):
+                return False
+            j += 1
+        return j - i < 4 * len(want)
+    ok = any(played[i] == want[0] and lead_in(i) for i in range(len(played)))
     check(f'the {name} plays its own tune', ok, f'wanted {want[:2]}, got {played[-4:]}')
 
 # 5. Jumping and dying play the arcade's voice samples on channel 5's direct D/A:

@@ -20,7 +20,7 @@
 ;
 ; ***************************************************************************
 
-SND_FIRST_SFX_CH =	4		; Effects take channels 4 and 5.
+; An effect takes the two music channels that are quietest when it starts.
 
 		.zp
 snd_ptr:	ds	2		; Music stream, in MPR3/MPR4 ($6000-$9FFF).
@@ -33,10 +33,15 @@ sfx_bank:	ds	1
 sfx_wait:	ds	1
 sfx_on:		ds	1
 snd_tmp:	ds	1
+sfx_pass:	ds	1
+sfx_best:	ds	1
+sfx_bi:		ds	1
 snd_ch:		ds	1
 sfx_f0:		ds	1
 sfx_f1:		ds	1
 sfx_v:		ds	1
+sfx_c0:		ds	1		; The PSG channels the effect has (its stream's 4 and 5).
+sfx_c1:		ds	1
 snd_wp:		ds	2		; The wave being loaded (in the tune's table).
 snd_wbank:	ds	1		; The bank of the tune's wave table ($6000 there: 8 x 32).
 psg_ar:		ds	1		; The channel PSG_AR is left selecting: the port
@@ -144,9 +149,50 @@ sound_sfx:	cmp	#SND_SFX_COUNT
 		lda	snd_sfx_hi, x
 		sta	<sfx_ptr + 1
 		stz	<sfx_wait
+		lda	<sfx_on			; (one running: its channels go back first)
+		beq	!+
+		jsr	sfx_release
+!:		jsr	sfx_pick
 		lda	#1
 		sta	<sfx_on
 .r:		rts
+
+; sfx_pick - sfx_c0/sfx_c1 = the two quietest channels (a voice's is skipped). Its own
+; variables: the music tick, in the interrupt, uses the others.
+sfx_pick:	lda	#$FF
+		sta	<sfx_c0
+		lda	#2			; Two passes.
+		sta	<sfx_pass
+.pass:		lda	#$FF
+		sta	<sfx_best
+		ldx	#5			; (from the top: ties go to 4 and 5)
+.look:		cpx	#VOICE_CH
+		bne	!+
+		lda	<voice_on
+		bne	.next
+!:		cpx	<sfx_c0			; (the first pass's)
+		beq	.next
+		lda	snd_vol, x
+		cmp	<sfx_best
+		bcs	.next
+		sta	<sfx_best
+		stx	<sfx_bi
+.next:		dex
+		bpl	.look
+		lda	<sfx_bi
+		dec	<sfx_pass
+		beq	!+
+		sta	<sfx_c0
+		bra	.pass
+!:		sta	<sfx_c1
+		rts
+
+; sfx_release - give the music its channels back.
+sfx_release:	stz	<sfx_on
+		ldx	<sfx_c0
+		jsr	snd_write_ch
+		ldx	<sfx_c1
+		jmp	snd_write_ch
 
 ; sound_sfx_p - the same with X, Y and A kept (for the code that is working on a slot).
 sound_sfx_p:	phx
@@ -209,10 +255,12 @@ music_tick:	lda	<snd_wait
 		bcc	.skip
 		jsr	snd_read_ch		; Into snd_freq_*/snd_vol, then play it
 		ldx	<snd_ch			; unless an effect has the channel.
-		cpx	#SND_FIRST_SFX_CH
-		bcc	!+
 		lda	<sfx_on
-		bne	.skip
+		beq	!+
+		cpx	<sfx_c0
+		beq	.skip
+		cpx	<sfx_c1
+		beq	.skip
 !:		ldx	<snd_ch
 		jsr	snd_write_ch
 .skip:		inc	<snd_ch
@@ -255,19 +303,17 @@ sfx_tick:	lda	<sfx_wait
 		stz	<snd_ch
 .each:		lsr	<snd_tmp
 		bcc	.skip
-		ldx	<snd_ch			; (its own channels: write them through)
-		jsr	sfx_read_ch
+		ldx	<sfx_c0			; (its own channels: write them through;
+		lda	<snd_ch			; the stream's 4 and 5)
+		cmp	#5
+		bne	!+
+		ldx	<sfx_c1
+!:		jsr	sfx_read_ch
 .skip:		inc	<snd_ch
 		lda	<snd_tmp
 		bne	.each
 		bra	.byte
-.done:		stz	<sfx_on			; Give the music its channels back.
-		ldx	#SND_FIRST_SFX_CH
-!:		jsr	snd_write_ch
-		inx
-		cpx	#6
-		bne	!-
-		rts
+.done:		jmp	sfx_release		; Give the music its channels back.
 
 ; snd_read_ch - three stream bytes into the music's record of channel snd_ch.
 snd_read_ch:	ldx	<snd_ch
@@ -308,10 +354,8 @@ sfx_read_ch:	lda	[sfx_ptr]
 		lsr	a
 		and	#7
 		jsr	snd_wave
-		lda	<sfx_f1
-		bpl	!+			; Bit 7: strike the note again.
-		stz	PSG_CTRL
-!:		and	#$0F
+		lda	<sfx_f1			; (a new note does not restart the wave: that clicks)
+		and	#$0F
 		sta	PSG_FREQ_HI
 		lda	<sfx_f0
 		sta	PSG_FREQ_LO
@@ -320,7 +364,8 @@ sfx_read_ch:	lda	[sfx_ptr]
 		sta	PSG_CTRL
 		plp
 .r:		rts
-.off:		stz	PSG_CTRL
+.off:		lda	#$80
+		sta	PSG_CTRL
 		plp
 		rts
 
@@ -374,9 +419,7 @@ snd_write_ch:	cpx	#VOICE_CH
 		and	#7
 		jsr	snd_wave
 		lda	snd_freq_h, x
-		bpl	!+			; Bit 7: strike the note again, which
-		stz	PSG_CTRL		; restarts the waveform.
-!:		and	#$0F
+		and	#$0F
 		sta	PSG_FREQ_HI
 		lda	snd_freq_l, x
 		sta	PSG_FREQ_LO
@@ -385,7 +428,8 @@ snd_write_ch:	cpx	#VOICE_CH
 		sta	PSG_CTRL
 		plp
 .r:		rts
-.off:		stz	PSG_CTRL
+.off:		lda	#$80			; Silent: volume 0 with the channel on (switching it
+		sta	PSG_CTRL		; off at a nonzero level pops).
 		plp
 		rts
 
