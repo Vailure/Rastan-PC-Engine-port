@@ -37,6 +37,8 @@ snd_ch:		ds	1
 sfx_f0:		ds	1
 sfx_f1:		ds	1
 sfx_v:		ds	1
+snd_wp:		ds	2		; The wave being loaded (in the tune's table).
+snd_wbank:	ds	1		; The bank of the tune's wave table ($6000 there: 8 x 32).
 psg_ar:		ds	1		; The channel PSG_AR is left selecting: the port
 				; cannot be read, and the voice interrupt has to
 				; put it back (src/voice.asm).
@@ -45,6 +47,7 @@ psg_ar:		ds	1		; The channel PSG_AR is left selecting: the port
 snd_freq_l:	ds	6		; What the music last set each channel to, so an
 snd_freq_h:	ds	6		; effect can hand 4 and 5 back.
 snd_vol:	ds	6
+snd_wcur:	ds	6		; The wave each channel holds (0-6 the tune's, 7 the effects').
 
 		.code
 
@@ -54,6 +57,8 @@ snd_vol:	ds	6
 sound_init:	stz	<snd_track
 		stz	<sfx_on
 		stz	<snd_acc
+		lda	snd_music_bank		; (the first tune's table, for effects)
+		sta	<snd_wbank
 		php
 		sei
 		lda	#$FF			; Main volume, both sides.
@@ -73,6 +78,8 @@ sound_init:	stz	<snd_track
 		bne	.wave
 		stz	PSG_CTRL
 		stz	snd_vol, x
+		lda	#7
+		sta	snd_wcur, x
 		inx
 		cpx	#6
 		bne	.ch
@@ -96,6 +103,7 @@ sound_music:	cmp	#SND_MUSIC_COUNT
 		sta	<snd_track
 		lda	snd_music_bank, x
 		sta	<snd_bank
+		sta	<snd_wbank		; (the waves are at the start of the tune's bank)
 		lda	snd_music_lo, x
 		sta	<snd_ptr
 		lda	snd_music_hi, x
@@ -139,6 +147,16 @@ sound_sfx:	cmp	#SND_SFX_COUNT
 		lda	#1
 		sta	<sfx_on
 .r:		rts
+
+; sound_sfx_p - the same with X, Y and A kept (for the code that is working on a slot).
+sound_sfx_p:	phx
+		phy
+		pha
+		jsr	sound_sfx
+		pla
+		ply
+		plx
+		rts
 
 ; ---------------------------------------------------------------------------
 ; sound_update - once a frame (in VBLANK). The streams run at the arcade
@@ -283,6 +301,13 @@ sfx_read_ch:	lda	[sfx_ptr]
 		stx	<psg_ar
 		lda	<sfx_v
 		beq	.off
+		lda	<sfx_f1			; Its wave (bits 4-6).
+		lsr	a
+		lsr	a
+		lsr	a
+		lsr	a
+		and	#7
+		jsr	snd_wave
 		lda	<sfx_f1
 		bpl	!+			; Bit 7: strike the note again.
 		stz	PSG_CTRL
@@ -299,6 +324,36 @@ sfx_read_ch:	lda	[sfx_ptr]
 		plp
 		rts
 
+; snd_wave - A = the wave the channel should hold, X = channel (PSG_AR
+; selected, interrupts off): load it from the tune's table if it is not there.
+snd_wave:	cmp	snd_wcur, x
+		beq	.r
+		sta	snd_wcur, x
+		phy
+		stz	PSG_CTRL
+		asl	a			; x 32
+		asl	a
+		asl	a
+		asl	a
+		asl	a
+		sta	<snd_wp
+		lda	#$60
+		sta	<snd_wp + 1
+		tma3				; (the table is at the start of a bank
+		pha				; that the stream may have left)
+		lda	<snd_wbank
+		tam3
+		cly
+!:		lda	[snd_wp], y
+		sta	PSG_WAVEFORM
+		iny
+		cpy	#32
+		bne	!-
+		pla
+		tam3
+		ply
+.r:		rts
+
 ; snd_write_ch - X = channel: play what the music last set there.
 snd_write_ch:	cpx	#VOICE_CH
 		bne	!+
@@ -311,6 +366,13 @@ snd_write_ch:	cpx	#VOICE_CH
 		lda	snd_vol, x
 		beq	.off
 		pha
+		lda	snd_freq_h, x		; The patch's wave (bits 4-6).
+		lsr	a
+		lsr	a
+		lsr	a
+		lsr	a
+		and	#7
+		jsr	snd_wave
 		lda	snd_freq_h, x
 		bpl	!+			; Bit 7: strike the note again, which
 		stz	PSG_CTRL		; restarts the waveform.

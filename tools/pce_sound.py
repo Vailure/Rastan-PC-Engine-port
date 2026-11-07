@@ -52,8 +52,129 @@ EFFECTS = [
     ('DIE', 0x0d, 150),           # Rastan dies
     ('HIT', 0x07, 60),            # an enemy struck, not killed ($044804; $08 for some kinds)
     ('HURT', 0x0c, 60),           # Rastan hit ($0555B8, $05560C)
+    ('LEAP', 0x0b, 60),           # the FM half of a jump ($051584; the voice is $0a)
+    ('BOSSHIT', 0x08, 60),        # a boss struck ($04483C: $07 or $08 by the kind; the boss runs: sim/scripts/boss.txt)
+    ('WEIGHT', 0x12, 90),         # a spiked weight's landing ($043ABC; sim/scripts/weights.txt)
+    ('GARG', 0x14, 150),          # a gargoyle coming ($045396; sim/scripts/gargoyle.txt)
+    ('BREATH', 0x16, 90),         # a chimera's breath ($0425F0; sim/scripts/chimera.txt: handler $0a, every 135-144 frames)
+    ('FLAMES', 0x18, 120),        # the lava hall's fire ($04413E; sim/scripts/hall.txt, every 540 frames)
 ]
 NCH = 6
+VOL_STEP = 2             # the stream keeps a level until it has moved this many PSG steps (3 dB)
+
+
+# ---------------------------------------------------------------------------
+# Timbre. A PSG channel plays one 32-step wave; the FM voice behind a note is a
+# patch of four operators. Each patch is rendered once, at a steady note, into
+# a wave of its own, so a bell, a bass and a brass sound differ as they do on
+# the arcade's board instead of all being the one soft square.
+#
+# Registers (per channel ch, operator slot s = 0..3 in the chip's order M1, M2,
+# C1, C2, which are operators 1, 3, 2, 4 in the usual naming):
+#   $20+ch     bits 3-5 feedback, 0-2 algorithm
+#   $40+s*8+ch bits 0-3 MUL (0 is a half; used as 1 here, the wave being one cycle)
+#   $60+s*8+ch TL, 0.75 dB a step
+SLOT_OP = (0, 2, 1, 3)                          # slot -> 0-based operator (op1..op4)
+# Per algorithm: who modulates whom (operator -> its modulators), and the carriers.
+ALGS = {
+    0: ({1: [0], 2: [1], 3: [2]}, [3]),
+    1: ({2: [0, 1], 3: [2]}, [3]),
+    2: ({2: [1], 3: [0, 2]}, [3]),
+    3: ({1: [0], 3: [1, 2]}, [3]),
+    4: ({1: [0], 3: [2]}, [1, 3]),
+    5: ({1: [0], 2: [0], 3: [0]}, [1, 2, 3]),
+    6: ({1: [0]}, [1, 2, 3]),
+    7: ({}, [0, 1, 2, 3]),
+}
+FB_INDEX = [0, 1 / 16, 1 / 8, 1 / 4, 1 / 2, 1, 2, 4]    # x pi
+WAVE_N = 32
+OVER = 8                                         # oversampling before the wave is cut to 32 steps
+
+
+def patch_key(reg, ch):
+    """What makes two notes sound alike: the algorithm, the feedback, each operator's
+    multiple, the modulators' levels and the carriers' levels relative to the loudest
+    (the loudness itself is the stream's volume)."""
+    alg = reg[0x20 + ch] & 7
+    fb = (reg[0x20 + ch] >> 3) & 7
+    mul = [reg[0x40 + s * 8 + ch] & 15 for s in range(4)]
+    tl = [reg[0x60 + s * 8 + ch] & 127 for s in range(4)]
+    carriers = ALGS[alg][1]
+    cs = [SLOT_OP.index(c) for c in carriers]            # the slots that are carriers
+    low = min(tl[s] for s in cs)
+    rel = [(t - low if s in cs else t) for s, t in enumerate(tl)]
+    return (alg, fb, tuple(m & 15 for m in mul), tuple(min(r, 63) for r in rel))
+
+
+def render_wave(key):
+    """A patch's steady-state cycle as WAVE_N PSG levels 0-31."""
+    import math
+    alg, fb, mul, rel = key
+    mods, carriers = ALGS[alg]
+    n = WAVE_N * OVER
+    amp = [0.0] * 4          # per operator (op1..op4)
+    mulop = [1] * 4
+    for s in range(4):
+        op = SLOT_OP[s]
+        amp[op] = 10 ** (-0.75 * rel[s] / 20.0) if rel[s] < 63 else 0.0
+        mulop[op] = max(1, mul[s])
+    out = [0.0] * n
+    prev = [0.0, 0.0]        # op1's last two outputs, across cycles
+    beta_fb = FB_INDEX[fb] * math.pi
+    for cycle in range(4):   # settle the feedback
+        for i in range(n):
+            ph = 2 * math.pi * i / n
+            o = [0.0] * 4
+            for op in range(4):
+                m = sum(o[j] for j in mods.get(op, []))
+                x = ph * mulop[op] + 4 * math.pi * m
+                if op == 0 and fb:
+                    x += beta_fb * (prev[0] + prev[1]) / 2
+                o[op] = amp[op] * math.sin(x)
+            prev = [o[0], prev[0]]
+            out[i] = sum(o[c] for c in carriers)
+    # Band-limit to the harmonics 32 steps can hold (1-15, the top ones eased down) and
+    # cut to WAVE_N steps, so the high partials of a bright patch do not fold back as noise.
+    import numpy as np
+    sp = np.fft.rfft(np.array(out))
+    keep = np.zeros(WAVE_N // 2 + 1, complex)
+    for k in range(1, WAVE_N // 2):
+        keep[k] = sp[k] * (1.0 if k <= 8 else 1.0 - 0.7 * (k - 8) / 7.0)
+    w = [float(v) for v in np.fft.irfft(keep, WAVE_N)]
+    peak = max(abs(v) for v in w) or 1.0
+    return tuple(max(0, min(31, int(round(15.5 + 15.5 * v / peak)))) for v in w)
+
+
+DEFAULT_WAVE = (16, 19, 22, 25, 27, 29, 30, 31, 31, 31, 30, 29, 27, 25, 22, 19,
+                16, 13, 10, 7, 5, 3, 2, 1, 1, 1, 2, 3, 5, 7, 10, 13)   # src/sound.asm's
+
+
+def wave_table(weights):
+    """weights: {patch key: ticks sounding}. Returns ({key: index 0-6}, 256 bytes): at
+    most seven waves (index 7 is the default for effects), the lightest merged into the
+    nearest heavier one."""
+    waves = {k: render_wave(k) for k in weights}
+    groups = {}                      # wave -> [keys, weight]
+    for k, w in waves.items():
+        g = groups.setdefault(w, [[], 0])
+        g[0].append(k)
+        g[1] += weights[k]
+    while len(groups) > 7:
+        light = min(groups, key=lambda w: groups[w][1])
+        rest = [w for w in groups if w != light]
+        near = min(rest, key=lambda w: sum((a - b) ** 2 for a, b in zip(w, light)))
+        groups[near][0] += groups[light][0]
+        groups[near][1] += groups[light][1]
+        del groups[light]
+    order = sorted(groups, key=lambda w: -groups[w][1])
+    index = {}
+    for i, w in enumerate(order):
+        for k in groups[w][0]:
+            index[k] = i
+    blob = bytearray()
+    for i in range(8):
+        blob += bytes(order[i] if i < len(order) else DEFAULT_WAVE) if i < 7 else bytes(DEFAULT_WAVE)
+    return index, bytes(blob)
 
 
 def capture(snd, audio, adpcm, cmd, nframes, tmp, chans=range(NCH), per_tick=True):
@@ -72,8 +193,8 @@ def capture(snd, audio, adpcm, cmd, nframes, tmp, chans=range(NCH), per_tick=Tru
         row, note = [], []
         for ch in chans:
             on, hz, level = chip.state(ch)
-            row.append((on and level > 0, hz, level, ch in keyed))
-            note.append((chip.reg[0x28 + ch], chip.reg[0x30 + ch], on, ch in keyed))
+            row.append((on and level > 0, hz, level, ch in keyed, patch_key(chip.reg, ch)))
+            note.append((chip.reg[0x28 + ch], chip.reg[0x30 + ch], chip.on[ch], ch in keyed))
         rows.append(row)
         notes.append(tuple(note))
     return rows, notes
@@ -98,10 +219,10 @@ def states(rows, first=0):
     """Per frame, the channels as (period, volume, struck), from stream channel `first`."""
     out = []
     for row in rows:
-        chans = [(0, 0, False)] * first
-        chans += [(period(hz) if on else 0, volume(level) if on else 0, key)
-                  for on, hz, level, key in row]
-        out.append(chans + [(0, 0, False)] * (NCH - len(chans)))
+        chans = [(0, 0, False, None)] * first
+        chans += [(period(hz) if on else 0, volume(level) if on else 0, key, wk)
+                  for on, hz, level, key, wk in row]
+        out.append(chans + [(0, 0, False, None)] * (NCH - len(chans)))
     return out
 
 
@@ -124,10 +245,10 @@ def find_loop(notes, window=600):
     return None
 
 
-def encode(st, loop=None):
+def encode(st, loop=None, index=None):
     """Event stream: only what changes, with a wait count between changes."""
     out = bytearray()
-    prev = [(0, 0)] * NCH
+    prev = [(0, 0, 7 if index is None else 0)] * NCH
     wait = 0
     loop_at = None
     for i, row in enumerate(st):
@@ -137,11 +258,17 @@ def encode(st, loop=None):
                 wait = 0
             loop_at = len(out)
         mask, body = 0, bytearray()
-        for ch, (p, v, key) in enumerate(row):
-            if (p, v) != prev[ch] or (key and v):
+        for ch, (p, v, key, wk) in enumerate(row):
+            w = 7 if index is None else index.get(wk, 7)    # (the wave table's entry)
+            if not v:
+                w = prev[ch][2]                              # (a silent channel keeps its wave)
+            pp, pv, pw = prev[ch]
+            if p == pp and w == pw and v and pv and abs(v - pv) < VOL_STEP and not key:
+                v = pv                      # (an envelope's small slides ride on the held level)
+            if (p, v, w) != prev[ch] or (key and v):
                 mask |= 1 << ch
-                body += bytes([p & 0xff, ((p >> 8) & 0x0f) | (0x80 if key else 0), v])
-                prev[ch] = (p, v)
+                body += bytes([p & 0xff, ((p >> 8) & 0x0f) | (w << 4) | (0x80 if key else 0), v])
+                prev[ch] = (p, v, w)
         if not mask:
             wait += 1
             if wait == 128:
@@ -177,11 +304,20 @@ def main():
         if loop:
             st = st[:loop[0] + loop[1]]   # the way in, then one pass of the loop
         elif not loops:
-            while st and all(v == 0 for _, v, _ in st[-1]):
+            while st and all(v == 0 for _, v, *_ in st[-1]):
                 st.pop()                  # (a jingle: up to its last note)
-        data, loop_at = encode(st, loop)
+        weights = {}
+        for row in st:
+            for p_, v_, _, wk in row:
+                if v_:
+                    weights[wk] = weights.get(wk, 0) + 1
+        index, wtab = wave_table(weights)
+        data, loop_at = encode(st, loop, index)
         if not loops:
             data = data[:-1] + b'\xfe'
+        while len(blob) % 8192:
+            blob.append(0)                # (a tune starts on a bank: its waves are at the bank's start)
+        blob += wtab
         entries.append((name, 'M', len(blob), loop_at))
         blob += data
         print(f'{name}: command ${cmd:02x}, {len(st)} ticks, {len(data)} bytes'
@@ -189,7 +325,7 @@ def main():
     for name, cmd, nframes in EFFECTS:
         rows, _ = capture(snd, audio, adpcm, cmd, nframes, tmp, range(6, 8))
         st = states(rows, first=4)
-        while st and all(v == 0 for _, v, _ in st[-1]):
+        while st and all(v == 0 for _, v, *_ in st[-1]):
             st.pop()                      # trim the silence after it
         data, _ = encode(st)
         entries.append((name, 'E', len(blob), None))

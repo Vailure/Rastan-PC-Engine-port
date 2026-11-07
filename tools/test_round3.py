@@ -127,8 +127,10 @@ check('the wizard appears at x 256 of the room, y 384', come and pos(r[come], SP
 land = next((i for i in range(come or b, len(r)) if pos(r[i], SPEC)[1] == 448), None) if come else None
 check('it drops to the floor (448) after standing 57 frames', land and 56 <= land - come <= 100,
       f'landed {land and land - come} frames after it came')
-fans = [i for i in range(1, len(r)) if sum(1 for k in range(9, 17) if r[i]['e_state'][k] and r[i]['e_kind'][k] == EK_WFIRE
-                                          and not r[i - 1]['e_state'][k]) == 5]
+# (A frame's sample can fall in the middle of the spawn: a fan is counted across two frames.)
+newf = [0] + [sum(1 for k in range(9, 17) if r[i]['e_state'][k] and r[i]['e_kind'][k] == EK_WFIRE
+                  and not r[i - 1]['e_state'][k]) for i in range(1, len(r))] + [0]
+fans = [i for i in range(1, len(r)) if newf[i] and not newf[i - 1] and newf[i] + newf[i + 1] == 5]
 check('309 frames after landing, then 137 later, a fan of five fireballs',
       land and [f - land for f in fans][:2] == [309 + 17, 309 + 137 + 17], f'fans at {[f - land for f in fans] if land else fans}')
 

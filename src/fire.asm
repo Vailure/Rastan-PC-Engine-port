@@ -19,6 +19,7 @@ FIRE_VRAM	=	R1_FIRE_TILE0 << 4
 		.zp
 fire_t:		ds	1		; Frame count: the phase is bits 2-3.
 fire_on:	ds	1		; The tiles are in VRAM (bg_palettes clears it).
+fire_s:		ds	2		; Frames since the hall's last roar (the arcade's $18, every 540).
 
 		.code
 
@@ -36,7 +37,20 @@ fire_update:
 		cla
 		bra	fire_phase
 	.else
-		inc	<fire_t
+		inc	<fire_s
+		bne	!+
+		inc	<fire_s + 1
+!:		lda	<fire_s + 1
+		cmp	#>540
+		bcc	!+
+		lda	<fire_s
+		cmp	#<540
+		bcc	!+
+		stz	<fire_s
+		stz	<fire_s + 1
+		lda	#SFX_FLAMES
+		jsr	sound_sfx
+!:		inc	<fire_t
 		lda	<fire_on		; (just loaded: the tiles at once)
 		beq	!+
 		lda	<fire_t

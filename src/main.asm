@@ -922,13 +922,13 @@ data12_end:
 
 		.bank	OBJ_FREE_BANK		; (after the object data)
 		.page	3
-snd_data:	incbin	"sound.bin"		; Music and effects (build/sound, 6 banks).
+snd_data:	incbin	"sound.bin"		; Music and effects (build/sound, 10 banks).
 
-		.bank	OBJ_FREE_BANK + 6
+		.bank	OBJ_FREE_BANK + 10
 		.page	3
 voice_data:	incbin	"voice.bin"		; Jump and death voices (build/voice, 3 banks).
 
-		.bank	OBJ_FREE_BANK + 9
+		.bank	OBJ_FREE_BANK + 13
 		.page	3
 still_ending:	incbin	"ending.bin"		; The round-clear screen (build/still).
 

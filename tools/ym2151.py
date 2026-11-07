@@ -30,30 +30,105 @@ def frequency(kc, kf):
     return 440.0 * 2 ** ((semi - A4 + (kf >> 2) / 64.0) / 12.0)
 
 
+# The envelope generator. Attenuation is in 1/10.7 dB units (a TL step is 8 of them, 1023 is
+# silent). One driver tick (about 18.3 ms) is 342 envelope ticks of 53.6 us (3 chip samples).
+EG_PER_TICK = 342.0
+STEPS = [0.5, 0.625, 0.75, 0.875]      # the mean increment of a rate's four-step pattern
+
+
+def eg_units(rs):
+    """Attenuation units a rate (0-63) moves in one driver tick."""
+    if rs <= 0:
+        return 0.0
+    q, r = rs >> 2, rs & 3
+    return STEPS[r] * 2.0 ** (q - 11) * EG_PER_TICK
+
+
 class Chip:
-    """The register file, and the state of each channel as the driver leaves it."""
+    """The register file, and the state of each channel as the driver leaves it.
+
+    `tick()` (once per driver tick) moves each operator's envelope: attack, the first and
+    second decay and the release, from the rates in $80-$FF, so a note decays and rings
+    off as the chip's own would."""
 
     def __init__(self):
         self.reg = [0] * 256
         self.on = [False] * 8
+        self.att = [[1023.0] * 4 for _ in range(8)]
+        self.key = [[False] * 4 for _ in range(8)]
+        self.phase = [['rel'] * 4 for _ in range(8)]
 
     def write(self, r, v):
         self.reg[r] = v
         if r == 0x08:
-            self.on[v & 7] = (v & 0x78) != 0
+            ch = v & 7
+            self.on[ch] = (v & 0x78) != 0
+            for s in range(4):
+                k = bool(v & (8 << s))
+                if k and not self.key[ch][s]:
+                    self.phase[ch][s] = 'atk'
+                elif not k and self.key[ch][s]:
+                    self.phase[ch][s] = 'rel'
+                self.key[ch][s] = k
+
+    def _rks(self, ch, ks):
+        kc = self.reg[0x28 + ch]
+        return (((kc >> 4) & 7) * 4 + ((kc & 15) >> 2)) >> (3 - ks)
+
+    def tick(self):
+        for ch in range(8):
+            for s in range(4):
+                ph = self.phase[ch][s]
+                if ph == 'off':
+                    continue
+                o = s * 8 + ch
+                ar, ks = self.reg[0x80 + o] & 31, self.reg[0x80 + o] >> 6
+                d1r, d2r = self.reg[0xa0 + o] & 31, self.reg[0xc0 + o] & 31
+                d1l, rr = self.reg[0xe0 + o] >> 4, self.reg[0xe0 + o] & 15
+                rks = self._rks(ch, ks)
+                a = self.att[ch][s]
+                if ph == 'atk':
+                    rs = min(63, 2 * ar + rks) if ar else 0
+                    if rs >= 62:
+                        a = 0.0
+                    elif rs:
+                        a -= max(1.0, a) * eg_units(rs) * 0.06     # (exponential: faster while loud)
+                    if a <= 1.0 and rs:
+                        a = 0.0
+                    if a <= 0.0:
+                        ph = 'd1'
+                elif ph == 'd1':
+                    a += eg_units(min(63, 2 * d1r + rks) if d1r else 0)
+                    if a >= (31 if d1l == 15 else d1l) * 32:
+                        ph = 'd2'
+                elif ph == 'd2':
+                    a += eg_units(min(63, 2 * d2r + rks) if d2r else 0)
+                else:
+                    a += eg_units(min(63, 4 * rr + 2 + rks))
+                if a >= 1023:
+                    a, ph = 1023.0, ('rel' if ph == 'rel' else ph)
+                    if ph == 'rel':
+                        ph = 'off'
+                self.att[ch][s], self.phase[ch][s] = a, ph
+
+    def sounding(self, ch):
+        """Keyed, or still ringing out: some carrier has not faded away."""
+        alg = self.reg[0x20 + ch] & 7
+        return any(self.att[ch][s] < 1000 and self.phase[ch][s] != 'off' for s in CARRIERS[alg])
 
     def level(self, ch):
-        """0 (silent) .. 127 (loudest), from the loudest carrier (they sum)."""
+        """0 (silent) .. 127 (loudest), from the loudest carrier (they sum), its TL plus
+        its envelope's attenuation."""
         alg = self.reg[0x20 + ch] & 7
-        tl = [self.reg[0x60 + op * 8 + ch] & 127 for op in CARRIERS[alg]]
-        return 127 - min(tl)
+        tl = [(self.reg[0x60 + op * 8 + ch] & 127) + self.att[ch][op] / 8.0 for op in CARRIERS[alg]]
+        return max(0, int(127 - min(tl)))
 
     def pan(self, ch):
         return (self.reg[0x20 + ch] >> 6) & 3
 
     def state(self, ch):
         """(sounding, Hz, level) for one channel."""
-        return self.on[ch], frequency(self.reg[0x28 + ch], self.reg[0x30 + ch]), self.level(ch)
+        return self.sounding(ch), frequency(self.reg[0x28 + ch], self.reg[0x30 + ch]), self.level(ch)
 
     def noise(self):
         """(on, period 0-31): channel 7's operator 4 is a noise source when enabled."""
@@ -75,6 +150,7 @@ def frames(path, per_tick=False):
         if not p or p[0] == ';':
             continue
         if p[0] == 'F' and not per_tick or p[0] == 'T' and per_tick:
+            chip.tick()
             if frame is not None:
                 yield frame, chip, keyed, adpcm
             frame = (int(p[1]) if p[0] == 'F' else (frame or 0) + 1)

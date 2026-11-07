@@ -977,7 +977,9 @@ enter_catk:	lda	#SFX_SWING
 		jmp	set_anim
 
 ; start_jump: UP held = high jump; a direction held = forward jump.
-start_jump:	lda	#VOICE_JUMP		; The arcade's grunt (an ADPCM voice
+start_jump:	lda	#SFX_LEAP		; (the FM half, $0b)
+		jsr	sound_sfx
+		lda	#VOICE_JUMP		; The arcade's grunt (an ADPCM voice
 		jsr	voice_play		; there, not an FM effect).
 		stz	<p_jdir
 		bbr5	<pad, !+

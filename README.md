@@ -544,8 +544,28 @@ Each tune and effect becomes a stream of per-channel PSG periods and volumes; `s
 plays it on the PSG's 6 channels, pacing itself with an 8.8 fixed-point tick counter, with an
 effect borrowing channels 4 and 5 and handing them back when it ends.
 
-What is lost: each FM voice becomes one PSG waveform (one shared 32-step wave), and notes below the
-PSG's range move up an octave.
+**Timbre.** Each FM patch (algorithm, feedback, the four operators' multiples and levels) is rendered once at
+a steady note into a 32-step PSG wave (`render_wave`: the operators' phase modulation as the YM2151 does it,
+band-limited to the 15 harmonics 32 steps can hold). A tune keeps its seven heaviest waves (the rest merge into
+the nearest), in a table of 8 x 32 bytes at the start of the tune's first bank (a tune starts on a bank; slot 7
+is the old soft square, which the effects use). The stream's note events carry the wave in bits 4-6 of the
+period's high byte; `snd_wave` loads it into the channel when it differs from the one held
+(`snd_wcur`). An effect that borrowed channels 4 and 5 hands them back with the music's wave reloaded.
+
+**Which tune.** The arcade picks it in `$0506A2`: the boss room's `$1C` (round 6's `$1D`), the castle's `$1B`
+from 16 squares into a round, else `$1A`: the same three for every round, as the port plays them
+(`music_here`).
+
+**Effects** (the commands the main CPU sends while the arcade plays, decoded from its sound-latch writes
+with the return addresses: `sim/scripts/*.txt`): `$09` swing, `$0A` jump voice with `$0B` its FM half, `$0C`
+hurt, `$0D` death cry, `$10` an enemy dies, `$07`/`$08` a blow that does not kill (`$08`: the bosses),
+`$12` a spiked weight landing, `$14` a gargoyle coming, `$15` a weapon taken, `$16` a chimera's breath,
+`$17` the cave block, `$18` the lava hall's roar every 540 frames. Seen but not wired, because the port has
+no event they match yet: `$0E`/`$0F` (the table at `$054EC6`), `$11` (follows `$0B` by a frame), `$13` (a crash
+with a screen shake of 8, from markers `$4C`, `$55`, `$67` and the boss), `$06`, `$23`, `$2A`, `$2B`.
+
+What is lost: the envelopes (a note's decay and its modulators' fading are not followed; only the carriers'
+levels are), vibrato, noise, and notes below the PSG's range move up an octave.
 
 **Voices** (`tools/pce_voice.py`, `src/voice.asm`). Rastan's jump grunt and death cry (commands `$0A`
 and `$0D`) are MSM5205 ADPCM samples, not FM. The ADPCM ROM holds the samples back to back, so each

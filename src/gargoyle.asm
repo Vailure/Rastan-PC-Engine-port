@@ -112,6 +112,8 @@ garg_spawn:
 		jsr	map_kind
 		jsr	start_walk		; ES_WALK, its looping animation
 		ply
+		lda	#SFX_GARG
+		jsr	sound_sfx_p
 		stz	e_timer, x		; No run loaded yet (after start_walk,
 		lda	#<path_gargoyle		; which sets e_range).
 		sta	e_range, x

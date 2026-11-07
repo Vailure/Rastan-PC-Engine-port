@@ -155,7 +155,7 @@ boss_think:	lda	e_state, x
 		cmp	#BOSS_HITS
 		bcs	!+
 		phx
-		lda	#SFX_HIT
+		lda	#SFX_BOSSHIT
 		jsr	sound_sfx
 		plx
 		bra	.act

@@ -104,6 +104,29 @@ check('the ROM plays round 1 from its first notes', first_got == first_want,
 check('every channel is used', len({ch for _, ch, _, _ in played}) >= 5,
       f'channels {sorted({ch for _, ch, _, _ in played})}')
 
+# 1b. Each channel's wave is the tune's patch wave: the 32 steps written to a channel
+# (the waveform port, $806) are the entries of the tune's wave table in sound.bin.
+def waves_written(path):
+    cur, out = {}, {}
+    for line in open(path):
+        ch, a, d = line.split()
+        ch, a, d = int(ch), int(a, 16), int(d, 16)
+        if a == 0x806:
+            cur.setdefault(ch, []).append(d)
+            if len(cur[ch]) == 32:
+                out.setdefault(ch, []).append(tuple(cur[ch]))
+                cur[ch] = []
+        elif a == 0x804 and not (d & 0xC0):
+            pass
+    return out
+blob = open(os.path.join(build, 'sound', 'sound.bin'), 'rb').read()
+table = {tuple(blob[256 * 0 + i * 32:256 * 0 + i * 32 + 32]) for i in range(8)}
+written = waves_written(psg)
+known = [w for ws in written.values() for w in ws if w in table]
+distinct = {w for w in known}
+check('the music loads its patches\' waves, from the tune\'s table', len(distinct) >= 3 and len(known) >= len(distinct),
+      f'{len(distinct)} distinct waves of the table written, {len(known)} loads')
+
 # 2. The sound that comes out holds those notes.
 wav = os.path.join(tmp, f'snd_{os.getpid()}.wav')
 run(rom, 420, [], wav=wav)
@@ -119,10 +142,16 @@ expect = sorted(PSG_CLOCK / (32 * p) for p, v in (x for x in hold.values() if x)
 seg = a[3 * 44100:4 * 44100]
 sp = np.abs(np.fft.rfft(seg * np.hanning(len(seg))))
 fr = np.fft.rfftfreq(len(seg), 1 / 44100)
-peaks = [float(fr[i]) for i in np.argsort(sp)[-12:][::-1] if fr[i] > 30]
-matched = [f for f in peaks[:5] if any(abs(f - e) / e < 0.03 for e in expect)]
+# Each note's fundamental stands out of the spectrum (the waves carry harmonics, so the
+# loudest peaks need not be the fundamentals: the test is that the fundamentals are there).
+floor = float(np.median(sp[(fr > 30) & (fr < 4000)]))
+def band(e):
+    m = (fr > e * 0.97) & (fr < e * 1.03)
+    return float(sp[m].max()) / floor if m.any() else 0.0
+levels = [round(band(e), 1) for e in expect]
+matched = [e for e in expect if band(e) > 8]
 check('the notes it plays are the ones the stream asks for', len(matched) >= 3,
-      f'peaks {[round(f) for f in peaks[:5]]} vs {[round(e) for e in expect]}')
+      f'fundamentals {[round(e) for e in expect]} stand {levels} times the floor')
 
 # 3. An attack plays the swing effect on channels 4 and 5.
 quiet = len([1 for _, ch, _, _ in psg_notes(psg) if ch >= 4])

@@ -79,7 +79,9 @@ breathe_fire:	ldy	#NUM_OBJ - 1		; Free projectile slot?
 		cpy	#NUM_BIG
 		bcs	!-
 		rts
-.slot:		lda	e_xl, x
+.slot:		lda	#SFX_BREATH
+		jsr	sound_sfx_p
+		lda	e_xl, x
 		sec
 		sbc	#FIRE_DX
 		sta	e_xl, y

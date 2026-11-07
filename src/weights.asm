@@ -128,7 +128,9 @@ weights_update:
 		beq	!+
 		inc	wt_len, x
 		bra	.next
-!:		lda	#2
+!:		lda	#SFX_WEIGHT		; (it lands)
+		jsr	sound_sfx_p
+		lda	#2
 		sta	wt_ph, x
 		sta	wt_t, x
 		bra	.next
