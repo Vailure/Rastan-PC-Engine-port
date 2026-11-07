@@ -90,7 +90,8 @@ kills = []
 for i in range(1, len(r)):
     for k in range(17):
         if r[i]['e_state'][k] == ES_DYING and r[i - 1]['e_state'][k] != ES_DYING and r[i]['e_kind'][k] == EK_SNAKE:
-            kills.append(bcd(r[i]['score']) - bcd(r[i - 1]['score']))
+            kills.append(bcd(r[min(i + 1, len(r) - 1)]['score']) - bcd(r[i - 2]['score']))  # (a frame either side: the
+            # score and the state can land either side of a frame's end when the frame runs long)
 check('a crouching swing kills snakes, 200 each', len(kills) >= 2 and all(v == 2 for v in kills), f'score steps {kills}')
 
 # Standing, swinging (II every 12 frames): no snake dies (the arcade's neither, at any distance:

@@ -77,6 +77,7 @@ EK_G2		=	30		; Rounds 2 and 3's green demon: body,
 EK_G2W		=	31		; and wings.
 EK_WATER	=	32		; Round 3's water falling from the roof (src/beasts.asm).
 EK_WFLAME	=	33		; Round 3's castle wall flames (src/beasts.asm).
+EK_WOMAN3	=	34		; Round 3's woman warrior (her colours in palette 8).
 SOLDIER_RANGE	=	60
 
 ITEM_SLOT	=	NUM_EN		; Big slots after the walkers'.
@@ -138,6 +139,7 @@ rocks_done:	ds	1		; Boulders spawned this life.
 gargs_done:	ds	1		; Gargoyles spawned this life.
 woman_done:	ds	1		; The woman warrior spawned this life.
 place_done:	ds	3		; The map's walkers spawned this life (bits).
+pal8_cur:	ds	1		; Round 3: whose colours sprite palette 8 holds.
 pl_end:		ds	1
 jet_wait:	ds	3		; Frames before each fire jet may erupt again.
 vines_done:	ds	1		; Vines present (bits, vines.asm).
@@ -230,6 +232,8 @@ enemies_load:	lda	<cur_round		; Rounds 2 and 3: their map objects'
 		bra	obj_invalidate
 !:		cmp	#3			; Round 3: its falling water's 8 (its
 		bne	obj_invalidate		; wizard's later: src/wizard.asm).
+		lda	#$FF			; (pal8_area: from the camera's area)
+		sta	pal8_cur
 		lda	#^water3_pal
 		tam3
 		php
@@ -304,6 +308,7 @@ enemies_update:	inc	spawn_tick		; (the spawn scans take turns: the frame's
 		jsr	vines_spawn
 		jsr	x_mobj_update		; Their map objects (src/mobj.asm),
 		jsr	x_weights_update	; (round 3's weight: src/weights.asm)
+		jsr	pal8_area		; (round 3: sprite palette 8 by area)
 		lda	spawn_tick
 		lsr	a
 		bcs	!+
@@ -619,7 +624,7 @@ zn_x_h:		db	>0, >1500, >2400, >8200
 		db	>0, >2384, >3472, >5680, >8200
 zn_n:		db	1, 2, 3, 2
 		db	2, 6, 6, 2
-		db	3, 4, 3, 6, 2
+		db	3, 4, 3, 7, 2
 zn_ofs:		db	ZK_LIZ, ZK_LIZBLUE, ZK_BCL, ZK_CASTLE
 		db	ZK_SNLIZ, ZK_R2B, ZK_R2C, ZK_CASTLE
 		db	ZK_LLC, ZK_HSHS, ZK_CHS, ZK_R3, ZK_CASTLE
@@ -644,7 +649,7 @@ ZK_HSHS		=	* - zn_kinds
 ZK_CHS		=	* - zn_kinds
 		db	EK_CHIM, EK_HORN, EK_SNAKE
 ZK_R3		=	* - zn_kinds
-		db	EK_HORN, EK_HARPY, EK_SNAKE, EK_CHIM, EK_SKEL, EK_LIZARD
+		db	EK_HORN, EK_HARPY, EK_SNAKE, EK_CHIM, EK_SKEL, EK_LIZARD, EK_WOMAN3
 
 ; ---------------------------------------------------------------------------
 ; enemy_think - X = slot.
@@ -742,8 +747,10 @@ enemy_think:	lda	e_kind, x
 		bne	!+
 		jmp	chim_think
 !:		cmp	#EK_WOMAN
-		bne	!+
-		jmp	woman_think
+		beq	!+
+		cmp	#EK_WOMAN3
+		bne	!++
+!:		jmp	woman_think
 !:		cmp	#EK_SNAKE
 		bne	!+
 		jmp	x_snake_think
@@ -979,14 +986,14 @@ kind_walk_l:	db	<anim_liz_walk, <anim_blue_walk, <anim_club, 0, <anim_bat, <anim
 		db	<anim_vine_swing, <anim_snake_crawl, <anim_kn_stand, <anim_kn2_stand, <anim_orb
 		db	<anim_horn_walk, <anim_skel_walk, <anim_harpy_walk, <anim_blade
 		db	<anim_wz_walk, <anim_wz2_walk, <anim_wfire
-		db	<anim_piranha, <anim_g2_body, <anim_g2_wings, <anim_water_fall, <anim_wf_cycle
+		db	<anim_piranha, <anim_g2_body, <anim_g2_wings, <anim_water_fall, <anim_wf_cycle, <anim_woman3_walk
 kind_walk_h:	db	>anim_liz_walk, >anim_blue_walk, >anim_club, 0, >anim_bat, >anim_chim_walk, >anim_fireball
 		db	>anim_boulder, >anim_garg_body, >anim_garg_wings, >anim_woman_walk, >anim_sword_walk
 		db	>anim_mace_walk, >anim_jet_column, >anim_boss_walk, >anim_boss2_walk, >anim_frag_form
 		db	>anim_vine_swing, >anim_snake_crawl, >anim_kn_stand, >anim_kn2_stand, >anim_orb
 		db	>anim_horn_walk, >anim_skel_walk, >anim_harpy_walk, >anim_blade
 		db	>anim_wz_walk, >anim_wz2_walk, >anim_wfire
-		db	>anim_piranha, >anim_g2_body, >anim_g2_wings, >anim_water_fall, >anim_wf_cycle
+		db	>anim_piranha, >anim_g2_body, >anim_g2_wings, >anim_water_fall, >anim_wf_cycle, >anim_woman3_walk
 kind_attack_l:	db	<anim_liz_attack, <anim_blue_throw, 0, 0, 0, 0, 0, 0, 0, 0, 0, <anim_sword_attack
 		db	<anim_mace_attack, 0, 0, 0, 0, 0, 0, 0, 0, 0, <anim_horn_attack, <anim_skel_attack, <anim_harpy_throw
 kind_attack_h:	db	>anim_liz_attack, >anim_blue_throw, 0, 0, 0, 0, 0, 0, 0, 0, 0, >anim_sword_attack
@@ -1005,30 +1012,30 @@ kind_attack2_h:	db	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, >anim_sword_low, >anim_mace_
 kind_death_l:	db	<anim_liz_death, <anim_blue_death, 0, 0, 0, <anim_chim_death, 0, 0, <anim_garg_death, <anim_wings_death, <anim_woman_death
 		db	<anim_sword_death, <anim_mace_death, 0, 0, 0, 0, 0, 0, <anim_snake_death, 0, 0, 0
 		db	<anim_horn_death, <anim_skel_death, <anim_harpy_death, 0
-		db	0, 0, 0, <anim_pir_death, <anim_g2_death, <anim_g2_wdeath, 0, 0
+		db	0, 0, 0, <anim_pir_death, <anim_g2_death, <anim_g2_wdeath, 0, 0, <anim_woman3_death
 kind_death_h:	db	>anim_liz_death, >anim_blue_death, 0, 0, 0, >anim_chim_death, 0, 0, >anim_garg_death, >anim_wings_death, >anim_woman_death
 		db	>anim_sword_death, >anim_mace_death, 0, 0, 0, 0, 0, 0, >anim_snake_death, 0, 0, 0
 		db	>anim_horn_death, >anim_skel_death, >anim_harpy_death, 0
-		db	0, 0, 0, >anim_pir_death, >anim_g2_death, >anim_g2_wdeath, 0, 0
+		db	0, 0, 0, >anim_pir_death, >anim_g2_death, >anim_g2_wdeath, 0, 0, >anim_woman3_death
 kind_range:	db	ATTACK_RANGE, 88, 0, 0, 0, 0, 0, 0, 0, 0, 0, SOLDIER_RANGE, SOLDIER_RANGE, 0, 0, 0, 0, 0, 0, 0, 0, 0
 		db	ATTACK_RANGE, ATTACK_RANGE, HARPY_RANGE, 0, 0, 0, 0, 0, 0, 0
 kind_keep:	db	0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 0	; No off-screen despawn.
-		db	0, 1, 1, 1, 1
+		db	0, 1, 1, 1, 1, 0
 ; Arcade: lizardman 300, blue thrower 200, bat 200, chimera 300.
 ; Castle soldiers: the arcade's ($2C,A4): 400 the sword's, 500 the mace's. Snake 200 (snake.txt).
 ; Round 3's (not measured): the horned man 300, the skeleton 400, the harpy 300.
 kind_score:	db	$03, $02, 0, 0, $02, $03, 0, 0, $05, $05, $03, $04, $05, 0, 0, 0, 0, 0, $02, 0, 0, 0
 		db	$03, $04, $03, 0, 0, 0, 0
-		db	$04, $05, $05, 0, 0		; (the piranha's and the green demon's halves: build/r2run.snp)
+		db	$04, $05, $05, 0, 0, $03		; (the piranha's and the green demon's halves: build/r2run.snp)
 ; Touching Rastan (the arcade's ($29,A4), player_touch): 1, 2 drain 4, 8 units;
 ; 3 knocks him back, 12 units; 0 nothing (the woman warrior: only her sword).
 ; (The item and its bat, the boss's second half and the vines: their own code.)
 kind_touch:	db	1, 1, 3, 0, 0, 2, 3, 3, 2, 2, 0, 2, 2, 2, 3, 0, 3, 0, 1, 3, 0, 3, 1, 1, 1, 3, 0, 0, 2
-		db	3, 1, 1, 0, 3		; (piranha: knocks back; the demon: drains; the water: its own test)
+		db	3, 1, 1, 0, 3, 0		; (piranha: knocks back; the demon: drains; the water: its own test)
 ; Hit points (the arcade's ($3A,A4)): the gargoyle and the soldiers take two of
 ; the sword's hits (one of the stronger blows: weapon_power), the boss ten.
 kind_hp:	db	1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 1, 2, 2, 1, 10, 1, 1, 1, 1, 10, 1, 1, 1, 2, 1, 1, 10, 1, 1
-		db	1, 1, 1, 1, 1			; (piranha, the demon's halves: build/r2run.snp)
+		db	1, 1, 1, 1, 1, 1			; (piranha, the demon's halves: build/r2run.snp)
 kind_bank:	db	GRP_SECT1_BANK, GRP_SECT1_BANK, GRP_SECT1_BANK, GRP_ITEMS_BANK, GRP_ITEMS_BANK
 		db	GRP_CHIMERA_BANK, GRP_CHIMERA_BANK, GRP_ROCKS_BANK, GRP_GARGOYLE_BANK, GRP_GARGOYLE_BANK
 		db	GRP_WOMAN_BANK, GRP_CASTLE_BANK, GRP_CASTLE_BANK, GRP_JETS_BANK
@@ -1036,7 +1043,7 @@ kind_bank:	db	GRP_SECT1_BANK, GRP_SECT1_BANK, GRP_SECT1_BANK, GRP_ITEMS_BANK, GR
 		db	GRP_KNIGHT_BANK, GRP_KNIGHT_BANK, GRP_KNIGHT_BANK
 		db	GRP_HORN_BANK, GRP_R3WALK_BANK, GRP_R3WALK_BANK, GRP_R3WALK_BANK
 		db	GRP_WIZARD_BANK, GRP_WIZARD_BANK, GRP_WIZARD_BANK
-		db	GRP_PIRANHA_BANK, GRP_GARG2_BANK, GRP_GARG2_BANK, GRP_WATER3_BANK, GRP_WFLAME3_BANK
+		db	GRP_PIRANHA_BANK, GRP_GARG2_BANK, GRP_GARG2_BANK, GRP_WATER3_BANK, GRP_WFLAME3_BANK, GRP_WOMAN3_BANK
 kind_ptab_l:	db	<grp_sect1_ptab, <grp_sect1_ptab, <grp_sect1_ptab, <grp_items_ptab, <grp_items_ptab
 		db	<grp_chimera_ptab, <grp_chimera_ptab, <grp_rocks_ptab, <grp_gargoyle_ptab, <grp_gargoyle_ptab
 		db	<grp_woman_ptab, <grp_castle_ptab, <grp_castle_ptab, <grp_jets_ptab
@@ -1044,7 +1051,7 @@ kind_ptab_l:	db	<grp_sect1_ptab, <grp_sect1_ptab, <grp_sect1_ptab, <grp_items_pt
 		db	<grp_knight_ptab, <grp_knight_ptab, <grp_knight_ptab
 		db	<grp_horn_ptab, <grp_r3walk_ptab, <grp_r3walk_ptab, <grp_r3walk_ptab
 		db	<grp_wizard_ptab, <grp_wizard_ptab, <grp_wizard_ptab
-		db	<grp_piranha_ptab, <grp_garg2_ptab, <grp_garg2_ptab, <grp_water3_ptab, <grp_wflame3_ptab
+		db	<grp_piranha_ptab, <grp_garg2_ptab, <grp_garg2_ptab, <grp_water3_ptab, <grp_wflame3_ptab, <grp_woman3_ptab
 kind_ptab_h:	db	>grp_sect1_ptab, >grp_sect1_ptab, >grp_sect1_ptab, >grp_items_ptab, >grp_items_ptab
 		db	>grp_chimera_ptab, >grp_chimera_ptab, >grp_rocks_ptab, >grp_gargoyle_ptab, >grp_gargoyle_ptab
 		db	>grp_woman_ptab, >grp_castle_ptab, >grp_castle_ptab, >grp_jets_ptab
@@ -1052,7 +1059,7 @@ kind_ptab_h:	db	>grp_sect1_ptab, >grp_sect1_ptab, >grp_sect1_ptab, >grp_items_pt
 		db	>grp_knight_ptab, >grp_knight_ptab, >grp_knight_ptab
 		db	>grp_horn_ptab, >grp_r3walk_ptab, >grp_r3walk_ptab, >grp_r3walk_ptab
 		db	>grp_wizard_ptab, >grp_wizard_ptab, >grp_wizard_ptab
-		db	>grp_piranha_ptab, >grp_garg2_ptab, >grp_garg2_ptab, >grp_water3_ptab, >grp_wflame3_ptab
+		db	>grp_piranha_ptab, >grp_garg2_ptab, >grp_garg2_ptab, >grp_water3_ptab, >grp_wflame3_ptab, >grp_woman3_ptab
 ; Body box: x = anchor + cx +/- half, y = anchor - top .. anchor + bot: the
 ; arcade's ($0446BC: an index per object into the boxes at $044CE0), for all
 ; but the item, its bat and the vines (from their sprites' extent); the jets'
@@ -1060,13 +1067,13 @@ kind_ptab_h:	db	>grp_sect1_ptab, >grp_sect1_ptab, >grp_sect1_ptab, >grp_items_pt
 ; the span it sweeps. The snake's: $95, x -10 .. 10, y -5 .. 14 (its ($3E,A4), 11,
 ; picks it from the table at $044796).
 kind_top:	db	20, 20, 8, 2, 25, 5, 8, 8, 16, 8, 20, 20, 20, 0, BOSS_TOP, 0, 8, 0, 5, KNIGHT_TOP, 0, 8, 20, 20, 20, 8, 32, 0, 6
-		db	8, 16, 8, 0, 16		; (the piranha: its sprite's extent; the demon: the gargoyle's)
+		db	8, 16, 8, 0, 16, 20		; (the piranha: its sprite's extent; the demon: the gargoyle's)
 kind_bot:	db	16, 16, 8, 30, 7, 14, 8, 8, 24, 18, 16, 16, 16, 116, BOSS_BOT, 0, 8, 0, 14, KNIGHT_BOT, 0, 8, 16, 16, 16, 8, 16, 0, 6
-		db	8, 24, 18, 0, 16
+		db	8, 24, 18, 0, 16, 16
 kind_half:	db	12, 12, 3, 20, 16, 20, 3, 3, 12, 12, 12, 12, 12, 16, BOSS_HALF, 0, 3, 0, 10, KNIGHT_HALF, 0, 3, 12, 12, 12, 3, 16, 0, 6
-		db	10, 12, 12, 0, 40
+		db	10, 12, 12, 0, 40, 12
 kind_cx:	db	0, 0, 0, -8, -2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-		db	0, 0, 0, 0, 32
+		db	0, 0, 0, 0, 32, 0
 
 ; sword_strike - X = slot: carry set if Rastan's weapon kills it now. A hit
 ; adds his weapon's power (weapon_power) to its damage; at its kind's hit
@@ -2101,3 +2108,47 @@ slot_pat_l:	db	<((EN_VRAM + 0 * 64) >> 5), <((EN_VRAM + 11 * 64) >> 5), <((EN_VR
 slot_pat_h:	db	>((EN_VRAM + 0 * 64) >> 5), >((EN_VRAM + 11 * 64) >> 5), >((EN_VRAM + 22 * 64) >> 5), >((EN_VRAM + 33 * 64) >> 5), >((EN_VRAM + 44 * 64) >> 5), >((EN_VRAM + 48 * 64) >> 5)
 		db	>((EN_VRAM + 52 * 64) >> 5), >((EN_VRAM + 65 * 64) >> 5), >((EN_VRAM + 78 * 64) >> 5), >((EN_VRAM + 91 * 64) >> 5), >((EN_VRAM + 93 * 64) >> 5), >((EN_VRAM + 95 * 64) >> 5)
 		db	>((EN_VRAM + 97 * 64) >> 5), >((EN_VRAM + 99 * 64) >> 5), >((EN_VRAM + 101 * 64) >> 5), >((EN_VRAM + 103 * 64) >> 5), >((EN_VRAM + 105 * 64) >> 5)
+
+; ---------------------------------------------------------------------------
+; pal8_area - round 3, once a frame: sprite palette 8 by the camera's area: the
+; falling water's colours before x 5680, the woman warriors' from there to the
+; castle (x 8192; the weight's and the wizard's load theirs themselves).
+PAL8_WOMAN_X	=	5680
+PAL8_CASTLE_X	=	8192
+pal8_area:	lda	<cur_round
+		cmp	#3
+		bne	.r
+		ldy	#0			; Area: 0 water, 1 women, 2 the castle.
+		lda	<scroll_x
+		cmp	#<PAL8_WOMAN_X
+		lda	<scroll_x + 1
+		sbc	#>PAL8_WOMAN_X
+		bmi	.got
+		iny
+		lda	<scroll_x
+		cmp	#<PAL8_CASTLE_X
+		lda	<scroll_x + 1
+		sbc	#>PAL8_CASTLE_X
+		bmi	.got
+		iny
+.got:		cpy	pal8_cur
+		beq	.r
+		sty	pal8_cur
+		cpy	#2
+		beq	.r
+		php
+		sei
+		lda	#^water3_pal		; (water3_pal and woman3_pal: one bank)
+		tam3
+		lda	#<(256 + 8 * 16)
+		sta	VCE_CTA + 0
+		lda	#>(256 + 8 * 16)
+		sta	VCE_CTA + 1
+		cpy	#1
+		beq	.w
+		tia	water3_pal, VCE_CTW, 32
+		plp
+.r:		rts
+.w:		tia	woman3_pal, VCE_CTW, 32
+		plp
+		rts

@@ -168,13 +168,25 @@ woman_think:	jsr	touch_hurts
 .hop:		sta	e_alt, x
 		lda	#HOP_FRAMES
 		sta	e_timer, x
+		lda	e_kind, x		; (round 3's: her own colours)
+		cmp	#EK_WOMAN3
+		beq	!+
 		lda	#<anim_woman_hop
 		ldy	#>anim_woman_hop
 		jmp	enemy_set_anim
+!:		lda	#<anim_woman3_hop
+		ldy	#>anim_woman3_hop
+		jmp	enemy_set_anim
 
 woman_walk_anim:
+		lda	e_kind, x
+		cmp	#EK_WOMAN3
+		beq	!+
 		lda	#<anim_woman_walk
 		ldy	#>anim_woman_walk
+		jmp	enemy_set_anim
+!:		lda	#<anim_woman3_walk
+		ldy	#>anim_woman3_walk
 		jmp	enemy_set_anim
 
 ; floor_ahead - A = signed x offset: carry set if a floor is at (e_x + A, e_y + 17).

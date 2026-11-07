@@ -81,6 +81,14 @@ GROUPS = {
         ('woman_hop', 'woman', 7, 3141, 3169),
         ('woman_death', 'woman', 7, 3239, 3269),
     ],
+    # Round 3's woman warriors: the same, their own colours (arcade $32) in sprite
+    # palette 8, loaded while the camera is between x 5680 and the castle (round 3's
+    # thirteen slots are full: src/enemies.asm pal8_area).
+    'woman3': [
+        ('woman3_walk', 'woman', 7, 3105, 3120),
+        ('woman3_hop', 'woman', 7, 3141, 3169),
+        ('woman3_death', 'woman', 7, 3239, 3269),
+    ],
     # Castle soldiers: the same body with a mace or a sword; walk, two swings (high, or
     # low: the arcade picks by bit 2 of the slot's byte $21), death.
     'castle': [
@@ -244,14 +252,15 @@ FIXED_PALS = {'knight': {15: (8, 'knight', 700, 79)},
               'water3': {15: (8, 'r3run', 2050, 0x3f)},
               # Round 3's weight (src/weights.asm: its bar, frame and chain, arcade $4C):
               # sprite palette 8 as it appears in the castle.
-              'weight3': {12: (8, 'r3run', 9341, 0x4c)}}
+              'weight3': {12: (8, 'r3run', 9341, 0x4c)},
+              'woman3': {2: (8, 'woman', 3105, 0x32)}}
 BANK64_SNAP = ('castle', 2600)
 B64_GROUPS = ('castle', 'jets', 'vine', 'swarm', 'items', 'boss', 'knight')
 
 # The rounds a group's objects appear in (default: every round). Arcade palettes used only
 # in rounds that never meet can share a PCE sprite palette slot: each round loads its own
 # colours (objpal.bin for round 1, objpal_r<n>.bin).
-GROUP_ROUNDS = {'boss': {1}, 'woman': {1, 2}, 'jets': {1}, 'snake': {2, 3}, 'knight': {2}, 'r3walk': {3}, 'horn': {2, 3},
+GROUP_ROUNDS = {'boss': {1}, 'woman': {1, 2}, 'woman3': {3}, 'jets': {1}, 'snake': {2, 3}, 'knight': {2}, 'r3walk': {3}, 'horn': {2, 3},
                 'wizard': {3}, 'garg2': {2, 3}, 'piranha': {2}, 'water3': {3}, 'wflame3': {3}}
 NUM_ROUNDS = 3
 

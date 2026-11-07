@@ -420,6 +420,10 @@ floor pokes where the bot can't cross a hazard; `R2RUN_POKES`, `R3RUN_POKES` in 
 - **Wall flames** (round 3's castle, `src/beasts.asm`; handler `$22`, markers `$73-$75` at x 9122): three dragon-head
   nozzles shoot jets of fire 80 px to the right, a 108-frame cycle each, out of step; the jet knocks Rastan back.
 - The camera writes `scroll_x` only once clamped (`camera_clamp_w`), so nothing reads an unclamped value mid-frame.
+- **Round 3's woman warriors** (`EK_WOMAN3`, group `woman3`): round 3's thirteen sprite palette slots are full, so
+  her own colours (the arcade's `$32`) go into sprite palette 8 while the camera is between x 5680 and the castle
+  (`pal8_area` in `src/enemies.asm`: the falling water's colours before x 5680; the weight and the wizard load
+  theirs later); she walks in round 3's last lanes (x 5680 on), as the arcade's run has four there.
 - **Round 3's weight** (`src/weights.asm`, marker `$45` at x 9006, plate y 128): round 1's spiked-weight code with
   a per-round set (count, x, anchor offset, palette); it appears as the camera reaches x 8650, with round 1's clocks;
   a touch kills. Its colours (the arcade's `$4C`) in sprite palette 8, loaded then.
