@@ -137,7 +137,7 @@ items_done:	ds	1		; Items spawned this life (bit per item).
 rocks_done:	ds	1		; Boulders spawned this life.
 gargs_done:	ds	1		; Gargoyles spawned this life.
 woman_done:	ds	1		; The woman warrior spawned this life.
-place_done:	ds	2		; The map's walkers spawned this life (bits).
+place_done:	ds	3		; The map's walkers spawned this life (bits).
 pl_end:		ds	1
 jet_wait:	ds	3		; Frames before each fire jet may erupt again.
 vines_done:	ds	1		; Vines present (bits, vines.asm).
@@ -265,6 +265,7 @@ enemies_reset:	ldx	#NUM_OBJ - 1
 		stz	woman_done
 		stz	place_done
 		stz	place_done + 1
+		stz	place_done + 2
 		stz	jet_wait
 		stz	boss_done
 		stz	boss_clear
@@ -580,22 +581,22 @@ place_spawn:	ldx	<cur_round
 !:		rts
 .bits:		db	1, 2, 4, 8, 16, 32, 64, 128
 
-pl_first:	db	0, 3, 12, 15		; (round n's: [n - 1] .. [n] - 1)
+pl_first:	db	0, 3, 13, 17		; (round n's: [n - 1] .. [n] - 1)
 pl_kind:	db	EK_LIZARD, EK_BLUE, EK_BLUE
-		db	EK_LIZARD, EK_LIZARD, EK_SNAKE, EK_HORN, EK_LIZARD, EK_BLUE, EK_CHIM, EK_SNAKE, EK_WOMAN
-		db	EK_BLUE, EK_LIZARD, EK_MACE
+		db	EK_LIZARD, EK_LIZARD, EK_SNAKE, EK_HORN, EK_LIZARD, EK_BLUE, EK_CHIM, EK_SNAKE, EK_WOMAN, EK_MACE
+		db	EK_BLUE, EK_LIZARD, EK_MACE, EK_SWORD
 pl_x_l:		db	<4460, <4524, <7846
-		db	<1198, <1263, <1263, <3243, <3376, <4941, <4940, <5099, <6128
-		db	<6123, <7851, <8870
+		db	<1198, <1263, <1263, <3243, <3376, <4941, <4940, <5099, <6128, <9766
+		db	<6123, <7851, <8870, <9548
 pl_x_h:		db	>4460, >4524, >7846
-		db	>1198, >1263, >1263, >3243, >3376, >4941, >4940, >5099, >6128
-		db	>6123, >7851, >8870
+		db	>1198, >1263, >1263, >3243, >3376, >4941, >4940, >5099, >6128, >9766
+		db	>6123, >7851, >8870, >9548
 pl_y_l:		db	<336, <304, <303
-		db	<236, <301, <301, <272, <301, <368, <368, <272, <301
-		db	<176, <304, <301
+		db	<236, <301, <301, <272, <301, <368, <368, <272, <301, <144
+		db	<176, <304, <301, <-80
 pl_y_h:		db	>336, >304, >303
-		db	>236, >301, >301, >272, >301, >368, >368, >272, >301
-		db	>176, >304, >301
+		db	>236, >301, >301, >272, >301, >368, >368, >272, >301, >144
+		db	>176, >304, >301, >-80
 ; Walker zones (from x on, a cycle of kinds), each round's from zn_first[round - 1]
 ; on, in x order, the first at x 0; the castle's (x 8200) sword and mace soldiers
 ; in every round.
