@@ -28,12 +28,12 @@ VINE_NOGRAB	=	20		; and not again this many frames after a jump.
 ; chasm vine is from its marker at (2720, 80): + (30, -96). Round 3's: over the
 ; first wide lava pit, where the bot's run (build/r3run.snp, slot 2, handler
 ; $20) has it, (4646, 272) (world x = census x - 23552 there: Rastan's feet
-; on the map's floors); and from its marker $4F at (9568, -288), in the
-; castle's shaft (not measured).
-vine_x_l:	db	<2750, <8830, <8990, <9150, <5662, <8446, <4646, <9598
-vine_x_h:	db	>2750, >8830, >8990, >9150, >5662, >8446, >4646, >9598
-vine_y_l:	db	<-16, <-496, <-496, <-496, <112, <144, <272, <-384
-vine_y_h:	db	>-16, >-496, >-496, >-496, >112, >144, >272, >-384
+; on the map's floors); and in the castle's shaft, (9616, -366), where the
+; arcade's run from its restart at segment $41 has it.
+vine_x_l:	db	<2750, <8830, <8990, <9150, <5662, <8446, <4646, <9616
+vine_x_h:	db	>2750, >8830, >8990, >9150, >5662, >8446, >4646, >9616
+vine_y_l:	db	<-16, <-496, <-496, <-496, <112, <144, <272, <-366
+vine_y_h:	db	>-16, >-496, >-496, >-496, >112, >144, >272, >-366
 vine_bit:	db	1, 2, 4, 8, 16, 32, 64, 128
 ; Phase offset (frames) within the 180-frame swing. The lava hall's middle vine
 ; swings opposite its neighbours, so a hop always meets the next vine coming

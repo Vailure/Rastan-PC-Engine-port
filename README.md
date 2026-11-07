@@ -425,9 +425,9 @@ floor pokes where the bot can't cross a hazard; `R2RUN_POKES`, `R3RUN_POKES` in 
   a touch kills. Its colours (the arcade's `$4C`) in sprite palette 8, loaded then.
 - **Round 2's castle:** the arcade run from the round's start stops at x 8533, so the castle was run from the
   arcade's restarts at segments `$28` and `$29`. Those runs show no flames at markers `$4C`, `$52-$54` and no
-  weight at marker `$45`, so none are placed; they do show a fourth gargoyle at (9735, 112), now in round 2's
-  table. One flame stays by the lava at (10158, 464), from marker `$55` as round 3's flames are from theirs (an
-  estimate: no run reaches it).
+  weight at marker `$45`, so none are placed; they do show a small castle flyer near the shaft (x 9735; cells `$33E-$345`, as one in
+  round 3's shaft: not ported yet). The run from the shaft's restart (segment `$2A`) shows marker `$55`'s flame and fireball by the lava at
+  (10155, 496); both are placed there. The runs from segments `$2B` and `$2C` meet no other objects.
 - Round 3's first wide lava pit (x 4576-4735) is crossed on the vine that hangs over it, at (4646, 272) as the bot's
   run has it (census x - 23552 there: calibrated by Rastan's feet on the map's floors over the whole run).
 - **No torn frames:** the SATB is DMA'd at the start of VBLANK, before the object cell uploads, so `enemies_draw`

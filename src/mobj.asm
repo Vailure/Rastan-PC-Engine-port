@@ -753,9 +753,9 @@ mobj_cells:	ldx	<cur_round
 		st2	#>MOB_VRAM
 		st0	#VDC_VWR
 		jsr	ram_tia
-		lda	<cur_round		; Round 3: its fireballs' cells too.
-		cmp	#3
-		bne	!+
+		lda	<cur_round		; Rounds 2 and 3: their fireballs' cells too.
+		cmp	#1
+		beq	!+
 		st0	#VDC_MAWR
 		st1	#<BALL_VRAM
 		st2	#>BALL_VRAM
@@ -1133,10 +1133,10 @@ mo_tab_r2:	MOBJ	MK_LOG, 1831, 328, LOG_REST	; (markers $59-$5D)
 		MOBJ	MK_BLOCK, 6479, 336, 56		; ($61-$63)
 		MOBJ	MK_BLOCK, 6543, 336, 56
 		MOBJ	MK_BLOCK, 6607, 336, 56
-		MOBJ	MK_FLAME, 10158, 464, 0		; (the castle's lava flame: an estimate
-						; from its map's marker $55, + (14, -16)
-						; as round 3's; the arcade's runs from the
-						; restarts at segments $28 and $29 show none
+		MOBJ	MK_FLAME, 10155, 496, 0		; (the castle's lava flame and its
+		MOBJ	MK_BALL, 10155, 496, 0		; fireball: marker $55, the arcade's
+						; run from its restart at segment $2A;
+						; its runs from $28 and $29 show none
 						; at its markers $4C, $52-$54)
 		db	$FF
 mo_tab_r3:	MOBJ	MK_WSPEAR, 3837, 304, 82	; ($65, $66)
